@@ -25,7 +25,7 @@ app.get("/", (req, res) => {
 app.use("/api/v1/auth", authRoutes);
 
 // Start the server
-app.listen(port, () => {
+let server = app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
 });
 

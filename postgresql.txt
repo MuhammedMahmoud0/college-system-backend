@@ -1,0 +1,271 @@
+-- ///////////////////////////////////////////////////////
+-- //  COLLEGE MANAGEMENT SYSTEM (User's Final Edit)
+-- ///////////////////////////////////////////////////////
+
+-- --- ENUM Definitions ---
+CREATE TYPE user_role AS ENUM (
+  'student',
+  'doctor',
+  'admin',
+  'teaching_assistant',
+  'super_admin',
+  'leader'
+);
+
+
+CREATE TYPE enrollment_status AS ENUM (
+  'enrolled',
+  'dropped',
+  'completed'
+  -- Note: 'termnait ' was in your schema; you may need to add 'terminated'
+);
+
+CREATE TYPE audience_type AS ENUM (
+  'All',
+  'Students',
+  'Faculty'
+);
+
+
+-- --- SECTION 1: CORE USER & ACADEMIC STRUCTURE ---
+
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role user_role NOT NULL,
+  avatar_url TEXT,
+  phone TEXT,
+  national_id TEXT, -- Note: This may be too small for a 14-digit ID.
+  address TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE departments (
+  department_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT UNIQUE NOT NULL
+);
+
+CREATE TABLE student_profiles (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  student_id TEXT UNIQUE NOT NULL,
+  year_level INT,
+  cgpa FLOAT,
+  department_id UUID REFERENCES departments(department_id),
+  total_credits INT
+);
+
+CREATE TABLE courses (
+  code TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  credits INT NOT NULL,
+  department_id UUID NOT NULL REFERENCES departments(department_id)
+);
+
+CREATE TABLE course_prerequisites (
+  course_code TEXT REFERENCES courses(code),
+  prerequisite_code TEXT REFERENCES courses(code),
+  PRIMARY KEY (course_code, prerequisite_code)
+);
+
+
+-- --- SECTION 2: OFFERINGS, LECTURES & TUTORIALS/LABS ---
+
+CREATE TABLE course_offerings (
+  offering_id SERIAL PRIMARY KEY,
+  course_code TEXT NOT NULL REFERENCES courses(code),
+  semester TEXT NOT NULL -- e.g., Fall 2025
+);
+
+CREATE TABLE lectures (
+  lecture_id SERIAL PRIMARY KEY,
+  offering_id INT NOT NULL REFERENCES course_offerings(offering_id) ON DELETE CASCADE,
+  instructor_id UUID NOT NULL REFERENCES users(id),
+  capacity INT NOT NULL,
+  day_of_week TEXT NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  location TEXT,
+  "group" TEXT -- "group" is a reserved SQL keyword, so it's quoted
+);
+
+CREATE TABLE tutorials_labs (
+  tutorial_lab_id SERIAL PRIMARY KEY,
+  offering_id INT NOT NULL REFERENCES course_offerings(offering_id) ON DELETE CASCADE,
+  ta_id UUID NOT NULL REFERENCES users(id),
+  type TEXT NOT NULL, -- "Tutorial" or "Lab"
+  capacity INT NOT NULL,
+  day_of_week TEXT NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  location TEXT,
+  "group" TEXT NOT NULL
+);
+
+
+-- --- SECTION 3: ENROLLMENTS, GRADES & EXAMS ---
+
+CREATE TABLE enrollments (
+  student_user_id UUID NOT NULL REFERENCES users(id),
+  lecture_id INT NOT NULL REFERENCES lectures(lecture_id),
+  tutorial_lab_id INT NOT NULL REFERENCES tutorials_labs(tutorial_lab_id),
+  mid_score FLOAT,
+  work_score FLOAT,
+  final_score FLOAT,
+  grade TEXT,
+  status enrollment_status NOT NULL DEFAULT 'enrolled',
+  PRIMARY KEY (student_user_id, lecture_id, tutorial_lab_id)
+);
+
+CREATE TABLE exams (
+  exam_id SERIAL PRIMARY KEY,
+  offering_id INT NOT NULL REFERENCES course_offerings(offering_id),
+  exam_name TEXT NOT NULL,
+  exam_type TEXT NOT NULL, -- "Midterm", "Final", "Quiz", etc.
+  exam_date DATE NOT NULL,
+  day_of_week TEXT NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  location TEXT
+);
+
+
+-- --- SECTION 4: EXTRA FEATURES - STUDENT ENGAGEMENT ---
+
+CREATE TABLE tasks (
+  id SERIAL PRIMARY KEY,
+  lecture_id INT REFERENCES lectures(lecture_id),
+  tutorial_lab_id INT REFERENCES tutorials_labs(tutorial_lab_id),
+  title TEXT NOT NULL,
+  description TEXT,
+  due_date TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT chk_task_link CHECK (lecture_id IS NOT NULL OR tutorial_lab_id IS NOT NULL)
+);
+
+CREATE TABLE task_submissions (
+  id SERIAL PRIMARY KEY,
+  task_id INT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  submission_content TEXT, -- Link
+  submitted_at TIMESTAMPTZ DEFAULT now(), -- Corrected typo from TIMESTAMTz
+  grade FLOAT
+);
+
+CREATE TABLE files (
+  file_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  file_name TEXT NOT NULL,
+  file_path TEXT NOT NULL UNIQUE, -- S3 key or server path
+  media_type TEXT,
+  size_bytes BIGINT,
+  uploaded_by_user_id UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE course_materials (
+  id SERIAL PRIMARY KEY,
+  lecture_id INT REFERENCES lectures(lecture_id),
+  tutorial_lab_id INT REFERENCES tutorials_labs(tutorial_lab_id),
+  title TEXT NOT NULL,
+  url TEXT, 
+  file_id UUID REFERENCES files(file_id),
+  uploaded_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT chk_material_link CHECK (lecture_id IS NOT NULL OR tutorial_lab_id IS NOT NULL),
+  CONSTRAINT chk_material_source CHECK (url IS NOT NULL OR file_id IS NOT NULL)
+);
+
+CREATE TABLE attendance (
+  id SERIAL PRIMARY KEY,
+  student_user_id UUID NOT NULL REFERENCES users(id),
+  lecture_id INT REFERENCES lectures(lecture_id),
+  tutorial_lab_id INT REFERENCES tutorials_labs(tutorial_lab_id),
+  session_date DATE NOT NULL,
+  status TEXT NOT NULL, -- "Present", "Absent"
+  CONSTRAINT chk_attendance_link CHECK (lecture_id IS NOT NULL OR tutorial_lab_id IS NOT NULL)
+);
+
+
+-- --- SECTION 5: EXTRA FEATURES - FINANCIALS ---
+
+CREATE TABLE financials (
+  id SERIAL PRIMARY KEY,
+  department_id UUID UNIQUE NOT NULL REFERENCES departments(department_id),
+  credit_price DECIMAL NOT NULL
+);
+
+
+-- --- SECTION 6: EXTRA FEATURES - COMMUNITY & COMMUNICATION ---
+
+CREATE TABLE community_posts (
+  id SERIAL PRIMARY KEY,
+  author_id UUID NOT NULL REFERENCES users(id),
+  content TEXT NOT NULL,
+  image_url TEXT,
+  is_pinned BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE post_likes (
+  post_id INT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (post_id, user_id)
+);
+
+CREATE TABLE notifications (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id),
+  message TEXT NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  type TEXT, -- e.g., grade, task, exam, deadline, community
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+
+-- --- SECTION 7: EXTRA FEATURES - LANDING PAGE & SYSTEM CONTENT ---
+
+CREATE TABLE news_articles (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  content TEXT,
+  publish_date DATE NOT NULL,
+  image_url TEXT,
+  link TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE Events ( -- Note: Table names are typically lowercase, e.g., 'campus_events'
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  event_date TEXT NOT NULL, -- e.g., "NOV 15"
+  time TEXT,
+  location TEXT,
+  img_url TEXT,
+  link TEXT,
+  description TEXT
+);
+
+CREATE TABLE testimonials (
+  id SERIAL PRIMARY KEY,
+  student_name TEXT NOT NULL,
+  program TEXT NOT NULL,
+  quote TEXT NOT NULL,
+  image_url TEXT,
+  is_featured BOOLEAN DEFAULT false
+);
+
+
+-- --- SECTION 8: EXTRA FEATURES - SYSTEM CONFIGURATION ---
+
+CREATE TABLE announcements (
+  id SERIAL PRIMARY KEY,
+  author_id UUID NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  audience audience_type NOT NULL DEFAULT 'All',
+  publish_at TIMESTAMPTZ DEFAULT now(),
+  expire_at TIMESTAMPTZ
+);
+

@@ -1,0 +1,317 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model announcements {
+  id         Int           @id @default(autoincrement())
+  author_id  String        @db.Uuid
+  title      String
+  content    String
+  audience   audience_type @default(All)
+  publish_at DateTime?     @default(now()) @db.Timestamptz(6)
+  expire_at  DateTime?     @db.Timestamptz(6)
+  users      users         @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model attendance {
+  id              Int             @id @default(autoincrement())
+  student_user_id String          @db.Uuid
+  lecture_id      Int?
+  tutorial_lab_id Int?
+  session_date    DateTime        @db.Date
+  status          String
+  lectures        lectures?       @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
+  users           users           @relation(fields: [student_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tutorials_labs  tutorials_labs? @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model community_posts {
+  id         Int          @id @default(autoincrement())
+  author_id  String       @db.Uuid
+  content    String
+  image_url  String?
+  is_pinned  Boolean?     @default(false)
+  created_at DateTime?    @default(now()) @db.Timestamptz(6)
+  users      users        @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  post_likes post_likes[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model course_materials {
+  id              Int             @id @default(autoincrement())
+  lecture_id      Int?
+  tutorial_lab_id Int?
+  title           String
+  url             String?
+  file_id         String?         @db.Uuid
+  uploaded_at     DateTime?       @default(now()) @db.Timestamptz(6)
+  files           files?          @relation(fields: [file_id], references: [file_id], onDelete: NoAction, onUpdate: NoAction)
+  lectures        lectures?       @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
+  tutorials_labs  tutorials_labs? @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model course_offerings {
+  offering_id    Int              @id @default(autoincrement())
+  course_code    String
+  semester       String
+  courses        courses          @relation(fields: [course_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  exams          exams[]
+  lectures       lectures[]
+  tutorials_labs tutorials_labs[]
+}
+
+model course_prerequisites {
+  course_code                                             String
+  prerequisite_code                                       String
+  courses_course_prerequisites_course_codeTocourses       courses @relation("course_prerequisites_course_codeTocourses", fields: [course_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  courses_course_prerequisites_prerequisite_codeTocourses courses @relation("course_prerequisites_prerequisite_codeTocourses", fields: [prerequisite_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([course_code, prerequisite_code])
+}
+
+model courses {
+  code                                                                 String                 @id
+  name                                                                 String
+  credits                                                              Int
+  department_id                                                        String                 @db.Uuid
+  course_offerings                                                     course_offerings[]
+  course_prerequisites_course_prerequisites_course_codeTocourses       course_prerequisites[] @relation("course_prerequisites_course_codeTocourses")
+  course_prerequisites_course_prerequisites_prerequisite_codeTocourses course_prerequisites[] @relation("course_prerequisites_prerequisite_codeTocourses")
+  departments                                                          departments            @relation(fields: [department_id], references: [department_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model departments {
+  department_id    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String             @unique
+  courses          courses[]
+  financials       financials?
+  student_profiles student_profiles[]
+}
+
+model enrollments {
+  student_user_id String            @db.Uuid
+  lecture_id      Int
+  tutorial_lab_id Int
+  mid_score       Float?
+  work_score      Float?
+  final_score     Float?
+  grade           String?
+  status          enrollment_status @default(enrolled)
+  lectures        lectures          @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
+  users           users             @relation(fields: [student_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tutorials_labs  tutorials_labs    @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([student_user_id, lecture_id, tutorial_lab_id])
+}
+
+model events {
+  id          Int     @id @default(autoincrement())
+  title       String
+  event_date  String
+  time        String?
+  location    String?
+  img_url     String?
+  link        String?
+  description String?
+}
+
+model exams {
+  exam_id          Int              @id @default(autoincrement())
+  offering_id      Int
+  exam_name        String
+  exam_type        String
+  exam_date        DateTime         @db.Date
+  day_of_week      String
+  start_time       DateTime         @db.Time(6)
+  end_time         DateTime         @db.Time(6)
+  location         String?
+  course_offerings course_offerings @relation(fields: [offering_id], references: [offering_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model files {
+  file_id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  file_name           String
+  file_path           String             @unique
+  media_type          String?
+  size_bytes          BigInt?
+  uploaded_by_user_id String             @db.Uuid
+  created_at          DateTime?          @default(now()) @db.Timestamptz(6)
+  course_materials    course_materials[]
+  users               users              @relation(fields: [uploaded_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model financials {
+  id            Int         @id @default(autoincrement())
+  department_id String      @unique @db.Uuid
+  credit_price  Decimal     @db.Decimal
+  departments   departments @relation(fields: [department_id], references: [department_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model lectures {
+  lecture_id       Int                @id @default(autoincrement())
+  offering_id      Int
+  instructor_id    String             @db.Uuid
+  capacity         Int
+  day_of_week      String
+  start_time       DateTime           @db.Time(6)
+  end_time         DateTime           @db.Time(6)
+  location         String?
+  group            String?
+  attendance       attendance[]
+  course_materials course_materials[]
+  enrollments      enrollments[]
+  users            users              @relation(fields: [instructor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  course_offerings course_offerings   @relation(fields: [offering_id], references: [offering_id], onDelete: Cascade, onUpdate: NoAction)
+  tasks            tasks[]
+}
+
+model news_articles {
+  id           Int       @id @default(autoincrement())
+  title        String
+  content      String?
+  publish_date DateTime  @db.Date
+  image_url    String?
+  link         String?
+  created_at   DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model notifications {
+  id         Int       @id @default(autoincrement())
+  user_id    String    @db.Uuid
+  message    String
+  is_read    Boolean   @default(false)
+  type       String?
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model post_likes {
+  post_id         Int
+  user_id         String          @db.Uuid
+  created_at      DateTime?       @default(now()) @db.Timestamptz(6)
+  community_posts community_posts @relation(fields: [post_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users           @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([post_id, user_id])
+}
+
+model student_profiles {
+  user_id       String       @id @db.Uuid
+  student_id    String       @unique
+  year_level    Int?
+  cgpa          Float?
+  department_id String?      @db.Uuid
+  total_credits Int?
+  departments   departments? @relation(fields: [department_id], references: [department_id], onDelete: NoAction, onUpdate: NoAction)
+  users         users        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model task_submissions {
+  id                 Int       @id @default(autoincrement())
+  task_id            Int
+  student_id         String    @db.Uuid
+  submission_content String?
+  submitted_at       DateTime? @default(now()) @db.Timestamptz(6)
+  grade              Float?
+  users              users     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tasks              tasks     @relation(fields: [task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tasks {
+  id               Int                @id @default(autoincrement())
+  lecture_id       Int?
+  tutorial_lab_id  Int?
+  title            String
+  description      String?
+  due_date         DateTime?          @db.Timestamptz(6)
+  created_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  task_submissions task_submissions[]
+  lectures         lectures?          @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
+  tutorials_labs   tutorials_labs?    @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model testimonials {
+  id           Int      @id @default(autoincrement())
+  student_name String
+  program      String
+  quote        String
+  image_url    String?
+  is_featured  Boolean? @default(false)
+}
+
+model tutorials_labs {
+  tutorial_lab_id  Int                @id @default(autoincrement())
+  offering_id      Int
+  ta_id            String             @db.Uuid
+  type             String
+  capacity         Int
+  day_of_week      String
+  start_time       DateTime           @db.Time(6)
+  end_time         DateTime           @db.Time(6)
+  location         String?
+  group            String
+  attendance       attendance[]
+  course_materials course_materials[]
+  enrollments      enrollments[]
+  tasks            tasks[]
+  course_offerings course_offerings   @relation(fields: [offering_id], references: [offering_id], onDelete: Cascade, onUpdate: NoAction)
+  users            users              @relation(fields: [ta_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model users {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name        String
+  email            String             @unique
+  password_hash    String
+  role             user_role
+  avatar_url       String?
+  phone            String?
+  national_id      String?
+  address          String?
+  created_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  announcements    announcements[]
+  attendance       attendance[]
+  community_posts  community_posts[]
+  enrollments      enrollments[]
+  files            files[]
+  lectures         lectures[]
+  notifications    notifications[]
+  post_likes       post_likes[]
+  student_profiles student_profiles?
+  task_submissions task_submissions[]
+  tutorials_labs   tutorials_labs[]
+}
+
+enum audience_type {
+  All
+  Students
+  Faculty
+}
+
+enum enrollment_status {
+  enrolled
+  dropped
+  completed
+}
+
+enum user_role {
+  student
+  doctor
+  admin
+  teaching_assistant
+  super_admin
+  leader
+}

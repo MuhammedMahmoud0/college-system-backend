@@ -1,5 +1,5 @@
 import express from "express";
-import { login, me } from "../controllers/authController.js";
+import { getUsers, addUsers } from "../controllers/usersController.js";
 import {
     authMiddleware,
     authorizationMiddleware,
@@ -7,7 +7,7 @@ import {
 
 const router = express.Router();
 
-router.post("/login", login);
-router.get("/me", authMiddleware, me);
+router.get("/users", authMiddleware, getUsers);
+router.post("/users", authMiddleware, addUsers);
 
 export default router;

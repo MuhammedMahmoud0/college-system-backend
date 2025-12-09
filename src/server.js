@@ -2,6 +2,7 @@ import { config } from "dotenv";
 import express from "express";
 import { connectDB, disconnectDB } from "./config/connection.js";
 import authRoutes from "./routes/authRoutes.js";
+import usersRoutes from "./routes/usersRoutes.js";
 
 config();
 connectDB();
@@ -23,6 +24,9 @@ app.get("/", (req, res) => {
 
 // mount auth routes
 app.use("/api/v1/auth", authRoutes);
+
+// mount user routes
+app.use("/api/v1", usersRoutes);
 
 // Start the server
 let server = app.listen(port, () => {

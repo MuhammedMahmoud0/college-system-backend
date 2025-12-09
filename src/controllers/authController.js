@@ -32,11 +32,21 @@ export const login = async (req, res) => {
             .status(400)
             .json({ message: "Invalid username or password" });
     }
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
-        expiresIn: "1h",
-    });
+    const token = jwt.sign(
+        { userId: user.id, name: user.full_name, role: user.role },
+        process.env.JWT_SECRET,
+        {
+            expiresIn: "1h",
+        }
+    );
     res.status(200).json({
         message: "Login successful",
         token,
     });
+};
+
+export const me = async (req, res) => {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: "not authenticated" });
+    res.json({ user });
 };

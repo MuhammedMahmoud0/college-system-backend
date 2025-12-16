@@ -2,12 +2,12 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../src/config/connection.js";
 import { config } from "dotenv";
+import logger from "../src/utils/logger.js";
 
 config();
-
 async function main() {
-    console.log(
-        "Seeding database (destructive for many tables) — make sure this is a dev DB..."
+    logger.info(
+        "Seeding database (destructive for many tables)  make sure this is a dev DB..."
     );
 
     // Delete child records first to avoid FK constraint errors
@@ -310,13 +310,13 @@ async function main() {
         },
     });
 
-    console.log("Seeding finished. Created many demo records.");
-    console.log("Common password for seeded users:", passwordPlain);
+    logger.info("Seeding finished. Created many demo records.");
+    logger.info("Common password for seeded users:", passwordPlain);
 }
 
 main()
     .catch((e) => {
-        console.error(e);
+        logger.error(e);
         process.exit(1);
     })
     .finally(async () => {

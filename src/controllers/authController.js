@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/connection.js";
+import logger from "../utils/logger.js";
 
 // export const register = async (req, res) => {
 //     const { email, password } = req.body;
@@ -19,30 +20,38 @@ import { prisma } from "../config/connection.js";
 // };
 
 export const login = async (req, res) => {
-    const { email, password } = req.body;
-    const user = await prisma.users.findUnique({ where: { email } });
-    if (!user) {
-        return res
-            .status(400)
-            .json({ message: "Invalid username or password" });
-    }
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    if (!isPasswordValid) {
-        return res
-            .status(400)
-            .json({ message: "Invalid username or password" });
-    }
-    const token = jwt.sign(
-        { userId: user.id, name: user.full_name, role: user.role },
-        process.env.JWT_SECRET,
-        {
-            expiresIn: "1h",
+    try {
+        const { email, password } = req.body;
+        const user = await prisma.users.findUnique({ where: { email } });
+        if (!user) {
+            return res
+                .status(400)
+                .json({ message: "Invalid username or password" });
         }
-    );
-    res.status(200).json({
-        message: "Login successful",
-        token,
-    });
+        const isPasswordValid = await bcrypt.compare(
+            password,
+            user.password_hash
+        );
+        if (!isPasswordValid) {
+            return res
+                .status(400)
+                .json({ message: "Invalid username or password" });
+        }
+        const token = jwt.sign(
+            { userId: user.id, name: user.full_name, role: user.role },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: "1h",
+            }
+        );
+        res.status(200).json({
+            message: "Login successful",
+            token,
+        });
+    } catch (err) {
+        logger.error(err);
+        res.status(500).json({ error: "Internal server error" });
+    }
 };
 
 export const me = async (req, res) => {

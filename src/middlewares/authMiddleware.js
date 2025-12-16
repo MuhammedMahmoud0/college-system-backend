@@ -15,10 +15,19 @@ export const authMiddleware = (req, res, next) => {
     }
 };
 
-export const authorizationMiddleware = (requiredRole) => {
+// export const authorizationMiddleware = (requiredRole) => {
+//     return (req, res, next) => {
+//         if (!req.user || req.user.role !== requiredRole) {
+//             return res.status(403).json({ error: "Access denied" });
+//         }
+//         next();
+//     };
+// };
+
+export const authorizationMiddleware = (...allowedRoles) => {
     return (req, res, next) => {
-        if (!req.user || req.user.role !== requiredRole) {
-            return res.status(403).json({ error: "Access denied" });
+        if (!allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ message: "Access denied" });
         }
         next();
     };

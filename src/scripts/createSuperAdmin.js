@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 import bcrypt from "bcryptjs";
 import { prisma } from "../config/connection.js";
+import logger from "../utils/logger.js";
 
 config();
 
@@ -26,7 +27,7 @@ async function main() {
     });
 
     if (existing) {
-        console.log(
+        logger.info(
             `Super admin already exists: id=${existing.id} email=${existing.email} role=${existing.role}`
         );
         await prisma.$disconnect();
@@ -55,12 +56,12 @@ async function main() {
         },
     });
 
-    console.log("Super admin created:", newUser);
+    logger.info("Super admin created:", newUser);
     await prisma.$disconnect();
 }
 
 main().catch(async (err) => {
-    console.error("Failed to create super admin:", err);
+    logger.error("Failed to create super admin:", err);
     await prisma.$disconnect();
     process.exit(1);
 });

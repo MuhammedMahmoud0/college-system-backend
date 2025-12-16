@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { config } from "dotenv";
+import logger from "../utils/logger.js";
 
 config();
 
@@ -18,16 +19,16 @@ const prisma = new PrismaClient({
 const connectDB = async () => {
     try {
         await prisma.$connect();
-        console.log("DB connected via Prisma");
+        logger.info("DB connected via Prisma");
     } catch (error) {
-        console.error(`Database connection error: ${error.message}`);
+        logger.error(`Database connection error: ${error.message}`);
         process.exit(1);
     }
 };
 
 const disconnectDB = async () => {
     await prisma.$disconnect();
-    console.log("Database disconnected successfully");
+    logger.info("Database disconnected successfully");
 };
 
 export { connectDB, disconnectDB, prisma };

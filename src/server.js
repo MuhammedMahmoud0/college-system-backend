@@ -3,6 +3,7 @@ import express from "express";
 import { connectDB, disconnectDB } from "./config/connection.js";
 import authRoutes from "./routes/authRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
+import logger from "./utils/logger.js";
 
 config();
 connectDB();
@@ -30,12 +31,12 @@ app.use("/api/v1", usersRoutes);
 
 // Start the server
 let server = app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
+    logger.info(`Server is running at http://localhost:${port}`);
 });
 
 // Handle unhandled promise rejections (e.g., database connection errors)
 process.on("unhandledRejection", (err) => {
-    console.error("Unhandled Rejection:", err);
+    logger.error("Unhandled Rejection:", err);
     server.close(async () => {
         await disconnectDB();
         process.exit(1);
@@ -44,14 +45,14 @@ process.on("unhandledRejection", (err) => {
 
 // Handle uncaught exceptions
 process.on("uncaughtException", async (err) => {
-    console.error("Uncaught Exception:", err);
+    logger.error("Uncaught Exception:", err);
     await disconnectDB();
     process.exit(1);
 });
 
 // Graceful shutdown on SIGTERM
 process.on("SIGTERM", async () => {
-    console.log("SIGTERM received. Shutting down gracefully...");
+    logger.info("SIGTERM received. Shutting down gracefully...");
     server.close(async () => {
         await disconnectDB();
         process.exit(0);

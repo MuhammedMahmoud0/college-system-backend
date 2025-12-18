@@ -1,6 +1,6 @@
 export default {
     paths: {
-        "/login": {
+        "/auth/login": {
             post: {
                 tags: ["Auth"],
                 summary: "Authenticate user and return a JWT token",
@@ -38,7 +38,7 @@ export default {
                 },
             },
         },
-        "/me": {
+        "/auth/me": {
             get: {
                 tags: ["Auth"],
                 summary: "Get current authenticated user",

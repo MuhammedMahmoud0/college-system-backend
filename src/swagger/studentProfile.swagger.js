@@ -1,6 +1,6 @@
 export default {
     paths: {
-        "/profile": {
+        "/student/profile": {
             get: {
                 tags: ["StudentProfile"],
                 summary: "Get current student's profile",

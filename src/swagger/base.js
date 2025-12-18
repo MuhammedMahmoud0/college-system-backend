@@ -7,7 +7,7 @@ export default {
     },
     servers: [
         {
-            url: "/",
+            url: "/api/v1",
         },
     ],
 };

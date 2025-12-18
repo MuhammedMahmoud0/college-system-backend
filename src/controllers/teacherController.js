@@ -223,13 +223,9 @@ export const getTeacherSchedule = async (req, res) => {
       // Sort slots by start time
       slots.sort((a, b) => {
         const timeA =
-          a.startTime instanceof Date
-            ? a.startTime.toISOString()
-            : a.startTime;
+          a.startTime instanceof Date ? a.startTime.toISOString() : a.startTime;
         const timeB =
-          b.startTime instanceof Date
-            ? b.startTime.toISOString()
-            : b.startTime;
+          b.startTime instanceof Date ? b.startTime.toISOString() : b.startTime;
         return timeA.localeCompare(timeB);
       });
 

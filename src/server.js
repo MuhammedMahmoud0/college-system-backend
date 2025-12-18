@@ -5,8 +5,15 @@ import authRoutes from "./routes/authRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
 import studentProfileRoutes from "./routes/studentProfileRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
+import materialsRoutes from "./routes/materialsRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
+
+// Handle BigInt serialization to JSON
+// Convert BigInt values to strings to prevent JSON serialization errors
+BigInt.prototype.toJSON = function() {
+    return this.toString();
+};
 
 config();
 connectDB();
@@ -37,6 +44,9 @@ app.use("/api/v1/student", studentProfileRoutes);
 
 // mount leaderboard routes
 app.use("/api/v1/leaderboard", leaderboardRoutes);
+
+// mount materials routes
+app.use("/api/v1/materials", materialsRoutes);
 
 // Swagger API documentation route
 app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));

@@ -8,6 +8,14 @@ export const authMiddleware = (req, res, next) => {
     const token = authHeader.split(" ")[1];
     try {
         const payload = jwt.verify(token, process.env.JWT_SECRET);
+
+        // Normalize user id
+        payload.id = payload.id ?? payload.userId;
+
+        if (!payload.id) {
+            return res.status(401).json({ error: "Invalid token payload" });
+        }
+
         req.user = payload;
         next();
     } catch (err) {

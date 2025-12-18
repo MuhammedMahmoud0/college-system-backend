@@ -3,7 +3,10 @@ import express from "express";
 import { connectDB, disconnectDB } from "./config/connection.js";
 import authRoutes from "./routes/authRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
+import studentProfileRoutes from "./routes/studentProfileRoutes.js";
+import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import logger from "./utils/logger.js";
+import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 
 config();
 connectDB();
@@ -28,6 +31,15 @@ app.use("/api/v1/auth", authRoutes);
 
 // mount user routes
 app.use("/api/v1", usersRoutes);
+
+// mount student profile routes
+app.use("/api/v1/student", studentProfileRoutes);
+
+// mount leaderboard routes
+app.use("/api/v1/leaderboard", leaderboardRoutes);
+
+// Swagger API documentation route
+app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));
 
 // Start the server
 let server = app.listen(port, () => {

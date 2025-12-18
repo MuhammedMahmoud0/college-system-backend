@@ -101,10 +101,14 @@ async function main() {
     // Users
     const superAdmin = await prisma.users.create({
         data: {
-            full_name: "Super Admin",
-            email: "superadmin@example.com",
-            password_hash: hashed,
+            full_name: "Magda Madbouly",
+            email: "magda_madbouly@example.com",
+            password_hash: bcrypt.hashSync("123456789", 10),
             role: "super_admin",
+            phone: "+201234567890",
+            avatar_url: null,
+            national_id: "20907192200123", // integer or null
+            address: "123 Admin St, Cairo, Egypt",
         },
     });
 

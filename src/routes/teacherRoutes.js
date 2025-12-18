@@ -1,5 +1,8 @@
 import express from "express";
-import { getAllTeachers } from "../controllers/teacherController.js";
+import {
+  getAllTeachers,
+  getTeacherSchedule,
+} from "../controllers/teacherController.js";
 import {
   authMiddleware,
   authorizationMiddleware,
@@ -13,6 +16,14 @@ router.get(
   authMiddleware,
   authorizationMiddleware("super_admin", "admin"),
   getAllTeachers
+);
+
+// Route to get teacher schedule - only accessible by doctor and teaching_assistant
+router.get(
+  "/:teacherId/schedule",
+  authMiddleware,
+  authorizationMiddleware("doctor", "teaching_assistant"),
+  getTeacherSchedule
 );
 
 export default router;

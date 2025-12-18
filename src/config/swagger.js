@@ -6,16 +6,18 @@ import leaderboard from "../swagger/leaderboard.swagger.js";
 import auth from "../swagger/auth.swagger.js";
 import users from "../swagger/users.swagger.js";
 import studentProfile from "../swagger/studentProfile.swagger.js";
+import schedule from "../swagger/schedule.swagger.js";
 
 export const swaggerSpec = {
-    ...base,
-    components,
-    paths: {
-        ...auth.paths,
-        ...users.paths,
-        ...studentProfile.paths,
-        ...leaderboard.paths,
-    },
+  ...base,
+  components,
+  paths: {
+    ...auth.paths,
+    ...users.paths,
+    ...studentProfile.paths,
+    ...leaderboard.paths,
+    ...schedule.paths,
+  },
 };
 
 export const swaggerUiHandler = swaggerUi;

@@ -7,6 +7,8 @@ import studentProfileRoutes from "./routes/studentProfileRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import scheduleRoutes from "./routes/scheduleRoutes.js";
 import materialsRoutes from "./routes/materialsRoutes.js";
+import communityRoutes from './routes/communityRoutes.js';
+import courseRoutes from './routes/courseRoutes.js';
 import teacherRoutes from "./routes/teacherRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
@@ -48,6 +50,12 @@ app.use("/api/v1/leaderboard", leaderboardRoutes);
 
 // mount schedule routes
 app.use("/api/v1/schedule", scheduleRoutes);
+
+// mount community routes
+app.use('/api/community', communityRoutes);
+
+// mount course routes
+app.use('/api/courses', courseRoutes);
 
 // mount materials routes
 app.use("/api/v1/materials", materialsRoutes);

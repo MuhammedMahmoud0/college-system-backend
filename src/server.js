@@ -5,6 +5,8 @@ import authRoutes from "./routes/authRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
 import studentProfileRoutes from "./routes/studentProfileRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
+import communityRoutes from './routes/communityRoutes.js';
+import courseRoutes from './routes/courseRoutes.js';
 import materialsRoutes from "./routes/materialsRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
@@ -23,6 +25,11 @@ const port = process.env.PORT || 3000;
 
 // Middleware to parse JSON bodies
 app.use(express.json());
+
+// Convert BigInt values to strings to prevent JSON serialization errors
+BigInt.prototype.toJSON = function () {
+    return this.toString();
+};
 
 // Sample route
 app.get("/", (req, res) => {
@@ -44,6 +51,12 @@ app.use("/api/v1/student", studentProfileRoutes);
 
 // mount leaderboard routes
 app.use("/api/v1/leaderboard", leaderboardRoutes);
+
+// mount community routes
+app.use('/api/community', communityRoutes);
+
+// mount course routes
+app.use('/api/courses', courseRoutes);
 
 // mount materials routes
 app.use("/api/v1/materials", materialsRoutes);

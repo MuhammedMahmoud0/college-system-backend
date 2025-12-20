@@ -51,20 +51,13 @@ export const getMaterialsByCourseCode = async (req, res) => {
                     select: {
                         lecture_id: true,
                         day_of_week: true,
-                        start_time: true,
-                        end_time: true,
-                        location: true,
                         group: true,
                     },
                 },
                 tutorials_labs: {
                     select: {
                         tutorial_lab_id: true,
-                        type: true,
                         day_of_week: true,
-                        start_time: true,
-                        end_time: true,
-                        location: true,
                         group: true,
                     },
                 },

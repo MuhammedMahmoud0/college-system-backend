@@ -6,6 +6,9 @@
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "dev": "node --watch src/server.js",
+        "prisma:migrate": "prisma migrate dev",
+        "prisma:generate": "prisma generate",
+        "start": "node src/server.js",
         "seed": "node prisma/seed.js",
         "db:studio": "prisma studio"
     },

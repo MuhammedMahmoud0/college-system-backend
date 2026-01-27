@@ -8,18 +8,26 @@ import users from "../swagger/users.swagger.js";
 import studentProfile from "../swagger/studentProfile.swagger.js";
 import schedule from "../swagger/schedule.swagger.js";
 import teacher from "../swagger/teacher.swagger.js";
+import notification from "../swagger/notification.swagger.js";
 
 export const swaggerSpec = {
-  ...base,
-  components,
-  paths: {
-    ...auth.paths,
-    ...users.paths,
-    ...studentProfile.paths,
-    ...leaderboard.paths,
-    ...schedule.paths,
-    ...teacher.paths,
-  },
+    ...base,
+    components: {
+        ...components,
+        schemas: {
+            ...components.schemas,
+            ...notification.schemas,
+        },
+    },
+    paths: {
+        ...auth.paths,
+        ...users.paths,
+        ...studentProfile.paths,
+        ...leaderboard.paths,
+        ...schedule.paths,
+        ...teacher.paths,
+        ...notification.paths,
+    },
 };
 
 export const swaggerUiHandler = swaggerUi;

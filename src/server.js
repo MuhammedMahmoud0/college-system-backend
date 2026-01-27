@@ -7,9 +7,10 @@ import studentProfileRoutes from "./routes/studentProfileRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import scheduleRoutes from "./routes/scheduleRoutes.js";
 import materialsRoutes from "./routes/materialsRoutes.js";
-import communityRoutes from './routes/communityRoutes.js';
-import courseRoutes from './routes/courseRoutes.js';
+import communityRoutes from "./routes/communityRoutes.js";
+import courseRoutes from "./routes/courseRoutes.js";
 import teacherRoutes from "./routes/teacherRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 
@@ -24,16 +25,16 @@ app.use(express.json());
 
 // Convert BigInt values to strings to prevent JSON serialization errors
 BigInt.prototype.toJSON = function () {
-  return this.toString();
+    return this.toString();
 };
 
 // Sample route
 app.get("/", (req, res) => {
-  res.json({
-    status: "OK",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
+    res.json({
+        status: "OK",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+    });
 });
 
 // mount auth routes
@@ -52,10 +53,10 @@ app.use("/api/v1/leaderboard", leaderboardRoutes);
 app.use("/api/v1/schedule", scheduleRoutes);
 
 // mount community routes
-app.use('/api/community', communityRoutes);
+app.use("/api/community", communityRoutes);
 
 // mount course routes
-app.use('/api/courses', courseRoutes);
+app.use("/api/courses", courseRoutes);
 
 // mount materials routes
 app.use("/api/v1/materials", materialsRoutes);
@@ -63,35 +64,38 @@ app.use("/api/v1/materials", materialsRoutes);
 // mount teacher routes
 app.use("/api/v1/teachers", teacherRoutes);
 
+// mount notification routes
+app.use("/api/v1/notifications", notificationRoutes);
+
 // Swagger API documentation route
 app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));
 
 // Start the server
 let server = app.listen(port, () => {
-  logger.info(`Server is running at http://localhost:${port}`);
+    logger.info(`Server is running at http://localhost:${port}`);
 });
 
 // Handle unhandled promise rejections (e.g., database connection errors)
 process.on("unhandledRejection", (err) => {
-  logger.error("Unhandled Rejection:", err);
-  server.close(async () => {
-    await disconnectDB();
-    process.exit(1);
-  });
+    logger.error("Unhandled Rejection:", err);
+    server.close(async () => {
+        await disconnectDB();
+        process.exit(1);
+    });
 });
 
 // Handle uncaught exceptions
 process.on("uncaughtException", async (err) => {
-  logger.error("Uncaught Exception:", err);
-  await disconnectDB();
-  process.exit(1);
+    logger.error("Uncaught Exception:", err);
+    await disconnectDB();
+    process.exit(1);
 });
 
 // Graceful shutdown on SIGTERM
 process.on("SIGTERM", async () => {
-  logger.info("SIGTERM received. Shutting down gracefully...");
-  server.close(async () => {
-    await disconnectDB();
-    process.exit(0);
-  });
+    logger.info("SIGTERM received. Shutting down gracefully...");
+    server.close(async () => {
+        await disconnectDB();
+        process.exit(0);
+    });
 });

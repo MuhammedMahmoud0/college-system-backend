@@ -1,56 +1,46 @@
 import express from "express";
+import { upload } from "../middlewares/uploadMiddleware.js";
 import {
-    getMaterialsByCourseCode,
-    getMaterialsByLecture,
-    getMaterialsByTutorial,
-    getMaterialById,
+    authMiddleware,
+    authorizationMiddleware,
+} from "../middlewares/authMiddleware.js";
+import {
     createMaterial,
+    getMaterials,
     updateMaterial,
     deleteMaterial,
-    getUserFiles,
-    getFileById,
+    downloadMaterial,
+    streamMaterial,
 } from "../controllers/materialsController.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-/**
- * Public/Authenticated Routes for fetching materials
- */
+// Apply authentication to all routes
+router.use(authMiddleware);
 
-// Get all materials for a specific course code
-router.get("/course/:courseCode", authMiddleware, getMaterialsByCourseCode);
+// Get materials - accessible by all authenticated users (students, doctors, admins)
+router.get("/", getMaterials);
 
-// Get all materials for a specific lecture
-router.get("/lecture/:lectureId", authMiddleware, getMaterialsByLecture);
+// Download endpoints - accessible by all authenticated users
+router.get("/:id/download", downloadMaterial); // Returns signed URL
+router.get("/:id/stream", streamMaterial); // Streams file directly
 
-// Get all materials for a specific tutorial/lab
-router.get("/tutorial/:tutorialLabId", authMiddleware, getMaterialsByTutorial);
-
-// Get a specific material by ID
-router.get("/:materialId", authMiddleware, getMaterialById);
-
-/**
- * File Routes
- */
-
-// Get all files uploaded by the authenticated user
-router.get("/files/my-uploads", authMiddleware, getUserFiles);
-
-// Get file details by file ID
-router.get("/files/:fileId", authMiddleware, getFileById);
-
-/**
- * CRUD Routes for course materials
- */
-
-// Create a new material
-router.post("/", authMiddleware, createMaterial);
-
-// Update a material
-router.put("/:materialId", authMiddleware, updateMaterial);
-
-// Delete a material
-router.delete("/:materialId", authMiddleware, deleteMaterial);
+// Create, update, delete - only doctors and admins
+router.post(
+    "/",
+    authorizationMiddleware("doctor", "admin", "super_admin"),
+    upload.single("file"),
+    createMaterial
+);
+router.put(
+    "/:id",
+    authorizationMiddleware("doctor", "admin", "super_admin"),
+    updateMaterial
+);
+router.delete(
+    "/:id",
+    authorizationMiddleware("doctor", "admin", "super_admin"),
+    deleteMaterial
+);
 
 export default router;

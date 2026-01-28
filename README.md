@@ -27,15 +27,37 @@ npm install
 
 2. Environment variables
 
-Create a `.env` file at the project root with at least:
+Create a `.env` file at the project root (copy from `.env.example`):
+
+```bash
+cp .env.example .env
+```
+
+Then fill in the required values:
 
 ```env
 DATABASE_URL="postgresql://user:pass@localhost:5432/yourdb?schema=public"
 JWT_SECRET="a_strong_secret"
 PORT=3000
+
+# Supabase (required for file uploads)
+SUPABASE_URL="https://your-project-id.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key-here"
 ```
 
-3. Prisma
+**Getting Supabase credentials:**
+
+1. Go to [Supabase Dashboard](https://app.supabase.com/)
+2. Select your project
+3. Go to Settings → API
+4. Copy the `URL` and `service_role` key (NOT the `anon` key)
+5. Create a storage bucket named `course-materials`:
+
+    - Go to Storage → New bucket
+    - Name: `course-materials`
+    - Make it public or configure RLS policies
+
+6. Prisma
 
 If you modify `prisma/schema.prisma` or on first setup run:
 

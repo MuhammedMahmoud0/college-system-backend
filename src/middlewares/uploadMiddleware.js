@@ -16,6 +16,11 @@ export const uploadExcel = multer({
     },
 });
 
+export const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+});
+
 // // 1. Defined allowed mimetypes as a constant for maintainability
 // const ALLOWED_MIMES = [
 //     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -9,6 +9,7 @@ import studentProfile from "../swagger/studentProfile.swagger.js";
 import schedule from "../swagger/schedule.swagger.js";
 import teacher from "../swagger/teacher.swagger.js";
 import notification from "../swagger/notification.swagger.js";
+import materials from "../swagger/materials.swagger.js";
 
 export const swaggerSpec = {
     ...base,
@@ -17,6 +18,7 @@ export const swaggerSpec = {
         schemas: {
             ...components.schemas,
             ...notification.schemas,
+            ...materials.schemas,
         },
     },
     paths: {
@@ -27,6 +29,7 @@ export const swaggerSpec = {
         ...schedule.paths,
         ...teacher.paths,
         ...notification.paths,
+        ...materials.paths,
     },
 };
 

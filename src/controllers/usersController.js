@@ -21,7 +21,25 @@ export const getUsers = async (req, res) => {
 
 export const addUsers = async (req, res) => {
     try {
-        const { name, email, password, role } = req.body;
+        const { name, id, email, password, role } = req.body;
+        if (!name || !email || !password || !role) {
+            return res.status(400).json({
+                error: "All fields (name, id, email, password, role) are required",
+            });
+        }
+        if (role === "student" && !id) {
+            return res.status(400).json({
+                error: "Student ID is required for student role",
+            });
+        }
+        const existingUser = await prisma.users.findUnique({
+            where: { email },
+        });
+
+        if (existingUser) {
+            return res.status(409).json({ error: "Email already exist" });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await prisma.users.create({
             data: {
@@ -31,6 +49,15 @@ export const addUsers = async (req, res) => {
                 role,
             },
         });
+        if (role === "student") {
+            await prisma.student_profiles.create({
+                data: {
+                    user_id: newUser.id,
+                    student_id: id,
+                },
+            });
+        }
+
         res.status(201).json({
             message: "User created successfully",
             userId: newUser.id,

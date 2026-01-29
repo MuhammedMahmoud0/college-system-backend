@@ -7,6 +7,7 @@ import {
     authMiddleware,
     authorizationMiddleware,
 } from "../middlewares/authMiddleware.js";
+import { upload } from "../middlewares/uploadMiddleware.js";
 
 const router = express.Router();
 
@@ -18,11 +19,12 @@ router.get(
     getStudentProfile
 );
 
-// Route to update student profile
+// Route to update student profile (with optional avatar upload)
 router.put(
     "/profile",
     authMiddleware,
     authorizationMiddleware("student"),
+    upload.single("avatar"), // Accept avatar file
     updateStudentProfile
 );
 

@@ -21,6 +21,8 @@ export default {
             post: {
                 tags: ["Users"],
                 summary: "Create a new user",
+                description:
+                    "Create a new user. For students, student_id is required and a student profile will be created automatically.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
@@ -34,11 +36,62 @@ export default {
                 },
                 responses: {
                     201: {
-                        description: "User created",
+                        description: "User created successfully",
                         content: {
                             "application/json": {
                                 schema: {
                                     $ref: "#/components/schemas/CreateUserResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description:
+                            "Validation error - missing required fields or invalid role",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                                examples: {
+                                    missingFields: {
+                                        value: {
+                                            error: "All fields (name, email, password, role) are required",
+                                        },
+                                    },
+                                    missingStudentId: {
+                                        value: {
+                                            error: "Student ID is required for student role",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    409: {
+                        description:
+                            "Conflict - email or student ID already exists",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                                examples: {
+                                    emailExists: {
+                                        value: {
+                                            error: "Email already exist",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
                                 },
                             },
                         },

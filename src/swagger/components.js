@@ -75,16 +75,43 @@ export default {
             type: "object",
             required: ["name", "email", "password", "role"],
             properties: {
-                name: { type: "string" },
-                email: { type: "string", format: "email" },
-                password: { type: "string" },
-                role: { type: "string" },
+                name: {
+                    type: "string",
+                    description: "Full name of the user",
+                },
+                email: {
+                    type: "string",
+                    format: "email",
+                    description: "Email address (must be unique)",
+                },
+                password: {
+                    type: "string",
+                    description: "User password (will be hashed)",
+                },
+                role: {
+                    type: "string",
+                    enum: [
+                        "student",
+                        "doctor",
+                        "admin",
+                        "super_admin",
+                        "teaching_assistant",
+                        "leader",
+                    ],
+                    description: "User role",
+                },
+                id: {
+                    type: "string",
+                    description:
+                        "Student ID (required when role is 'student', must be unique)",
+                },
             },
             example: {
                 name: "John Smith",
                 email: "john.smith@example.edu",
                 password: "SuperSecurePass123",
                 role: "student",
+                id: "2021001234",
             },
         },
         CreateUserResponse: {
@@ -140,12 +167,33 @@ export default {
         StudentProfileUpdateRequest: {
             type: "object",
             properties: {
-                address: { type: "string" },
-                phone: { type: "string" },
+                full_name: {
+                    type: "string",
+                    description: "Student's full name",
+                },
+                address: {
+                    type: "string",
+                    description: "Student's address",
+                },
+                phone: {
+                    type: "string",
+                    description: "Student's phone number",
+                },
+                national_id: {
+                    type: "string",
+                    description: "Student's national ID number",
+                },
+                avatar: {
+                    type: "string",
+                    format: "binary",
+                    description: "Avatar image file (JPG, PNG, etc.)",
+                },
             },
             example: {
+                full_name: "John Doe",
                 address: "Apartment 4B, 456 College Rd",
                 phone: "+201112223334",
+                national_id: "12345678901234",
             },
         },
         StudentWithProfiles: {

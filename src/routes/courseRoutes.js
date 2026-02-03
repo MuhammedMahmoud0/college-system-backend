@@ -10,4 +10,8 @@ router.get('/student', courseController.getStudentCourses);
 router.get('/:courseId', courseController.getCourseDetails);
 router.get('/:courseId/grades', courseController.getGradeBreakdown);
 
+router.post('/', courseController.createCourse);
+router.patch('/:code', courseController.updateCourse);
+router.delete('/:code', courseController.deleteCourse);
+
 export default router;

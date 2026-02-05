@@ -136,3 +136,171 @@ export const getGradeBreakdown = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
+// POST /api/courses
+export const createCourse = async (req, res) => {
+    try {
+        const { code, name, credits, department, prerequisites } = req.body;
+
+        if (!code || !name || !credits || !department) {
+            return res.status(400).json({
+                error: "Missing required fields",
+                required: ["code", "name", "credits", "department"],
+            });
+        }
+
+        // Resolve department by name
+        const dept = await prisma.departments.findUnique({
+            where: { name: department },
+            select: { department_id: true, name: true },
+        });
+
+        if (!dept) {
+            return res.status(400).json({
+                error: "Invalid department",
+                message: `Department with name '${department}' not found`,
+            });
+        }
+
+        const courseData = {
+            code,
+            name,
+            credits: parseInt(credits),
+            department_id: dept.department_id,
+        };
+
+        const newCourse = await prisma.courses.create({
+            data: courseData,
+        });
+
+        if (prerequisites && prerequisites.length > 0) {
+            await prisma.course_prerequisites.createMany({
+                data: prerequisites.map(prereqCode => ({
+                    course_code: newCourse.code,
+                    prerequisite_code: prereqCode,
+                })),
+            });
+        }
+
+        const result = await prisma.courses.findUnique({
+            where: { code: newCourse.code },
+            include: {
+                course_prerequisites_course_prerequisites_course_codeTocourses: {
+                    include: {
+                        courses_course_prerequisites_prerequisite_codeTocourses: true,
+                    },
+                },
+                departments: true,
+            },
+        });
+
+        res.status(201).json({
+            code: result.code,
+            name: result.name,
+            credits: result.credits,
+            department: result.departments?.name || department,
+            course_prerequisites_course_prerequisites_course_codeTocourses:
+                result.course_prerequisites_course_prerequisites_course_codeTocourses,
+        });
+    } catch (err) {
+        logger.error(err);
+        if (err.code === "P2002") {
+            return res.status(400).json({ error: "A course with this code already exists." });
+        }
+        if (err.code === "P2003") {
+            return res.status(400).json({ error: "Invalid prerequisite course." });
+        }
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// PATCH /api/courses/:code
+export const updateCourse = async (req, res) => {
+    try {
+        const { code } = req.params;
+        const { name, prerequisites } = req.body;
+
+        const updateData = {};
+        if (name) updateData.name = name;
+
+        await prisma.$transaction(async (tx) => {
+            if (name) {
+                await tx.courses.update({
+                    where: { code },
+                    data: { name },
+                });
+            }
+
+            if (prerequisites) {
+                await tx.course_prerequisites.deleteMany({
+                    where: { course_code: code },
+                });
+                await tx.course_prerequisites.createMany({
+                    data: prerequisites.map(prereqCode => ({
+                        course_code: code,
+                        prerequisite_code: prereqCode,
+                    })),
+                });
+            }
+        });
+
+        const updatedCourse = await prisma.courses.findUnique({
+            where: { code },
+            include: {
+                course_prerequisites_course_prerequisites_course_codeTocourses: {
+                    include: {
+                        courses_course_prerequisites_prerequisite_codeTocourses: true,
+                    },
+                },
+            },
+        });
+
+        res.status(200).json({
+            code: updatedCourse.code,
+            name: updatedCourse.name,
+            credits: updatedCourse.credits,
+            department: updatedCourse.departments?.name || undefined,
+            course_prerequisites_course_prerequisites_course_codeTocourses:
+                updatedCourse.course_prerequisites_course_prerequisites_course_codeTocourses,
+        });
+    } catch (err) {
+        logger.error(err);
+        if (err.code === "P2025") {
+            return res.status(404).json({ error: "Course not found." });
+        }
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// DELETE /api/courses/:code
+export const deleteCourse = async (req, res) => {
+    try {
+        const { code } = req.params;
+
+        const prerequisiteFor = await prisma.course_prerequisites.findMany({
+            where: { prerequisite_code: code },
+        });
+
+        if (prerequisiteFor.length > 0) {
+            return res.status(400).json({
+                error: "Cannot delete course; it is a prerequisite for other modules.",
+            });
+        }
+
+        await prisma.course_prerequisites.deleteMany({
+            where: { course_code: code },
+        });
+
+        const deletedCourse = await prisma.courses.delete({
+            where: { code },
+        });
+
+        res.status(200).json(deletedCourse);
+    } catch (err) {
+        logger.error(err);
+        if (err.code === "P2025") {
+            return res.status(404).json({ error: "Course not found." });
+        }
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

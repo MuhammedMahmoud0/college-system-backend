@@ -11,6 +11,7 @@ import communityRoutes from "./routes/communityRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import teacherRoutes from "./routes/teacherRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import registrationRoutes from "./routes/registrationRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 
@@ -66,6 +67,9 @@ app.use("/api/v1/teachers", teacherRoutes);
 
 // mount notification routes
 app.use("/api/v1/notifications", notificationRoutes);
+
+// mount registration routes
+app.use("/api/registration", registrationRoutes);
 
 // Swagger API documentation route
 app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));

@@ -1,0 +1,337 @@
+import { prisma } from "../config/connection.js";
+import logger from "../utils/logger.js";
+
+/**
+ * Helper function to check if two time slots overlap
+ * @param {Date} startA - Start time of first slot
+ * @param {Date} endA - End time of first slot
+ * @param {Date} startB - Start time of second slot
+ * @param {Date} endB - End time of second slot
+ * @returns {boolean} - True if times overlap
+ */
+const timesOverlap = (startA, endA, startB, endB) => {
+    return startA < endB && endA > startB;
+};
+
+/**
+ * Helper function to format time for display
+ * @param {Date} time - Time to format
+ * @returns {string} - Formatted time string (HH:MM)
+ */
+const formatTime = (time) => {
+    if (!time) return '';
+    return new Date(time).toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: false 
+    });
+};
+
+// GET /api/registration/available-offerings
+export const getAvailableOfferings = async (req, res) => {
+    try {
+        const userId = req.user.id; // From auth middleware
+
+        // Get current semester (you may need to adjust this logic based on your system)
+        const currentSemester = "Spring 2026"; // This should be dynamic based on your semester management
+
+        // Fetch all course offerings for the current semester
+        const courseOfferings = await prisma.course_offerings.findMany({
+            where: { semester: currentSemester },
+            include: {
+                courses: true,
+                lectures: {
+                    include: {
+                        users: {
+                            select: {
+                                full_name: true
+                            }
+                        }
+                    }
+                },
+                tutorials_labs: {
+                    include: {
+                        users: {
+                            select: {
+                                full_name: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Get all enrollments for the student with status 'completed'
+        const completedEnrollments = await prisma.enrollments.findMany({
+            where: {
+                student_user_id: userId,
+                status: 'completed'
+            },
+            include: {
+                lectures: {
+                    include: {
+                        course_offerings: true
+                    }
+                }
+            }
+        });
+
+        // Extract course codes that the student has already completed
+        const completedCourseCodes = new Set(
+            completedEnrollments.map(en => en.lectures.course_offerings.course_code)
+        );
+
+        // Get all prerequisites
+        const prerequisites = await prisma.course_prerequisites.findMany();
+
+        // Build a map of course_code -> [prerequisite_codes]
+        const prerequisiteMap = new Map();
+        prerequisites.forEach(prereq => {
+            if (!prerequisiteMap.has(prereq.course_code)) {
+                prerequisiteMap.set(prereq.course_code, []);
+            }
+            prerequisiteMap.get(prereq.course_code).push(prereq.prerequisite_code);
+        });
+
+        // Filter and format the available offerings
+        const availableOfferings = [];
+
+        for (const offering of courseOfferings) {
+            const courseCode = offering.course_code;
+
+            // Skip if student has already completed this course
+            if (completedCourseCodes.has(courseCode)) {
+                continue;
+            }
+
+            // Check prerequisites
+            const requiredPrereqs = prerequisiteMap.get(courseCode) || [];
+            const hasAllPrereqs = requiredPrereqs.every(prereq => 
+                completedCourseCodes.has(prereq)
+            );
+
+            // Skip if prerequisites are not met
+            if (!hasAllPrereqs) {
+                continue;
+            }
+
+            // Format lectures
+            const lectures = offering.lectures.map(lecture => ({
+                id: lecture.lecture_id,
+                group_number: lecture.group || "1",
+                day_of_week: lecture.day_of_week,
+                start_time: formatTime(lecture.start_time),
+                end_time: formatTime(lecture.end_time),
+                location: lecture.location || "TBD",
+                instructor: lecture.users.full_name,
+                capacity: lecture.capacity,
+                type: "LECTURE"
+            }));
+
+            // Format labs (tutorials_labs with type = 'LAB' or 'Tutorial')
+            const labs = offering.tutorials_labs.map(lab => ({
+                id: lab.tutorial_lab_id,
+                group_number: lab.group,
+                day_of_week: lab.day_of_week,
+                start_time: formatTime(lab.start_time),
+                end_time: formatTime(lab.end_time),
+                location: lab.location || "TBD",
+                instructor: lab.users.full_name,
+                capacity: lab.capacity,
+                type: "LAB"
+            }));
+
+            // Add to available offerings
+            availableOfferings.push({
+                courseName: offering.courses.name,
+                courseCode: offering.course_code,
+                creditHours: offering.courses.credits,
+                lectures,
+                labs
+            });
+        }
+
+        res.status(200).json({
+            semester: currentSemester,
+            offerings: availableOfferings
+        });
+    } catch (err) {
+        logger.error("Error fetching available offerings:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// POST /api/registration/register
+export const registerCourses = async (req, res) => {
+    try {
+        const { studentId, selectedLectureIds, selectedLabIds } = req.body;
+
+        // Validate input
+        if (!studentId || !Array.isArray(selectedLectureIds) || !Array.isArray(selectedLabIds)) {
+            return res.status(400).json({ 
+                error: "Invalid input. Required: studentId, selectedLectureIds (array), selectedLabIds (array)" 
+            });
+        }
+
+        if (selectedLectureIds.length === 0 && selectedLabIds.length === 0) {
+            return res.status(400).json({ 
+                error: "Must select at least one lecture or lab" 
+            });
+        }
+
+        // Fetch all selected lectures
+        const lectures = await prisma.lectures.findMany({
+            where: {
+                lecture_id: { in: selectedLectureIds }
+            },
+            include: {
+                course_offerings: {
+                    include: {
+                        courses: true
+                    }
+                }
+            }
+        });
+
+        // Fetch all selected labs
+        const labs = await prisma.tutorials_labs.findMany({
+            where: {
+                tutorial_lab_id: { in: selectedLabIds }
+            },
+            include: {
+                course_offerings: {
+                    include: {
+                        courses: true
+                    }
+                }
+            }
+        });
+
+        // Combine all sessions for conflict checking
+        const allSessions = [
+            ...lectures.map(lecture => ({
+                id: lecture.lecture_id,
+                type: 'lecture',
+                day_of_week: lecture.day_of_week,
+                start_time: lecture.start_time,
+                end_time: lecture.end_time,
+                courseName: lecture.course_offerings.courses.name,
+                courseCode: lecture.course_offerings.course_code
+            })),
+            ...labs.map(lab => ({
+                id: lab.tutorial_lab_id,
+                type: 'lab',
+                day_of_week: lab.day_of_week,
+                start_time: lab.start_time,
+                end_time: lab.end_time,
+                courseName: lab.course_offerings.courses.name,
+                courseCode: lab.course_offerings.course_code
+            }))
+        ];
+
+        // Check for time conflicts
+        for (let i = 0; i < allSessions.length; i++) {
+            for (let j = i + 1; j < allSessions.length; j++) {
+                const sessionA = allSessions[i];
+                const sessionB = allSessions[j];
+
+                // Only check if they're on the same day
+                if (sessionA.day_of_week === sessionB.day_of_week) {
+                    const conflict = timesOverlap(
+                        sessionA.start_time,
+                        sessionA.end_time,
+                        sessionB.start_time,
+                        sessionB.end_time
+                    );
+
+                    if (conflict) {
+                        return res.status(400).json({
+                            error: `Conflict on ${sessionA.day_of_week}: ${sessionA.courseName} (${sessionA.courseCode}) [${formatTime(sessionA.start_time)}-${formatTime(sessionA.end_time)}] overlaps with ${sessionB.courseName} (${sessionB.courseCode}) [${formatTime(sessionB.start_time)}-${formatTime(sessionB.end_time)}]`
+                        });
+                    }
+                }
+            }
+        }
+
+        // Start database transaction
+        try {
+            const result = await prisma.$transaction(async (tx) => {
+                const enrollmentsCreated = [];
+
+                // Process each lecture-lab pair
+                // Group lectures and labs by course offering
+                const lecturesByOffering = new Map();
+                const labsByOffering = new Map();
+
+                lectures.forEach(lecture => {
+                    lecturesByOffering.set(lecture.offering_id, lecture);
+                });
+
+                labs.forEach(lab => {
+                    if (!labsByOffering.has(lab.offering_id)) {
+                        labsByOffering.set(lab.offering_id, []);
+                    }
+                    labsByOffering.get(lab.offering_id).push(lab);
+                });
+
+                // Create enrollments for each course
+                for (const lecture of lectures) {
+                    // Check lecture capacity
+                    const lectureEnrollmentCount = await tx.enrollments.count({
+                        where: { lecture_id: lecture.lecture_id }
+                    });
+
+                    if (lectureEnrollmentCount >= lecture.capacity) {
+                        throw new Error(`Lecture ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) is full`);
+                    }
+
+                    // Find corresponding lab(s) for this offering
+                    const courseLabs = labs.filter(lab => lab.offering_id === lecture.offering_id);
+
+                    if (courseLabs.length === 0) {
+                        throw new Error(`No lab selected for course ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code})`);
+                    }
+
+                    for (const lab of courseLabs) {
+                        // Check lab capacity
+                        const labEnrollmentCount = await tx.enrollments.count({
+                            where: { tutorial_lab_id: lab.tutorial_lab_id }
+                        });
+
+                        if (labEnrollmentCount >= lab.capacity) {
+                            throw new Error(`Lab ${lab.group} for ${lecture.course_offerings.courses.name} is full`);
+                        }
+
+                        // Create enrollment
+                        const enrollment = await tx.enrollments.create({
+                            data: {
+                                student_user_id: studentId,
+                                lecture_id: lecture.lecture_id,
+                                tutorial_lab_id: lab.tutorial_lab_id,
+                                status: 'enrolled'
+                            }
+                        });
+
+                        enrollmentsCreated.push(enrollment);
+                    }
+                }
+
+                return enrollmentsCreated;
+            });
+
+            res.status(201).json({
+                message: "Registration successful",
+                enrollments: result.length,
+                details: result
+            });
+        } catch (transactionError) {
+            logger.error("Transaction error:", transactionError);
+            return res.status(400).json({ 
+                error: transactionError.message || "Registration failed due to capacity or validation issues" 
+            });
+        }
+    } catch (err) {
+        logger.error("Error registering courses:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

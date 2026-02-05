@@ -10,6 +10,7 @@ import schedule from "../swagger/schedule.swagger.js";
 import teacher from "../swagger/teacher.swagger.js";
 import notification from "../swagger/notification.swagger.js";
 import materials from "../swagger/materials.swagger.js";
+import registration from "../swagger/registration.swagger.js";
 
 export const swaggerSpec = {
     ...base,
@@ -19,6 +20,7 @@ export const swaggerSpec = {
             ...components.schemas,
             ...notification.schemas,
             ...materials.schemas,
+            ...registration.components.schemas,
         },
     },
     paths: {
@@ -30,6 +32,7 @@ export const swaggerSpec = {
         ...teacher.paths,
         ...notification.paths,
         ...materials.paths,
+        ...registration.paths,
     },
 };
 

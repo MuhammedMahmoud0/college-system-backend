@@ -7,9 +7,17 @@ const router = express.Router();
 // Apply authentication to all community routes
 router.use(authMiddleware);
 
-router.get('/posts', communityController.getCommunityFeed);
+// Posts
 router.post('/posts', communityController.createPost);
-router.post('/posts/:postId/like', communityController.likePost);
+router.get('/feed', communityController.getCommunityFeed);
+router.post('/posts/:id/like', communityController.togglePostLike);
+router.post('/posts/:id/comment', communityController.addPostComment);
+
+// Groups
+router.get('/groups/suggested', communityController.getSuggestedGroups);
+router.post('/groups/:id/join', communityController.joinGroup);
+
+// Events
 router.get('/events', communityController.getUpcomingEvents);
 
 export default router;

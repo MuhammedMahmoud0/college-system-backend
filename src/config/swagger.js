@@ -11,6 +11,7 @@ import teacher from "../swagger/teacher.swagger.js";
 import notification from "../swagger/notification.swagger.js";
 import materials from "../swagger/materials.swagger.js";
 import registration from "../swagger/registration.swagger.js";
+import community from "../swagger/community.swagger.js";
 
 export const swaggerSpec = {
     ...base,
@@ -33,6 +34,7 @@ export const swaggerSpec = {
         ...notification.paths,
         ...materials.paths,
         ...registration.paths,
+        ...community.paths,
     },
 };
 

@@ -32,8 +32,17 @@ export const getAvailableOfferings = async (req, res) => {
     try {
         const userId = req.user.id; // From auth middleware
 
-        // Get current semester (you may need to adjust this logic based on your system)
-        const currentSemester = "Spring 2026"; // This should be dynamic based on your semester management
+        // Get semester from query parameter or use the latest available semester
+        let currentSemester = req.query.semester;
+        
+        if (!currentSemester) {
+            // If no semester provided, get the latest semester from database
+            const latestOffering = await prisma.course_offerings.findFirst({
+                orderBy: { semester: 'desc' },
+                select: { semester: true }
+            });
+            currentSemester = latestOffering?.semester || "Fall 2025";
+        }
 
         // Fetch all course offerings for the current semester
         const courseOfferings = await prisma.course_offerings.findMany({
@@ -300,6 +309,21 @@ export const registerCourses = async (req, res) => {
 
                         if (labEnrollmentCount >= lab.capacity) {
                             throw new Error(`Lab ${lab.group} for ${lecture.course_offerings.courses.name} is full`);
+                        }
+
+                        // Check if student is already enrolled in this lecture-lab combination
+                        const existingEnrollment = await tx.enrollments.findUnique({
+                            where: {
+                                student_user_id_lecture_id_tutorial_lab_id: {
+                                    student_user_id: studentId,
+                                    lecture_id: lecture.lecture_id,
+                                    tutorial_lab_id: lab.tutorial_lab_id
+                                }
+                            }
+                        });
+
+                        if (existingEnrollment) {
+                            throw new Error(`Already enrolled in ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) with this lecture and lab combination`);
                         }
 
                         // Create enrollment

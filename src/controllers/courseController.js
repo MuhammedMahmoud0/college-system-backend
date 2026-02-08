@@ -220,6 +220,8 @@ export const updateCourse = async (req, res) => {
         const { code } = req.params;
         const { name, prerequisites } = req.body;
 
+        logger.info(`Updating course with code: ${code}`);
+
         const updateData = {};
         if (name) updateData.name = name;
 
@@ -247,6 +249,7 @@ export const updateCourse = async (req, res) => {
         const updatedCourse = await prisma.courses.findUnique({
             where: { code },
             include: {
+                departments: true,
                 course_prerequisites_course_prerequisites_course_codeTocourses: {
                     include: {
                         courses_course_prerequisites_prerequisite_codeTocourses: true,
@@ -264,11 +267,12 @@ export const updateCourse = async (req, res) => {
                 updatedCourse.course_prerequisites_course_prerequisites_course_codeTocourses,
         });
     } catch (err) {
-        logger.error(err);
+        logger.error("Error updating course:", err);
+        logger.error("Error details:", { code: err.code, message: err.message });
         if (err.code === "P2025") {
             return res.status(404).json({ error: "Course not found." });
         }
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json({ error: "Internal server error", details: err.message });
     }
 };
 
@@ -276,6 +280,8 @@ export const updateCourse = async (req, res) => {
 export const deleteCourse = async (req, res) => {
     try {
         const { code } = req.params;
+
+        logger.info(`Deleting course with code: ${code}`);
 
         const prerequisiteFor = await prisma.course_prerequisites.findMany({
             where: { prerequisite_code: code },
@@ -297,10 +303,11 @@ export const deleteCourse = async (req, res) => {
 
         res.status(200).json(deletedCourse);
     } catch (err) {
-        logger.error(err);
+        logger.error("Error deleting course:", err);
+        logger.error("Error details:", { code: err.code, message: err.message });
         if (err.code === "P2025") {
             return res.status(404).json({ error: "Course not found." });
         }
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json({ error: "Internal server error", details: err.message });
     }
 };

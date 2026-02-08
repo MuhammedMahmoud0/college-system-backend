@@ -214,6 +214,59 @@ export const addPostComment = async (req, res) => {
     }
 };
 
+// POST /api/community/groups - Create a new group
+export const createGroup = async (req, res) => {
+    try {
+        const { name, description, avatar_url } = req.body;
+        
+        if (!name) {
+            return res.status(400).json({ error: "Group name is required" });
+        }
+
+        // Check if group with same name already exists
+        const existingGroup = await prisma.community_groups.findFirst({
+            where: { name }
+        });
+
+        if (existingGroup) {
+            return res.status(400).json({ error: "A group with this name already exists" });
+        }
+
+        // Create the group
+        const group = await prisma.community_groups.create({
+            data: {
+                name,
+                description: description || null,
+                avatar_url: avatar_url || null,
+            },
+            include: {
+                _count: {
+                    select: { group_members: true }
+                }
+            }
+        });
+
+        // Automatically add the creator as a member
+        await prisma.group_members.create({
+            data: {
+                group_id: group.id,
+                user_id: req.user.id
+            }
+        });
+
+        res.status(201).json({ 
+            message: "Group created successfully", 
+            group: {
+                ...group,
+                members_count: 1 // Creator is the first member
+            }
+        });
+    } catch (err) {
+        logger.error("Error creating group:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 // GET /api/community/groups/suggested - List groups user hasn't joined
 export const getSuggestedGroups = async (req, res) => {
     try {

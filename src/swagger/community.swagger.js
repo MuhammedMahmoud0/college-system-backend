@@ -255,9 +255,133 @@ export default {
                         },
                     },
                 },
+                "responses": {
+                    "201": {
+                        "description": "Comment added successfully",
+                        "content": {
+                        "application/json": {
+                            "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                "type": "string",
+                                "example": "Comment added successfully"
+                                },
+                                "comment": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                    "type": "integer",
+                                    "example": 1
+                                    },
+                                    "post_id": {
+                                    "type": "integer",
+                                    "example": 6
+                                    },
+                                    "author_id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "example": "f6c1fcd5-4d22-4914-87ed-ef86e4bae2e2"
+                                    },
+                                    "content": {
+                                    "type": "string",
+                                    "example": "Great post! Thanks for sharing."
+                                    },
+                                    "created_at": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "example": "2026-02-08T09:05:15.178Z"
+                                    },
+                                    "users": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "example": "f6c1fcd5-4d22-4914-87ed-ef86e4bae2e2"
+                                        },
+                                        "full_name": {
+                                        "type": "string",
+                                        "example": "Magda Madbouly"
+                                        },
+                                        "avatar_url": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "example": null
+                                        }
+                                    }
+                                    },
+                                    "author_name": {
+                                    "type": "string",
+                                    "example": "Magda Madbouly"
+                                    },
+                                    "author_avatar": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "example": null
+                                    }
+                                }
+                                }
+                            }
+                            }
+                        }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - content is required"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Post not found"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                    }
+
+            },
+        },
+        "/api/community/groups": {
+            post: {
+                summary: "Create a new community group",
+                description: "Create a new community group.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                required: ["name"],
+                                properties: {
+                                    name: {
+                                        type: "string",
+                                        description: "Name of the group",
+                                        example: "JavaScript Study Group",
+                                    },
+                                    description: {
+                                        type: "string",
+                                        nullable: true,
+                                        description: "Optional description of the group",
+                                        example: "A community for students learning and mastering JavaScript",
+                                    },
+                                    avatar_url: {
+                                        type: "string",
+                                        nullable: true,
+                                        description: "Optional avatar URL for the group",
+                                        example: "https://example.com/group-avatar.jpg",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
                 responses: {
                     201: {
-                        description: "Comment added successfully",
+                        description: "Group created successfully",
                         content: {
                             "application/json": {
                                 schema: {
@@ -265,10 +389,10 @@ export default {
                                     properties: {
                                         message: {
                                             type: "string",
-                                            example: "Comment added successfully",
+                                            example: "Group created successfully",
                                         },
-                                        comment: {
-                                            $ref: "#/components/schemas/PostComment",
+                                        group: {
+                                            $ref: "#/components/schemas/CommunityGroup",
                                         },
                                     },
                                 },
@@ -276,13 +400,39 @@ export default {
                         },
                     },
                     400: {
-                        description: "Bad request - content is required",
-                    },
-                    404: {
-                        description: "Post not found",
+                        description: "Bad request - name is required or group already exists",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        error: {
+                                            type: "string",
+                                            example: "A group with this name already exists",
+                                        },
+                                    },
+                                },
+                            },
+                        },
                     },
                     401: {
                         description: "Unauthorized",
+                    },
+                    403: {
+                        description: "Forbidden - Students cannot create groups",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: {
+                                            type: "string",
+                                            example: "Access denied",
+                                        },
+                                    },
+                                },
+                            },
+                        },
                     },
                     500: {
                         description: "Internal server error",

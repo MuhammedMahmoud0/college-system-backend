@@ -10,6 +10,7 @@ import schedule from "../swagger/schedule.swagger.js";
 import teacher from "../swagger/teacher.swagger.js";
 import notification from "../swagger/notification.swagger.js";
 import materials from "../swagger/materials.swagger.js";
+import course from "../swagger/course.swagger.js";
 import registration from "../swagger/registration.swagger.js";
 import community from "../swagger/community.swagger.js";
 
@@ -21,6 +22,7 @@ export const swaggerSpec = {
             ...components.schemas,
             ...notification.schemas,
             ...materials.schemas,
+            ...course.schemas,
             ...registration.components.schemas,
         },
     },
@@ -33,6 +35,7 @@ export const swaggerSpec = {
         ...teacher.paths,
         ...notification.paths,
         ...materials.paths,
+        ...course.paths,
         ...registration.paths,
         ...community.paths,
     },

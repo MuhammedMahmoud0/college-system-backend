@@ -6,6 +6,7 @@ import leaderboard from "../swagger/leaderboard.swagger.js";
 import auth from "../swagger/auth.swagger.js";
 import users from "../swagger/users.swagger.js";
 import studentProfile from "../swagger/studentProfile.swagger.js";
+import studentSettings from "../swagger/studentSettings.swagger.js";
 import schedule from "../swagger/schedule.swagger.js";
 import teacher from "../swagger/teacher.swagger.js";
 import notification from "../swagger/notification.swagger.js";
@@ -31,6 +32,7 @@ export const swaggerSpec = {
         ...auth.paths,
         ...users.paths,
         ...studentProfile.paths,
+        ...studentSettings.paths,
         ...leaderboard.paths,
         ...schedule.paths,
         ...teacher.paths,

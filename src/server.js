@@ -13,6 +13,7 @@ import teacherRoutes from "./routes/teacherRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import examRoutes from "./routes/examRoutes.js";
 import registrationRoutes from "./routes/registrationRoutes.js";
+import studentSettingsRoutes from "./routes/studentSettingsRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 
@@ -74,6 +75,9 @@ app.use("/api/v1/exams", examRoutes);
 
 // mount registration routes
 app.use("/api/registration", registrationRoutes);
+
+// mount student settings routes
+app.use("/api/v1/student-settings", studentSettingsRoutes);
 
 // Swagger API documentation route
 app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));

@@ -6,4 +6,5 @@ export const userPublicSelect = {
     avatar_url: true,
     phone: true,
     address: true,
+    national_id: true,
 };

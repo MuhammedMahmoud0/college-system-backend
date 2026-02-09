@@ -206,6 +206,7 @@ export default {
                 avatar_url: { type: "string", nullable: true },
                 phone: { type: "string", nullable: true },
                 address: { type: "string", nullable: true },
+                national_id: { type: "string", nullable: true },
                 student_profiles: {
                     type: "array",
                     items: { $ref: "#/components/schemas/StudentProfile" },
@@ -217,6 +218,32 @@ export default {
             properties: {
                 studentProfile: {
                     $ref: "#/components/schemas/StudentWithProfiles",
+                },
+            },
+        },
+        // Student Settings
+        UpdatePasswordRequest: {
+            type: "object",
+            required: ["currentPassword", "newPassword", "confirmNewPassword"],
+            properties: {
+                currentPassword: {
+                    type: "string",
+                    format: "password",
+                    description: "Current password for verification",
+                    example: "oldPassword123",
+                },
+                newPassword: {
+                    type: "string",
+                    format: "password",
+                    description: "New password (minimum 6 characters)",
+                    example: "newSecurePassword456",
+                },
+                confirmNewPassword: {
+                    type: "string",
+                    format: "password",
+                    description:
+                        "Confirmation of new password (must match newPassword)",
+                    example: "newSecurePassword456",
                 },
             },
         },

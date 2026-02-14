@@ -96,16 +96,15 @@ export const getTeacherSchedule = async (req, res) => {
             return res.status(401).json({ error: "Not authenticated" });
         }
 
-        const { teacherId } = req.params;
+        const teacherId = user.userId;
+        // logger.info(`Fetching schedule for teacher ID: ${teacherId}`);
 
         // Authorization: Teacher can only view their own schedule
-        if (user.userId !== teacherId && user.id !== teacherId) {
-            return res
-                .status(403)
-                .json({
-                    error: "Access denied. You can only view your own schedule.",
-                });
-        }
+        // if (user.userId !== teacherId && user.id !== teacherId) {
+        //     return res.status(403).json({
+        //         error: "Access denied. You can only view your own schedule.",
+        //     });
+        // }
 
         // Helper function to normalize day names
         const normalizeDayName = (day) => {

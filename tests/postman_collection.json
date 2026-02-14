@@ -1,0 +1,1206 @@
+{
+    "info": {
+        "name": "College System API",
+        "description": "Complete collection of College System Backend API endpoints",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        "_exporter_id": "college-system-api"
+    },
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{auth_token}}",
+                "type": "string"
+            }
+        ]
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:4000",
+            "type": "string"
+        },
+        {
+            "key": "auth_token",
+            "value": "",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "Health Check",
+            "request": {
+                "auth": {
+                    "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/",
+                    "host": ["{{base_url}}"],
+                    "path": [""]
+                },
+                "description": "Health check endpoint to verify server is running"
+            }
+        },
+        {
+            "name": "Authentication",
+            "item": [
+                {
+                    "name": "Login",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 200) {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    if (jsonData.token) {",
+                                    "        pm.collectionVariables.set('auth_token', jsonData.token);",
+                                    "    }",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "noauth"
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"student@example.com\",\n  \"password\": \"password123\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/login",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "auth", "login"]
+                        },
+                        "description": "Login with email and password"
+                    }
+                },
+                {
+                    "name": "Get Current User",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/me",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "auth", "me"]
+                        },
+                        "description": "Get current authenticated user information"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Users",
+            "item": [
+                {
+                    "name": "Get Users",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "users"]
+                        },
+                        "description": "Get list of all users"
+                    }
+                },
+                {
+                    "name": "Add User",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"student\",\n  \"name\": \"New User\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "users"]
+                        },
+                        "description": "Add a new user"
+                    }
+                },
+                {
+                    "name": "Upload Users Excel",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": []
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/upload-excel",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "users", "upload-excel"]
+                        },
+                        "description": "Upload users from Excel file (Admin only)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Student Profile",
+            "item": [
+                {
+                    "name": "Get Student Profile",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/student/profile",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "student", "profile"]
+                        },
+                        "description": "Get current student's profile (Student only)"
+                    }
+                },
+                {
+                    "name": "Update Student Profile",
+                    "request": {
+                        "method": "PUT",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "name",
+                                    "value": "Updated Name",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "avatar",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "bio",
+                                    "value": "My bio",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/student/profile",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "student", "profile"]
+                        },
+                        "description": "Update student profile with optional avatar upload"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Student Settings",
+            "item": [
+                {
+                    "name": "Update Password",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"currentPassword\": \"oldpassword123\",\n  \"newPassword\": \"newpassword123\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/student-settings/password",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "student-settings",
+                                "password"
+                            ]
+                        },
+                        "description": "Update student password (Student only)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Courses",
+            "item": [
+                {
+                    "name": "Get Student Courses",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/courses/student",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "courses", "student"]
+                        },
+                        "description": "Get courses for the authenticated student"
+                    }
+                },
+                {
+                    "name": "Get Course Details",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/courses/:courseId",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "courses", ":courseId"],
+                            "variable": [
+                                {
+                                    "key": "courseId",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Get details of a specific course"
+                    }
+                },
+                {
+                    "name": "Get Grade Breakdown",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/courses/:courseId/grades",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "courses", ":courseId", "grades"],
+                            "variable": [
+                                {
+                                    "key": "courseId",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Get grade breakdown for a specific course"
+                    }
+                },
+                {
+                    "name": "Create Course",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"code\": \"CS101\",\n  \"name\": \"Introduction to Computer Science\",\n  \"credits\": 3,\n  \"department\": \"Computer Science\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/courses",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "courses"]
+                        },
+                        "description": "Create a new course"
+                    }
+                },
+                {
+                    "name": "Update Course",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Updated Course Name\",\n  \"credits\": 4\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/courses/:code",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "courses", ":code"],
+                            "variable": [
+                                {
+                                    "key": "code",
+                                    "value": "CS101"
+                                }
+                            ]
+                        },
+                        "description": "Update an existing course"
+                    }
+                },
+                {
+                    "name": "Delete Course",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/courses/:code",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "courses", ":code"],
+                            "variable": [
+                                {
+                                    "key": "code",
+                                    "value": "CS101"
+                                }
+                            ]
+                        },
+                        "description": "Delete a course"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Registration",
+            "item": [
+                {
+                    "name": "Get Available Offerings",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/registration/available-offerings",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "registration",
+                                "available-offerings"
+                            ]
+                        },
+                        "description": "Get available course offerings for registration"
+                    }
+                },
+                {
+                    "name": "Register Courses",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"offeringIds\": [1, 2, 3]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/registration/register",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "registration", "register"]
+                        },
+                        "description": "Register for courses (Students and Leaders only)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Schedule",
+            "item": [
+                {
+                    "name": "Get Student Schedule",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/schedule",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "schedule"]
+                        },
+                        "description": "Get schedule for the authenticated student"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Materials",
+            "item": [
+                {
+                    "name": "Get Materials",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/materials?courseId=1",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "materials"],
+                            "query": [
+                                {
+                                    "key": "courseId",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Get all materials (with optional course filter)"
+                    }
+                },
+                {
+                    "name": "Download Material",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/materials/:id/download",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "materials",
+                                ":id",
+                                "download"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Get signed URL to download material"
+                    }
+                },
+                {
+                    "name": "Stream Material",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/materials/:id/stream",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "materials", ":id", "stream"],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Stream material file directly"
+                    }
+                },
+                {
+                    "name": "Create Material",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "title",
+                                    "value": "Lecture Notes",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "description",
+                                    "value": "Week 1 lecture notes",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "courseId",
+                                    "value": "1",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/materials",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "materials"]
+                        },
+                        "description": "Upload a new material (Doctor/Admin only)"
+                    }
+                },
+                {
+                    "name": "Update Material",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Updated Description\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/materials/:id",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "materials", ":id"],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Update material metadata (Doctor/Admin only)"
+                    }
+                },
+                {
+                    "name": "Delete Material",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/materials/:id",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "materials", ":id"],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Delete a material (Doctor/Admin only)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Exams",
+            "item": [
+                {
+                    "name": "Get Active Courses",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/exams/active-courses",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "exams", "active-courses"]
+                        },
+                        "description": "Get all active course offerings (Admin only)"
+                    }
+                },
+                {
+                    "name": "Get Exam Schedule",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/exams/schedule",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "exams", "schedule"]
+                        },
+                        "description": "Get exam schedule for student (Student only)"
+                    }
+                },
+                {
+                    "name": "Create Exam",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"courseOfferingId\": 1,\n  \"examType\": \"midterm\",\n  \"examDate\": \"2026-03-15T10:00:00Z\",\n  \"duration\": 120,\n  \"location\": \"Room 101\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/exams/set",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "exams", "set"]
+                        },
+                        "description": "Create a new exam (Admin only)"
+                    }
+                },
+                {
+                    "name": "Update Exam",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"examDate\": \"2026-03-20T10:00:00Z\",\n  \"location\": \"Room 102\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/exams/set/:exam_id",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "exams", "set", ":exam_id"],
+                            "variable": [
+                                {
+                                    "key": "exam_id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Update an existing exam (Admin only)"
+                    }
+                },
+                {
+                    "name": "Delete Exam",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/exams/set/:exam_id",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "exams", "set", ":exam_id"],
+                            "variable": [
+                                {
+                                    "key": "exam_id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Delete an exam (Admin only)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Attendance",
+            "item": [
+                {
+                    "name": "Start Attendance Session",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"courseOfferingId\": 1,\n  \"sessionType\": \"lecture\",\n  \"duration\": 15\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/attendance/sessions/start",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "attendance",
+                                "sessions",
+                                "start"
+                            ]
+                        },
+                        "description": "Start a new attendance session (Doctor/TA only)"
+                    }
+                },
+                {
+                    "name": "Get Active Sessions",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/attendance/sessions/active",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "attendance",
+                                "sessions",
+                                "active"
+                            ]
+                        },
+                        "description": "Get active attendance sessions for instructor"
+                    }
+                },
+                {
+                    "name": "Get Session Details",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/attendance/sessions/:sessionId",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "attendance",
+                                "sessions",
+                                ":sessionId"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "sessionId",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Get details of a specific attendance session"
+                    }
+                },
+                {
+                    "name": "Scan QR Code",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"qrCode\": \"session-code-here\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/attendance/scan",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "attendance", "scan"]
+                        },
+                        "description": "Student scans QR code to mark attendance"
+                    }
+                },
+                {
+                    "name": "End Attendance Session",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/attendance/sessions/:sessionId/end",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "attendance",
+                                "sessions",
+                                ":sessionId",
+                                "end"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "sessionId",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "End an attendance session (Doctor/TA only)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Teachers",
+            "item": [
+                {
+                    "name": "Get All Teachers",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/teachers",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "teachers"]
+                        },
+                        "description": "Get all teachers (Admin only)"
+                    }
+                },
+                {
+                    "name": "Get Teacher Schedule",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/teachers/:teacherId/schedule",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "teachers",
+                                ":teacherId",
+                                "schedule"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "teacherId",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Get schedule for a specific teacher (Doctor/TA only)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Notifications",
+            "item": [
+                {
+                    "name": "Get Notifications",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/notifications",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "notifications"]
+                        },
+                        "description": "Get user's notifications"
+                    }
+                },
+                {
+                    "name": "Get Unread Count",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/notifications/unread-count",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "notifications",
+                                "unread-count"
+                            ]
+                        },
+                        "description": "Get count of unread notifications"
+                    }
+                },
+                {
+                    "name": "Mark as Read",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/notifications/:id/read",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "notifications",
+                                ":id",
+                                "read"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Mark a notification as read"
+                    }
+                },
+                {
+                    "name": "Mark All as Read",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/notifications/mark-all-read",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "v1",
+                                "notifications",
+                                "mark-all-read"
+                            ]
+                        },
+                        "description": "Mark all notifications as read"
+                    }
+                },
+                {
+                    "name": "Delete Notification",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/notifications/:id",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "notifications", ":id"],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Delete a specific notification"
+                    }
+                },
+                {
+                    "name": "Delete All Notifications",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/notifications",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "notifications"]
+                        },
+                        "description": "Delete all notifications"
+                    }
+                },
+                {
+                    "name": "Create Notification",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userId\": 1,\n  \"title\": \"Important Announcement\",\n  \"message\": \"This is a notification message\",\n  \"type\": \"info\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/notifications",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "notifications"]
+                        },
+                        "description": "Create a notification (Admin only)"
+                    }
+                },
+                {
+                    "name": "Create Bulk Notifications",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userIds\": [1, 2, 3],\n  \"title\": \"Bulk Announcement\",\n  \"message\": \"This is sent to multiple users\",\n  \"type\": \"info\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/notifications/bulk",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "notifications", "bulk"]
+                        },
+                        "description": "Create notifications for multiple users (Admin only)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Community",
+            "item": [
+                {
+                    "name": "Create Post",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"content\": \"This is my post content\",\n  \"groupId\": 1\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/community/posts",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "community", "posts"]
+                        },
+                        "description": "Create a new community post"
+                    }
+                },
+                {
+                    "name": "Get Community Feed",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/community/feed",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "community", "feed"]
+                        },
+                        "description": "Get community feed posts"
+                    }
+                },
+                {
+                    "name": "Toggle Post Like",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/community/posts/:id/like",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "community",
+                                "posts",
+                                ":id",
+                                "like"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Like or unlike a post"
+                    }
+                },
+                {
+                    "name": "Add Comment",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"content\": \"This is my comment\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/community/posts/:id/comment",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "community",
+                                "posts",
+                                ":id",
+                                "comment"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Add a comment to a post"
+                    }
+                },
+                {
+                    "name": "Create Group",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Study Group\",\n  \"description\": \"A group for studying together\",\n  \"type\": \"course\",\n  \"courseId\": 1\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/community/groups",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "community", "groups"]
+                        },
+                        "description": "Create a new group (Non-students only)"
+                    }
+                },
+                {
+                    "name": "Get Suggested Groups",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/community/groups/suggested",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "community", "groups", "suggested"]
+                        },
+                        "description": "Get suggested groups for user"
+                    }
+                },
+                {
+                    "name": "Join Group",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/community/groups/:id/join",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "api",
+                                "community",
+                                "groups",
+                                ":id",
+                                "join"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Join a community group"
+                    }
+                },
+                {
+                    "name": "Get Upcoming Events",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/community/events",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "community", "events"]
+                        },
+                        "description": "Get upcoming community events"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Leaderboard",
+            "item": [
+                {
+                    "name": "Get Leaderboard",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/leaderboard",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "leaderboard"]
+                        },
+                        "description": "Get the student leaderboard"
+                    }
+                }
+            ]
+        }
+    ]
+}

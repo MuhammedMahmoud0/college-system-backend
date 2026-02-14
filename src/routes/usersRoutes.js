@@ -17,7 +17,7 @@ router.post("/users", authMiddleware, addUsers);
 router.post(
     "/users/upload-excel",
     authMiddleware,
-    authorizationMiddleware(["super_admin", "admin"]),
+    authorizationMiddleware("super_admin", "admin"),
     uploadExcel.single("file"),
     addExcelUsers
 );

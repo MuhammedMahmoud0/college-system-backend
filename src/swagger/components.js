@@ -247,6 +247,137 @@ export default {
                 },
             },
         },
+        // Attendance
+        StartAttendanceSessionRequest: {
+            type: "object",
+            required: ["session_date"],
+            properties: {
+                lecture_id: {
+                    type: "integer",
+                    description:
+                        "Lecture ID (required if tutorial_lab_id not provided)",
+                    example: 1,
+                },
+                tutorial_lab_id: {
+                    type: "integer",
+                    description:
+                        "Tutorial/Lab ID (required if lecture_id not provided)",
+                    example: 1,
+                },
+                session_date: {
+                    type: "string",
+                    format: "date",
+                    description: "Session date (YYYY-MM-DD)",
+                    example: "2026-02-10",
+                },
+            },
+        },
+        AttendanceSessionResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Attendance session started",
+                },
+                sessionId: {
+                    type: "string",
+                    format: "uuid",
+                    example: "550e8400-e29b-41d4-a716-446655440000",
+                },
+                qrCode: {
+                    type: "string",
+                    description: "QR code token (changes every 10 seconds)",
+                    example:
+                        "550e8400-e29b-41d4-a716-446655440000:1707580800000:abc123def456",
+                },
+                qrExpiry: {
+                    type: "integer",
+                    description: "QR code expiry timestamp (milliseconds)",
+                    example: 1707580810000,
+                },
+                enrolledStudents: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            user_id: { type: "string" },
+                            full_name: { type: "string" },
+                            email: { type: "string" },
+                            avatar_url: { type: "string", nullable: true },
+                            student_id: { type: "string" },
+                            status: {
+                                type: "string",
+                                enum: ["absent", "present"],
+                                example: "absent",
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        SessionDetailsResponse: {
+            type: "object",
+            properties: {
+                sessionId: { type: "string", format: "uuid" },
+                lectureId: { type: "integer", nullable: true },
+                tutorialLabId: { type: "integer", nullable: true },
+                sessionDate: { type: "string", format: "date" },
+                qrCode: { type: "string" },
+                qrExpiry: { type: "integer" },
+                students: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            user_id: { type: "string" },
+                            full_name: { type: "string" },
+                            email: { type: "string" },
+                            avatar_url: { type: "string", nullable: true },
+                            student_id: { type: "string" },
+                            status: {
+                                type: "string",
+                                enum: ["absent", "present"],
+                            },
+                        },
+                    },
+                },
+                presentCount: { type: "integer", example: 25 },
+                totalCount: { type: "integer", example: 30 },
+            },
+        },
+        ActiveSessionSummary: {
+            type: "object",
+            properties: {
+                sessionId: { type: "string", format: "uuid" },
+                type: {
+                    type: "string",
+                    enum: ["lecture", "tutorial"],
+                    example: "lecture",
+                },
+                courseName: { type: "string", example: "Data Structures" },
+                courseCode: { type: "string", example: "CS201" },
+                presentCount: { type: "integer", example: 25 },
+                totalCount: { type: "integer", example: 30 },
+                createdAt: {
+                    type: "integer",
+                    description: "Session creation timestamp (milliseconds)",
+                    example: 1707580800000,
+                },
+            },
+        },
+        ScanQRCodeRequest: {
+            type: "object",
+            required: ["qrCode"],
+            properties: {
+                qrCode: {
+                    type: "string",
+                    description:
+                        "QR code token scanned from the live attendance page",
+                    example:
+                        "550e8400-e29b-41d4-a716-446655440000:1707580800000:abc123def456",
+                },
+            },
+        },
         // Schedule
         ClassSession: {
             type: "object",
@@ -454,6 +585,266 @@ export default {
                 schedule: {
                     type: "array",
                     items: { $ref: "#/components/schemas/TeacherScheduleDay" },
+                },
+            },
+        },
+        // Community Schemas
+        CommunityPost: {
+            type: "object",
+            properties: {
+                id: {
+                    type: "integer",
+                    example: 1,
+                },
+                group_id: {
+                    type: "integer",
+                    nullable: true,
+                    example: 1,
+                },
+                author_id: {
+                    type: "string",
+                    format: "uuid",
+                    example: "550e8400-e29b-41d4-a716-446655440000",
+                },
+                content: {
+                    type: "string",
+                    example: "This is a post content",
+                },
+                image_url: {
+                    type: "string",
+                    nullable: true,
+                    example: "https://example.com/image.jpg",
+                },
+                is_pinned: {
+                    type: "boolean",
+                    example: false,
+                },
+                created_at: {
+                    type: "string",
+                    format: "date-time",
+                    example: "2026-02-07T10:30:00Z",
+                },
+                users: {
+                    type: "object",
+                    properties: {
+                        id: {
+                            type: "string",
+                            format: "uuid",
+                            example: "a3b5c7d9-e1f2-4a6b-8c9d-0e1f2a3b4c5d",
+                        },
+                        full_name: {
+                            type: "string",
+                            example: "John Doe",
+                        },
+                        avatar_url: {
+                            type: "string",
+                            nullable: true,
+                            example: "https://example.com/avatar.jpg",
+                        },
+                    },
+                },
+                community_groups: {
+                    type: "object",
+                    nullable: true,
+                    properties: {
+                        id: {
+                            type: "integer",
+                            example: 2,
+                        },
+                        name: {
+                            type: "string",
+                            example: "Computer Science Club",
+                        },
+                    },
+                },
+            },
+        },
+        CommunityFeedPost: {
+            type: "object",
+            properties: {
+                id: {
+                    type: "integer",
+                    example: 1,
+                },
+                author_name: {
+                    type: "string",
+                    example: "John Doe",
+                },
+                author_avatar: {
+                    type: "string",
+                    nullable: true,
+                    example: "https://example.com/avatar.jpg",
+                },
+                group_name: {
+                    type: "string",
+                    nullable: true,
+                    example: "Computer Science Club",
+                },
+                content: {
+                    type: "string",
+                    example:
+                        "Just finished my final project for Database Systems! Really proud of what we accomplished as a team.",
+                },
+                image_url: {
+                    type: "string",
+                    nullable: true,
+                    example:
+                        "https://storage.example.com/posts/project-demo.jpg",
+                },
+                likes_count: {
+                    type: "integer",
+                    example: 15,
+                },
+                comments_count: {
+                    type: "integer",
+                    example: 5,
+                },
+                created_at: {
+                    type: "string",
+                    format: "date-time",
+                    example: "2026-02-07T14:25:00Z",
+                },
+                recent_comments: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            id: {
+                                type: "integer",
+                                example: 12,
+                            },
+                            content: {
+                                type: "string",
+                                example: "Congratulations! That's awesome!",
+                            },
+                            created_at: {
+                                type: "string",
+                                format: "date-time",
+                                example: "2026-02-07T14:30:00Z",
+                            },
+                            author_name: {
+                                type: "string",
+                                example: "Sarah Johnson",
+                            },
+                            author_avatar: {
+                                type: "string",
+                                nullable: true,
+                                example:
+                                    "https://storage.example.com/avatars/sarah-j.jpg",
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        PostComment: {
+            type: "object",
+            properties: {
+                id: {
+                    type: "integer",
+                    example: 1,
+                },
+                post_id: {
+                    type: "integer",
+                    example: 1,
+                },
+                author_id: {
+                    type: "string",
+                    format: "uuid",
+                    example: "b4c6d8e0-f2a3-5b7c-9d0e-1f2a3b4c5d6e",
+                },
+                content: {
+                    type: "string",
+                    example:
+                        "Great post! Really inspiring to see your progress.",
+                },
+                created_at: {
+                    type: "string",
+                    format: "date-time",
+                    example: "2026-02-07T15:10:00Z",
+                },
+                author_name: {
+                    type: "string",
+                    example: "Jane Smith",
+                },
+                author_avatar: {
+                    type: "string",
+                    nullable: true,
+                    example: "https://example.com/avatar.jpg",
+                },
+            },
+        },
+        CommunityGroup: {
+            type: "object",
+            properties: {
+                id: {
+                    type: "integer",
+                    example: 1,
+                },
+                name: {
+                    type: "string",
+                    example: "Computer Science Club",
+                },
+                description: {
+                    type: "string",
+                    nullable: true,
+                    example: "A community for CS students",
+                },
+                avatar_url: {
+                    type: "string",
+                    nullable: true,
+                    example: "https://example.com/group-avatar.jpg",
+                },
+                created_at: {
+                    type: "string",
+                    format: "date-time",
+                    example: "2025-09-01T08:00:00Z",
+                },
+                members_count: {
+                    type: "integer",
+                    example: 45,
+                },
+            },
+        },
+        Event: {
+            type: "object",
+            properties: {
+                id: {
+                    type: "integer",
+                    example: 1,
+                },
+                title: {
+                    type: "string",
+                    example: "Annual Tech Conference",
+                },
+                event_date: {
+                    type: "string",
+                    example: "2026-03-15",
+                },
+                time: {
+                    type: "string",
+                    nullable: true,
+                    example: "14:00",
+                },
+                location: {
+                    type: "string",
+                    nullable: true,
+                    example: "Main Auditorium",
+                },
+                img_url: {
+                    type: "string",
+                    nullable: true,
+                    example: "https://example.com/event.jpg",
+                },
+                link: {
+                    type: "string",
+                    nullable: true,
+                    example: "https://example.com/register",
+                },
+                description: {
+                    type: "string",
+                    nullable: true,
+                    example: "Join us for the annual tech conference",
                 },
             },
         },

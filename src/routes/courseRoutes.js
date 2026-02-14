@@ -1,17 +1,53 @@
-import express from 'express';
-import * as courseController from '../controllers/courseController.js';
-import { authMiddleware } from '../middlewares/authMiddleware.js';
+import express from "express";
+import * as courseController from "../controllers/courseController.js";
+import {
+    authMiddleware,
+    authorizationMiddleware,
+} from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.use(authMiddleware);
+router.get(
+    "/student",
+    authMiddleware,
+    authorizationMiddleware("student", "leader"),
+    courseController.getStudentCourses
+);
+router.get(
+    "/:courseId",
+    authMiddleware,
+    authorizationMiddleware(
+        "doctor",
+        "teaching_assistant",
+        "admin",
+        "super_admin"
+    ),
+    courseController.getCourseDetails
+);
+router.get(
+    "/:courseId/grades",
+    authMiddleware,
+    authorizationMiddleware("student", "leader"),
+    courseController.getGradeBreakdown
+);
 
-router.get('/student', courseController.getStudentCourses);
-router.get('/:courseId', courseController.getCourseDetails);
-router.get('/:courseId/grades', courseController.getGradeBreakdown);
-
-router.post('/', courseController.createCourse);
-router.patch('/:code', courseController.updateCourse);
-router.delete('/:code', courseController.deleteCourse);
+router.post(
+    "/",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    courseController.createCourse
+);
+router.patch(
+    "/:code",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    courseController.updateCourse
+);
+router.delete(
+    "/:code",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    courseController.deleteCourse
+);
 
 export default router;

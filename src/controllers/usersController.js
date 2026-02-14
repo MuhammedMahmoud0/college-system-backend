@@ -85,13 +85,15 @@ export const addExcelUsers = async (req, res) => {
                 .json({ error: "No worksheet found in the Excel file" });
         }
 
-        const usersToAdd = [];
+        const rawUsers = [];
         const errors = [];
 
         worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
             if (rowNumber === 1) return; // Skip header row
 
-            const [name, email, password, role] = row.values.slice(1);
+            const [name, email, , role] = row.values.slice(1);
+            const passwordCell = row.getCell(3);
+            const password = passwordCell.text;
             if (!name || !email || !password || !role) {
                 errors.push({
                     row: rowNumber,
@@ -99,30 +101,42 @@ export const addExcelUsers = async (req, res) => {
                 });
                 return;
             }
-        });
-        usersToAdd.push({
-            full_name: name,
-            email,
-            password_hash: await bcrypt.hash(password, 10),
-            role,
+            rawUsers.push({ name, email, password, role });
         });
 
-        if (usersToAdd.length === 0) {
+        if (rawUsers.length === 0) {
             return res.status(400).json({
                 error: "No valid user data found in the file",
                 errors,
             });
         }
-        await prisma.users.createMany({
+
+        const usersToAdd = await Promise.all(
+            rawUsers.map(async (user) => ({
+                full_name: user.name,
+                email: user.email,
+                password_hash: await bcrypt.hash(user.password, 10),
+                role: user.role,
+            }))
+        );
+
+        const result = await prisma.users.createMany({
             data: usersToAdd,
             skipDuplicates: true,
         });
 
+        // res.status(201).json({
+        //     message: "Users added successfully",
+        //     addedCount: usersToAdd.length,
+        //     skippedRows: errors.length,
+        //     errors,
+        // });
+
         res.status(201).json({
-            message: "Users added successfully",
-            addedCount: usersToAdd.length,
-            skippedRows: errors.length,
-            errors,
+            message: "Users processed successfully",
+            insertedCount: result.count,
+            totalRows: usersToAdd.length,
+            skippedDueToValidation: errors.length,
         });
     } catch (err) {
         logger.error(err);

@@ -300,7 +300,15 @@ export const downloadMaterial = async (req, res) => {
 
         // If it's a link material, redirect to the URL
         if (material.url && !material.file_id) {
-            return res.redirect(material.url);
+            // return res.redirect(material.url);
+            return res.json({
+                material: {
+                    id: material.id,
+                    title: material.title,
+                    type: "external_link",
+                },
+                external_url: material.url,
+            });
         }
 
         // If it's a file material, get download URL from Supabase

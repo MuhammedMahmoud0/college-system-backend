@@ -80,24 +80,12 @@ export default {
                 },
             },
         },
-        "/teachers/{teacherId}/schedule": {
+        "/teachers/schedule": {
             get: {
                 tags: ["Teachers"],
                 summary:
                     "Get teacher's schedule (Doctor/TA can view their own schedule only)",
                 security: [{ bearerAuth: [] }],
-                parameters: [
-                    {
-                        in: "path",
-                        name: "teacherId",
-                        required: true,
-                        schema: {
-                            type: "string",
-                            format: "uuid",
-                        },
-                        description: "The teacher's unique ID",
-                    },
-                ],
                 responses: {
                     200: {
                         description: "Teacher schedule retrieved successfully",

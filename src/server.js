@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import express from "express";
+import { createServer } from "http";
 import { connectDB, disconnectDB } from "./config/connection.js";
 import authRoutes from "./routes/authRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
@@ -14,14 +15,23 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import examRoutes from "./routes/examRoutes.js";
 import registrationRoutes from "./routes/registrationRoutes.js";
 import studentSettingsRoutes from "./routes/studentSettingsRoutes.js";
+import attendanceRoutes from "./routes/attendanceRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
+import { initializeSocketIO } from "./utils/socketIO.js";
 
 config();
 connectDB();
 
 const app = express();
+const httpServer = createServer(app);
 const port = process.env.PORT || 3000;
+
+// Initialize Socket.IO
+const io = initializeSocketIO(httpServer);
+
+// Make io accessible in routes (optional)
+app.set("io", io);
 
 // Middleware to parse JSON bodies
 app.use(express.json());
@@ -79,12 +89,16 @@ app.use("/api/registration", registrationRoutes);
 // mount student settings routes
 app.use("/api/v1/student-settings", studentSettingsRoutes);
 
+// mount attendance routes (WebSocket-enabled)
+app.use("/api/v1/attendance", attendanceRoutes);
+
 // Swagger API documentation route
 app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));
 
 // Start the server
-let server = app.listen(port, () => {
+let server = httpServer.listen(port, () => {
     logger.info(`Server is running at http://localhost:${port}`);
+    logger.info(`WebSocket server is ready on ws://localhost:${port}`);
 });
 
 // Handle unhandled promise rejections (e.g., database connection errors)

@@ -18,6 +18,59 @@ const formatTime = (dateTime) => {
 };
 
 /**
+ * GET /api/v1/exams/all
+ * Get all created exams for admins to view, modify, or delete
+ * Only accessible to admins and super admins
+ */
+export const getAllExams = async (req, res) => {
+  try {
+    const exams = await prisma.exams.findMany({
+      include: {
+        course_offerings: {
+          include: {
+            courses: {
+              select: {
+                code: true,
+                name: true,
+                credits: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ exam_date: "asc" }, { start_time: "asc" }],
+    });
+
+    const formattedExams = exams.map((exam) => ({
+      exam_id: exam.exam_id,
+      course_code: exam.course_offerings.course_code,
+      course_name: exam.course_offerings.courses.name,
+      exam_name: exam.exam_name,
+      exam_type: exam.exam_type,
+      exam_date: exam.exam_date,
+      day_of_week: exam.day_of_week,
+      start_time: formatTime(exam.start_time),
+      end_time: formatTime(exam.end_time),
+      location: exam.location,
+      semester: exam.course_offerings.semester,
+      credits: exam.course_offerings.courses.credits,
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formattedExams.length,
+      data: formattedExams,
+    });
+  } catch (err) {
+    logger.error("Error fetching all exams:", err);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+    });
+  }
+};
+
+/**
  * GET /api/v1/exams/active-courses
  * Get all active course offerings for dropdown selection
  * Only accessible to admins and super admins

@@ -1,5 +1,138 @@
 export default {
   paths: {
+    "/api/v1/exams/all": {
+      get: {
+        tags: ["Exams"],
+        summary: "Get all created exams",
+        description:
+          "Retrieves all exams created in the system for admins to view, modify, or delete (Admin/Super Admin only)",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: "All exams retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: {
+                      type: "boolean",
+                      example: true,
+                    },
+                    count: {
+                      type: "integer",
+                      description: "Total number of exams",
+                      example: 15,
+                    },
+                    data: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          exam_id: {
+                            type: "integer",
+                            description: "Exam ID",
+                          },
+                          course_code: {
+                            type: "string",
+                            description: "Course code",
+                          },
+                          course_name: {
+                            type: "string",
+                            description: "Course name",
+                          },
+                          exam_name: {
+                            type: "string",
+                            description: "Name of the exam",
+                          },
+                          exam_type: {
+                            type: "string",
+                            description: "Type of exam",
+                          },
+                          exam_date: {
+                            type: "string",
+                            format: "date",
+                            description: "Date of the exam",
+                          },
+                          day_of_week: {
+                            type: "string",
+                            description: "Day of the week",
+                          },
+                          start_time: {
+                            type: "string",
+                            description: "Start time (HH:mm:ss)",
+                          },
+                          end_time: {
+                            type: "string",
+                            description: "End time (HH:mm:ss)",
+                          },
+                          location: {
+                            type: "string",
+                            nullable: true,
+                            description: "Location of the exam",
+                          },
+                          semester: {
+                            type: "string",
+                            description: "Semester information",
+                          },
+                          credits: {
+                            type: "integer",
+                            description: "Course credits",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                example: {
+                  success: true,
+                  count: 3,
+                  data: [
+                    {
+                      exam_id: 1,
+                      course_code: "CS301",
+                      course_name: "Database Systems",
+                      exam_name: "Midterm Exam",
+                      exam_type: "Midterm",
+                      exam_date: "2026-03-15",
+                      day_of_week: "Sunday",
+                      start_time: "10:00:00",
+                      end_time: "12:00:00",
+                      location: "Hall A",
+                      semester: "Spring 2026",
+                      credits: 3,
+                    },
+                    {
+                      exam_id: 2,
+                      course_code: "CS302",
+                      course_name: "Operating Systems",
+                      exam_name: "Final Exam",
+                      exam_type: "Final",
+                      exam_date: "2026-05-20",
+                      day_of_week: "Wednesday",
+                      start_time: "14:00:00",
+                      end_time: "16:00:00",
+                      location: "Hall B",
+                      semester: "Spring 2026",
+                      credits: 3,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          401: {
+            description: "Unauthorized - Invalid or missing token",
+          },
+          403: {
+            description: "Forbidden - Only admins and super admins can access",
+          },
+          500: {
+            description: "Internal server error",
+          },
+        },
+      },
+    },
     "/api/v1/exams/active-courses": {
       get: {
         tags: ["Exams"],

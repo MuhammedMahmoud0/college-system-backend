@@ -12,39 +12,42 @@ import teacher from "../swagger/teacher.swagger.js";
 import notification from "../swagger/notification.swagger.js";
 import materials from "../swagger/materials.swagger.js";
 import course from "../swagger/course.swagger.js";
+import courseOffering from "../swagger/courseOffering.swagger.js";
 import exam from "../swagger/exam.swagger.js";
 import registration from "../swagger/registration.swagger.js";
 import community from "../swagger/community.swagger.js";
 import attendance from "../swagger/attendance.swagger.js";
 
 export const swaggerSpec = {
-    ...base,
-    components: {
-        ...components,
-        schemas: {
-            ...components.schemas,
-            ...notification.schemas,
-            ...materials.schemas,
-            ...course.schemas,
-            ...registration.components.schemas,
-        },
+  ...base,
+  components: {
+    ...components,
+    schemas: {
+      ...components.schemas,
+      ...notification.schemas,
+      ...materials.schemas,
+      ...course.schemas,
+      ...courseOffering.schemas,
+      ...registration.components.schemas,
     },
-    paths: {
-        ...auth.paths,
-        ...users.paths,
-        ...studentProfile.paths,
-        ...studentSettings.paths,
-        ...leaderboard.paths,
-        ...schedule.paths,
-        ...teacher.paths,
-        ...notification.paths,
-        ...materials.paths,
-        ...course.paths,
-        ...exam.paths,
-        ...registration.paths,
-        ...community.paths,
-        ...attendance.paths,
-    },
+  },
+  paths: {
+    ...auth.paths,
+    ...users.paths,
+    ...studentProfile.paths,
+    ...studentSettings.paths,
+    ...leaderboard.paths,
+    ...schedule.paths,
+    ...teacher.paths,
+    ...notification.paths,
+    ...materials.paths,
+    ...course.paths,
+    ...courseOffering.paths,
+    ...exam.paths,
+    ...registration.paths,
+    ...community.paths,
+    ...attendance.paths,
+  },
 };
 
 export const swaggerUiHandler = swaggerUi;

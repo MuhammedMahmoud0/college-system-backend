@@ -1,71 +1,71 @@
 import express from "express";
 import * as courseController from "../controllers/courseController.js";
 import {
-    authMiddleware,
-    authorizationMiddleware,
+  authMiddleware,
+  authorizationMiddleware,
 } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
 router.get(
-    "/student",
-    authMiddleware,
-    authorizationMiddleware("student", "leader"),
-    courseController.getStudentCourses
+  "/student",
+  authMiddleware,
+  authorizationMiddleware("student", "leader"),
+  courseController.getStudentCourses,
 );
 router.get(
-    "/all",
-    authMiddleware,
-    authorizationMiddleware("admin", "super_admin"),
-    courseController.getAllCourses
+  "/all",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.getAllCourses,
 );
 router.get(
-    "/:offeringId",
-    authMiddleware,
-    authorizationMiddleware(
-        "doctor",
-        "teaching_assistant",
-        "admin",
-        "super_admin"
-    ),
-    courseController.getCourseDetails
+  "/:offeringId",
+  authMiddleware,
+  authorizationMiddleware(
+    "doctor",
+    "teaching_assistant",
+    "admin",
+    "super_admin",
+  ),
+  courseController.getCourseDetails,
 );
 router.get(
-    "/:courseId/grades",
-    authMiddleware,
-    authorizationMiddleware("student", "leader"),
-    courseController.getGradeBreakdown
+  "/:courseId/grades",
+  authMiddleware,
+  authorizationMiddleware("student", "leader"),
+  courseController.getGradeBreakdown,
 );
 
 router.post(
-    "/",
-    authMiddleware,
-    authorizationMiddleware("admin", "super_admin"),
-    courseController.createCourse
+  "/",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.createCourse,
 );
 router.post(
-    "/lectures",
-    authMiddleware,
-    authorizationMiddleware("admin", "super_admin"),
-    courseController.createLecture
+  "/lectures",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.createLecture,
 );
 router.post(
-    "/tutorials-labs",
-    authMiddleware,
-    authorizationMiddleware("admin", "super_admin"),
-    courseController.createTutorialLab
+  "/tutorials-labs",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.createTutorialLab,
 );
 router.patch(
-    "/:code",
-    authMiddleware,
-    authorizationMiddleware("admin", "super_admin"),
-    courseController.updateCourse
+  "/:code",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.updateCourse,
 );
 router.delete(
-    "/:code",
-    authMiddleware,
-    authorizationMiddleware("admin", "super_admin"),
-    courseController.deleteCourse
+  "/:code",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.deleteCourse,
 );
 
 export default router;

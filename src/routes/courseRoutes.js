@@ -14,7 +14,13 @@ router.get(
     courseController.getStudentCourses
 );
 router.get(
-    "/:courseId",
+    "/all",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    courseController.getAllCourses
+);
+router.get(
+    "/:offeringId",
     authMiddleware,
     authorizationMiddleware(
         "doctor",
@@ -36,6 +42,18 @@ router.post(
     authMiddleware,
     authorizationMiddleware("admin", "super_admin"),
     courseController.createCourse
+);
+router.post(
+    "/lectures",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    courseController.createLecture
+);
+router.post(
+    "/tutorials-labs",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    courseController.createTutorialLab
 );
 router.patch(
     "/:code",

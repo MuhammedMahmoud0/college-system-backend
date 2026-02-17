@@ -46,37 +46,130 @@ export const getStudentCourses = async (req, res) => {
     }
 };
 
-// GET /api/courses/:courseId
-export const getCourseDetails = async (req, res) => {
-    try {
-        const { courseId } = req.params;
+// Helper function to format time to HH:MM
+const formatTime = (time) => {
+    if (!time) return '';
+    const date = new Date(time);
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+};
 
-        const lecture = await prisma.lectures.findUnique({
-            where: { lecture_id: parseInt(courseId) },
+// GET /api/courses/all
+export const getAllCourses = async (req, res) => {
+    try {
+        const courses = await prisma.courses.findMany({
             include: {
-                course_offerings: { include: { courses: true } },
-                users: true // Instructor
+                departments: {
+                    select: {
+                        name: true
+                    }
+                },
+                course_prerequisites_course_prerequisites_course_codeTocourses: {
+                    include: {
+                        courses_course_prerequisites_prerequisite_codeTocourses: {
+                            select: {
+                                code: true,
+                                name: true
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: {
+                code: 'asc'
             }
         });
 
-        if (!lecture) return res.status(404).json({ error: "Course not found" });
+        const formattedCourses = courses.map(course => ({
+            code: course.code,
+            name: course.name,
+            credits: course.credits,
+            department: course.departments.name,
+            prerequisites: course.course_prerequisites_course_prerequisites_course_codeTocourses.map(
+                prereq => ({
+                    code: prereq.courses_course_prerequisites_prerequisite_codeTocourses.code,
+                    name: prereq.courses_course_prerequisites_prerequisite_codeTocourses.name
+                })
+            )
+        }));
 
         res.status(200).json({
-            id: lecture.lecture_id.toString(),
-            code: lecture.course_offerings.course_code,
-            name: lecture.course_offerings.courses.name,
-            credits: lecture.course_offerings.courses.credits,
-            instructor: {
-                id: lecture.users.id,
-                name: lecture.users.full_name,
-                email: lecture.users.email
-            },
-            schedule: [{
-                day: lecture.day_of_week,
-                startTime: lecture.start_time,
-                endTime: lecture.end_time,
-                location: lecture.location
-            }]
+            courses: formattedCourses,
+            total: formattedCourses.length
+        });
+    } catch (err) {
+        logger.error(err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// GET /api/courses/:offeringId
+export const getCourseDetails = async (req, res) => {
+    try {
+        const { offeringId } = req.params;
+
+        const offering = await prisma.course_offerings.findUnique({
+            where: { offering_id: parseInt(offeringId) },
+            include: {
+                courses: true,
+                lectures: {
+                    include: {
+                        users: {
+                            select: {
+                                full_name: true,
+                                email: true
+                            }
+                        }
+                    }
+                },
+                tutorials_labs: {
+                    include: {
+                        users: {
+                            select: {
+                                full_name: true,
+                                email: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!offering) return res.status(404).json({ error: "Course offering not found" });
+
+        // Format lectures without IDs
+        const lectures = offering.lectures.map(lecture => ({
+            instructor: lecture.users.full_name,
+            instructorEmail: lecture.users.email,
+            capacity: lecture.capacity,
+            dayOfWeek: lecture.day_of_week,
+            startTime: formatTime(lecture.start_time),
+            endTime: formatTime(lecture.end_time),
+            location: lecture.location,
+            group: lecture.group
+        }));
+
+        // Format tutorials/labs without IDs
+        const tutorialsLabs = offering.tutorials_labs.map(lab => ({
+            ta: lab.users.full_name,
+            taEmail: lab.users.email,
+            type: lab.type,
+            capacity: lab.capacity,
+            dayOfWeek: lab.day_of_week,
+            startTime: formatTime(lab.start_time),
+            endTime: formatTime(lab.end_time),
+            location: lab.location,
+            group: lab.group
+        }));
+
+        res.status(200).json({
+            name: offering.courses.name,
+            code: offering.course_code,
+            credits: offering.courses.credits,
+            semester: offering.semester,
+            lectures: lectures,
+            tutorialsLabs: tutorialsLabs
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -308,6 +401,184 @@ export const deleteCourse = async (req, res) => {
         if (err.code === "P2025") {
             return res.status(404).json({ error: "Course not found." });
         }
+        res.status(500).json({ error: "Internal server error", details: err.message });
+    }
+};
+
+// POST /api/courses/lectures
+export const createLecture = async (req, res) => {
+    try {
+        const { offeringId, instructorId, capacity, dayOfWeek, startTime, endTime, location, group } = req.body;
+
+        // Validate required fields
+        if (!offeringId || !instructorId || !capacity || !dayOfWeek || !startTime || !endTime) {
+            return res.status(400).json({
+                error: "Missing required fields",
+                required: ["offeringId", "instructorId", "capacity", "dayOfWeek", "startTime", "endTime"]
+            });
+        }
+
+        // Verify course offering exists
+        const offering = await prisma.course_offerings.findUnique({
+            where: { offering_id: parseInt(offeringId) }
+        });
+
+        if (!offering) {
+            return res.status(404).json({ error: "Course offering not found" });
+        }
+
+        // Verify instructor exists
+        const instructor = await prisma.users.findUnique({
+            where: { id: instructorId }
+        });
+
+        if (!instructor) {
+            return res.status(404).json({ error: "Instructor not found" });
+        }
+
+        // Parse time strings (HH:MM) to DateTime
+        const [startHour, startMin] = startTime.split(':').map(Number);
+        const [endHour, endMin] = endTime.split(':').map(Number);
+        
+        const startDateTime = new Date();
+        startDateTime.setUTCHours(startHour, startMin, 0, 0);
+        
+        const endDateTime = new Date();
+        endDateTime.setUTCHours(endHour, endMin, 0, 0);
+
+        const newLecture = await prisma.lectures.create({
+            data: {
+                offering_id: parseInt(offeringId),
+                instructor_id: instructorId,
+                capacity: parseInt(capacity),
+                day_of_week: dayOfWeek,
+                start_time: startDateTime,
+                end_time: endDateTime,
+                location: location || null,
+                group: group || null
+            },
+            include: {
+                course_offerings: {
+                    include: {
+                        courses: true
+                    }
+                },
+                users: {
+                    select: {
+                        full_name: true,
+                        email: true
+                    }
+                }
+            }
+        });
+
+        res.status(201).json({
+            message: "Lecture created successfully",
+            lecture: {
+                lectureId: newLecture.lecture_id,
+                courseName: newLecture.course_offerings.courses.name,
+                courseCode: newLecture.course_offerings.course_code,
+                instructor: newLecture.users.full_name,
+                capacity: newLecture.capacity,
+                dayOfWeek: newLecture.day_of_week,
+                startTime: formatTime(newLecture.start_time),
+                endTime: formatTime(newLecture.end_time),
+                location: newLecture.location,
+                group: newLecture.group
+            }
+        });
+    } catch (err) {
+        logger.error("Error creating lecture:", err);
+        res.status(500).json({ error: "Internal server error", details: err.message });
+    }
+};
+
+// POST /api/courses/tutorials-labs
+export const createTutorialLab = async (req, res) => {
+    try {
+        const { offeringId, taId, type, capacity, dayOfWeek, startTime, endTime, location, group } = req.body;
+
+        // Validate required fields
+        if (!offeringId || !taId || !type || !capacity || !dayOfWeek || !startTime || !endTime || !group) {
+            return res.status(400).json({
+                error: "Missing required fields",
+                required: ["offeringId", "taId", "type", "capacity", "dayOfWeek", "startTime", "endTime", "group"]
+            });
+        }
+
+        // Verify course offering exists
+        const offering = await prisma.course_offerings.findUnique({
+            where: { offering_id: parseInt(offeringId) }
+        });
+
+        if (!offering) {
+            return res.status(404).json({ error: "Course offering not found" });
+        }
+
+        // Verify TA exists
+        const ta = await prisma.users.findUnique({
+            where: { id: taId }
+        });
+
+        if (!ta) {
+            return res.status(404).json({ error: "Teaching assistant not found" });
+        }
+
+        // Parse time strings (HH:MM) to DateTime
+        const [startHour, startMin] = startTime.split(':').map(Number);
+        const [endHour, endMin] = endTime.split(':').map(Number);
+        
+        const startDateTime = new Date();
+        startDateTime.setUTCHours(startHour, startMin, 0, 0);
+        
+        const endDateTime = new Date();
+        endDateTime.setUTCHours(endHour, endMin, 0, 0);
+
+        const newTutorialLab = await prisma.tutorials_labs.create({
+            data: {
+                offering_id: parseInt(offeringId),
+                ta_id: taId,
+                type: type,
+                capacity: parseInt(capacity),
+                day_of_week: dayOfWeek,
+                start_time: startDateTime,
+                end_time: endDateTime,
+                location: location || null,
+                group: group
+            },
+            include: {
+                course_offerings: {
+                    include: {
+                        courses: true
+                    }
+                },
+                users: {
+                    select: {
+                        full_name: true,
+                        email: true
+                    }
+                }
+            }
+        });
+
+        res.status(201).json({
+            message: "Tutorial/Lab created successfully",
+            tutorialLab: {
+                tutorialLabId: newTutorialLab.tutorial_lab_id,
+                courseName: newTutorialLab.course_offerings.courses.name,
+                courseCode: newTutorialLab.course_offerings.course_code,
+                ta: newTutorialLab.users.full_name,
+                type: newTutorialLab.type,
+                capacity: newTutorialLab.capacity,
+                dayOfWeek: newTutorialLab.day_of_week,
+                startTime: formatTime(newTutorialLab.start_time),
+                endTime: formatTime(newTutorialLab.end_time),
+                location: newTutorialLab.location,
+                group: newTutorialLab.group
+            }
+        });
+    } catch (err) {
+        logger.error("Error creating tutorial/lab:", err);
         res.status(500).json({ error: "Internal server error", details: err.message });
     }
 };

@@ -90,6 +90,22 @@ export const getAvailableOfferings = async (req, res) => {
             completedEnrollments.map(en => en.lectures.course_offerings.course_code)
         );
 
+        // Get current enrollments (enrolled or enrolled status) to mark as enrolled
+        const currentEnrollments = await prisma.enrollments.findMany({
+            where: {
+                student_user_id: userId,
+                status: 'enrolled'
+            },
+            select: {
+                lecture_id: true,
+                tutorial_lab_id: true
+            }
+        });
+
+        // Create sets of enrolled lecture IDs and tutorial/lab IDs
+        const enrolledLectureIds = new Set(currentEnrollments.map(en => en.lecture_id));
+        const enrolledTutorialLabIds = new Set(currentEnrollments.map(en => en.tutorial_lab_id));
+
         // Get all prerequisites
         const prerequisites = await prisma.course_prerequisites.findMany();
 
@@ -134,7 +150,8 @@ export const getAvailableOfferings = async (req, res) => {
                 location: lecture.location || "TBD",
                 instructor: lecture.users.full_name,
                 capacity: lecture.capacity,
-                type: "LECTURE"
+                type: "LECTURE",
+                enrolled: enrolledLectureIds.has(lecture.lecture_id)
             }));
 
             // Format labs (tutorials_labs with type = 'LAB' or 'Tutorial')
@@ -147,7 +164,8 @@ export const getAvailableOfferings = async (req, res) => {
                 location: lab.location || "TBD",
                 instructor: lab.users.full_name,
                 capacity: lab.capacity,
-                type: "LAB"
+                type: "LAB",
+                enrolled: enrolledTutorialLabIds.has(lab.tutorial_lab_id)
             }));
 
             // Add to available offerings
@@ -173,12 +191,13 @@ export const getAvailableOfferings = async (req, res) => {
 // POST /api/registration/register
 export const registerCourses = async (req, res) => {
     try {
-        const { studentId, selectedLectureIds, selectedLabIds } = req.body;
+        const studentId = req.user.id; // Get studentId from authenticated user token
+        const { selectedLectureIds, selectedLabIds } = req.body;
 
         // Validate input
-        if (!studentId || !Array.isArray(selectedLectureIds) || !Array.isArray(selectedLabIds)) {
+        if (!Array.isArray(selectedLectureIds) || !Array.isArray(selectedLabIds)) {
             return res.status(400).json({ 
-                error: "Invalid input. Required: studentId, selectedLectureIds (array), selectedLabIds (array)" 
+                error: "Invalid input. Required: selectedLectureIds (array), selectedLabIds (array)" 
             });
         }
 
@@ -356,6 +375,96 @@ export const registerCourses = async (req, res) => {
         }
     } catch (err) {
         logger.error("Error registering courses:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// DELETE /api/registration/unregister
+export const unregisterSession = async (req, res) => {
+    try {
+        const studentId = req.user.id; // Get studentId from authenticated user token
+        const { lectureId, tutorialLabId } = req.body;
+
+        // Validate that at least one ID is provided
+        if (!lectureId && !tutorialLabId) {
+            return res.status(400).json({ 
+                error: "Must provide either lectureId or tutorialLabId" 
+            });
+        }
+
+        let offeringId;
+        let sessionType;
+
+        // Determine which type of session to delete and get the offering_id
+        if (lectureId) {
+            const lecture = await prisma.lectures.findUnique({
+                where: { lecture_id: parseInt(lectureId) },
+                select: { offering_id: true }
+            });
+
+            if (!lecture) {
+                return res.status(404).json({ error: "Lecture not found" });
+            }
+
+            offeringId = lecture.offering_id;
+            sessionType = 'lecture';
+        } else {
+            const tutorialLab = await prisma.tutorials_labs.findUnique({
+                where: { tutorial_lab_id: parseInt(tutorialLabId) },
+                select: { offering_id: true }
+            });
+
+            if (!tutorialLab) {
+                return res.status(404).json({ error: "Tutorial/Lab not found" });
+            }
+
+            offeringId = tutorialLab.offering_id;
+            sessionType = 'tutorialLab';
+        }
+
+        // Find all enrollments for this student in this course offering
+        const enrollments = await prisma.enrollments.findMany({
+            where: {
+                student_user_id: studentId,
+                lectures: {
+                    offering_id: offeringId
+                }
+            },
+            include: {
+                lectures: {
+                    include: {
+                        course_offerings: {
+                            include: {
+                                courses: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (enrollments.length === 0) {
+            return res.status(404).json({ error: "No enrollment found for this course" });
+        }
+
+        // Delete all enrollments for this student in this course offering
+        // This will remove both lecture and lab registrations together
+        const deleteResult = await prisma.enrollments.deleteMany({
+            where: {
+                student_user_id: studentId,
+                lectures: {
+                    offering_id: offeringId
+                }
+            }
+        });
+
+        res.status(200).json({
+            message: `Successfully unregistered from ${enrollments[0].lectures.course_offerings.courses.name}`,
+            courseCode: enrollments[0].lectures.course_offerings.course_code,
+            enrollmentsDeleted: deleteResult.count
+        });
+    } catch (err) {
+        logger.error("Error unregistering from course:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 };

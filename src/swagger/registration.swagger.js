@@ -114,6 +114,146 @@ export default {
                 },
             },
         },
+        "/registration/unregister": {
+            delete: {
+                tags: ["Registration"],
+                summary: "Unregister from a course",
+                description: "Unregister from a course by providing either lectureId or tutorialLabId. This will remove both lecture and lab enrollments for the course.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/UnregisterRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Successfully unregistered from course",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UnregisterResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description: "Bad request - must provide either lectureId or tutorialLabId",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Lecture/Lab or enrollment not found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Not authenticated",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/registration/unregister": {
+            delete: {
+                tags: ["Registration"],
+                summary: "Unregister from a course",
+                description: "Unregister from a course by providing either lectureId or tutorialLabId. This will remove both lecture and lab enrollments for the course.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/UnregisterRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Successfully unregistered from course",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UnregisterResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description: "Bad request - must provide either lectureId or tutorialLabId",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Lecture/Lab or enrollment not found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Not authenticated",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
     components: {
         schemas: {
@@ -165,6 +305,11 @@ export default {
                         enum: ["LECTURE", "LAB"],
                         description: "Type of session",
                         example: "LECTURE",
+                    },
+                    enrolled: {
+                        type: "boolean",
+                        description: "Indicates if the current student is already enrolled in this session",
+                        example: false,
                     },
                 },
             },
@@ -221,14 +366,8 @@ export default {
             },
             RegisterCoursesRequest: {
                 type: "object",
-                required: ["studentId", "selectedLectureIds", "selectedLabIds"],
+                required: ["selectedLectureIds", "selectedLabIds"],
                 properties: {
-                    studentId: {
-                        type: "string",
-                        format: "uuid",
-                        description: "UUID of the student",
-                        example: "550e8400-e29b-41d4-a716-446655440000",
-                    },
                     selectedLectureIds: {
                         type: "array",
                         description: "Array of lecture IDs to register for",
@@ -281,6 +420,39 @@ export default {
                                 },
                             },
                         },
+                    },
+                },
+            },
+            UnregisterRequest: {
+                type: "object",
+                properties: {
+                    lectureId: {
+                        type: "integer",
+                        description: "ID of the lecture to unregister from (provide either this or tutorialLabId)",
+                        example: 101,
+                    },
+                    tutorialLabId: {
+                        type: "integer",
+                        description: "ID of the tutorial/lab to unregister from (provide either this or lectureId)",
+                        example: 201,
+                    },
+                },
+            },
+            UnregisterResponse: {
+                type: "object",
+                properties: {
+                    message: {
+                        type: "string",
+                        example: "Successfully unregistered from Data Structures",
+                    },
+                    courseCode: {
+                        type: "string",
+                        example: "CS201",
+                    },
+                    enrollmentsDeleted: {
+                        type: "integer",
+                        description: "Number of enrollment records deleted",
+                        example: 1,
                     },
                 },
             },

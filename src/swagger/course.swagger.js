@@ -19,32 +19,52 @@ export default {
                 },
             },
         },
-        "/courses/{courseId}": {
+        "/courses/all": {
             get: {
                 tags: ["Courses"],
-                summary: "Get course details by lecture/course id",
+                summary: "Get all courses in the system",
+                description: "Retrieve all courses from the course table with their details and prerequisites",
                 security: [{ bearerAuth: [] }],
-                parameters: [
-                    {
-                        name: "courseId",
-                        in: "path",
-                        required: true,
-                        schema: { type: "string" },
-                        description: "Lecture/course identifier",
-                    },
-                ],
                 responses: {
                     200: {
-                        description: "Course detail",
+                        description: "List of all courses",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/CourseDetailsResponse",
+                                    $ref: "#/components/schemas/AllCoursesResponse",
                                 },
                             },
                         },
                     },
-                    404: { description: "Course not found" },
+                },
+            },
+        },
+        "/courses/{offeringId}": {
+            get: {
+                tags: ["Courses"],
+                summary: "Get course offering details by offering ID",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "offeringId",
+                        in: "path",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Course offering identifier",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Course offering details with lectures and tutorials/labs",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/CourseOfferingDetailsResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: { description: "Course offering not found" },
                 },
             },
         },
@@ -103,6 +123,66 @@ export default {
                             },
                         },
                     },
+                },
+            },
+        },
+        "/courses/lectures": {
+            post: {
+                tags: ["Courses"],
+                summary: "Create a new lecture",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/LectureCreateRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    201: {
+                        description: "Lecture created successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/LectureCreateResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: { description: "Course offering or instructor not found" },
+                },
+            },
+        },
+        "/courses/tutorials-labs": {
+            post: {
+                tags: ["Courses"],
+                summary: "Create a new tutorial/lab session",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/TutorialLabCreateRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    201: {
+                        description: "Tutorial/Lab created successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/TutorialLabCreateResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: { description: "Course offering or teaching assistant not found" },
                 },
             },
         },
@@ -274,31 +354,144 @@ export default {
                 totalCredits: { type: "integer" },
             },
         },
-        CourseDetailsResponse: {
+        AllCoursesResponse: {
             type: "object",
             properties: {
-                id: { type: "string" },
-                code: { type: "string" },
-                name: { type: "string" },
-                credits: { type: "integer" },
-                instructor: {
-                    type: "object",
-                    properties: {
-                        id: { type: "string" },
-                        name: { type: "string" },
-                        email: { type: "string" },
-                    },
-                },
-                schedule: {
+                courses: {
                     type: "array",
                     items: {
                         type: "object",
                         properties: {
-                            day: { type: "string" },
-                            startTime: { type: "string" },
-                            endTime: { type: "string" },
-                            location: { type: "string" },
+                            code: { type: "string", example: "CS101" },
+                            name: { type: "string", example: "Introduction to Programming" },
+                            credits: { type: "integer", example: 3 },
+                            department: { type: "string", example: "Computer Science" },
+                            prerequisites: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        code: { type: "string" },
+                                        name: { type: "string" },
+                                    },
+                                },
+                            },
                         },
+                    },
+                },
+                total: { type: "integer", example: 1 },
+            },
+        },
+        CourseOfferingDetailsResponse: {
+            type: "object",
+            properties: {
+                name: { type: "string", example: "Data Structures" },
+                code: { type: "string", example: "CS201" },
+                credits: { type: "integer", example: 3 },
+                semester: { type: "string", example: "Spring 2026" },
+                lectures: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            instructor: { type: "string", example: "Dr. John Doe" },
+                            instructorEmail: { type: "string", example: "john.doe@university.edu" },
+                            capacity: { type: "integer", example: 40 },
+                            dayOfWeek: { type: "string", example: "Monday" },
+                            startTime: { type: "string", example: "08:30" },
+                            endTime: { type: "string", example: "10:00" },
+                            location: { type: "string", example: "Room 101" },
+                            group: { type: "string", example: "1" },
+                        },
+                    },
+                },
+                tutorialsLabs: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            ta: { type: "string", example: "Jane Smith" },
+                            taEmail: { type: "string", example: "jane.smith@university.edu" },
+                            type: { type: "string", example: "LAB" },
+                            capacity: { type: "integer", example: 20 },
+                            dayOfWeek: { type: "string", example: "Wednesday" },
+                            startTime: { type: "string", example: "14:00" },
+                            endTime: { type: "string", example: "16:00" },
+                            location: { type: "string", example: "Lab A" },
+                            group: { type: "string", example: "1" },
+                        },
+                    },
+                },
+            },
+        },
+        LectureCreateRequest: {
+            type: "object",
+            required: ["offeringId", "instructorId", "capacity", "dayOfWeek", "startTime", "endTime"],
+            properties: {
+                offeringId: { type: "integer", example: 1 },
+                instructorId: { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000" },
+                capacity: { type: "integer", example: 40 },
+                dayOfWeek: { type: "string", example: "Monday" },
+                startTime: { type: "string", example: "08:30", description: "Time in HH:MM format" },
+                endTime: { type: "string", example: "10:00", description: "Time in HH:MM format" },
+                location: { type: "string", example: "Room 101" },
+                group: { type: "string", example: "1" },
+            },
+        },
+        LectureCreateResponse: {
+            type: "object",
+            properties: {
+                message: { type: "string", example: "Lecture created successfully" },
+                lecture: {
+                    type: "object",
+                    properties: {
+                        lectureId: { type: "integer" },
+                        courseName: { type: "string" },
+                        courseCode: { type: "string" },
+                        instructor: { type: "string" },
+                        capacity: { type: "integer" },
+                        dayOfWeek: { type: "string" },
+                        startTime: { type: "string" },
+                        endTime: { type: "string" },
+                        location: { type: "string" },
+                        group: { type: "string" },
+                    },
+                },
+            },
+        },
+        TutorialLabCreateRequest: {
+            type: "object",
+            required: ["offeringId", "taId", "type", "capacity", "dayOfWeek", "startTime", "endTime", "group"],
+            properties: {
+                offeringId: { type: "integer", example: 1 },
+                taId: { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000" },
+                type: { type: "string", example: "LAB" },
+                capacity: { type: "integer", example: 20 },
+                dayOfWeek: { type: "string", example: "Wednesday" },
+                startTime: { type: "string", example: "14:00", description: "Time in HH:MM format" },
+                endTime: { type: "string", example: "16:00", description: "Time in HH:MM format" },
+                location: { type: "string", example: "Lab A" },
+                group: { type: "string", example: "1" },
+            },
+        },
+        TutorialLabCreateResponse: {
+            type: "object",
+            properties: {
+                message: { type: "string", example: "Tutorial/Lab created successfully" },
+                tutorialLab: {
+                    type: "object",
+                    properties: {
+                        tutorialLabId: { type: "integer" },
+                        courseName: { type: "string" },
+                        courseCode: { type: "string" },
+                        ta: { type: "string" },
+                        type: { type: "string" },
+                        capacity: { type: "integer" },
+                        dayOfWeek: { type: "string" },
+                        startTime: { type: "string" },
+                        endTime: { type: "string" },
+                        location: { type: "string" },
+                        group: { type: "string" },
                     },
                 },
             },

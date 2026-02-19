@@ -1,6 +1,6 @@
 export default {
     paths: {
-        "/api/community/posts": {
+        "/community/posts": {
             post: {
                 summary: "Create a new community post",
                 tags: ["Community"],
@@ -16,18 +16,22 @@ export default {
                                     content: {
                                         type: "string",
                                         description: "Post content text",
-                                        example: "This is my first community post!",
+                                        example:
+                                            "This is my first community post!",
                                     },
                                     image_url: {
                                         type: "string",
                                         nullable: true,
-                                        description: "Optional image URL for the post",
-                                        example: "https://example.com/image.jpg",
+                                        description:
+                                            "Optional image URL for the post",
+                                        example:
+                                            "https://example.com/image.jpg",
                                     },
                                     group_id: {
                                         type: "integer",
                                         nullable: true,
-                                        description: "Optional group ID to post in a specific group",
+                                        description:
+                                            "Optional group ID to post in a specific group",
                                         example: 1,
                                     },
                                 },
@@ -45,7 +49,8 @@ export default {
                                     properties: {
                                         message: {
                                             type: "string",
-                                            example: "Post created successfully",
+                                            example:
+                                                "Post created successfully",
                                         },
                                         post: {
                                             $ref: "#/components/schemas/CommunityPost",
@@ -67,7 +72,7 @@ export default {
                 },
             },
         },
-        "/api/community/feed": {
+        "/community/feed": {
             get: {
                 summary: "Get community feed with all posts",
                 tags: ["Community"],
@@ -112,51 +117,70 @@ export default {
                                             {
                                                 id: 1,
                                                 author_name: "John Doe",
-                                                author_avatar: "https://storage.example.com/avatars/john-d.jpg",
-                                                group_name: "Computer Science Club",
-                                                content: "Just finished my final project for Database Systems! Really proud of what we accomplished as a team.",
-                                                image_url: "https://storage.example.com/posts/project-demo.jpg",
+                                                author_avatar:
+                                                    "https://storage.example.com/avatars/john-d.jpg",
+                                                group_name:
+                                                    "Computer Science Club",
+                                                content:
+                                                    "Just finished my final project for Database Systems! Really proud of what we accomplished as a team.",
+                                                image_url:
+                                                    "https://storage.example.com/posts/project-demo.jpg",
                                                 likes_count: 15,
                                                 comments_count: 5,
-                                                created_at: "2026-02-07T14:25:00Z",
+                                                created_at:
+                                                    "2026-02-07T14:25:00Z",
                                                 recent_comments: [
                                                     {
                                                         id: 12,
-                                                        content: "Congratulations! That's awesome!",
-                                                        created_at: "2026-02-07T14:30:00Z",
-                                                        author_name: "Sarah Johnson",
-                                                        author_avatar: "https://storage.example.com/avatars/sarah-j.jpg"
+                                                        content:
+                                                            "Congratulations! That's awesome!",
+                                                        created_at:
+                                                            "2026-02-07T14:30:00Z",
+                                                        author_name:
+                                                            "Sarah Johnson",
+                                                        author_avatar:
+                                                            "https://storage.example.com/avatars/sarah-j.jpg",
                                                     },
                                                     {
                                                         id: 13,
-                                                        content: "Well done! Can't wait to see the demo.",
-                                                        created_at: "2026-02-07T14:45:00Z",
-                                                        author_name: "Mike Chen",
-                                                        author_avatar: "https://storage.example.com/avatars/mike-c.jpg"
-                                                    }
-                                                ]
+                                                        content:
+                                                            "Well done! Can't wait to see the demo.",
+                                                        created_at:
+                                                            "2026-02-07T14:45:00Z",
+                                                        author_name:
+                                                            "Mike Chen",
+                                                        author_avatar:
+                                                            "https://storage.example.com/avatars/mike-c.jpg",
+                                                    },
+                                                ],
                                             },
                                             {
                                                 id: 2,
                                                 author_name: "Emily Wilson",
-                                                author_avatar: "https://storage.example.com/avatars/emily-w.jpg",
+                                                author_avatar:
+                                                    "https://storage.example.com/avatars/emily-w.jpg",
                                                 group_name: null,
-                                                content: "Looking for study partners for the upcoming algorithms exam. Anyone interested?",
+                                                content:
+                                                    "Looking for study partners for the upcoming algorithms exam. Anyone interested?",
                                                 image_url: null,
                                                 likes_count: 8,
                                                 comments_count: 3,
-                                                created_at: "2026-02-07T13:15:00Z",
+                                                created_at:
+                                                    "2026-02-07T13:15:00Z",
                                                 recent_comments: [
                                                     {
                                                         id: 14,
-                                                        content: "I'm in! Let's meet at the library.",
-                                                        created_at: "2026-02-07T13:20:00Z",
-                                                        author_name: "David Lee",
-                                                        author_avatar: null
-                                                    }
-                                                ]
-                                            }
-                                        ]
+                                                        content:
+                                                            "I'm in! Let's meet at the library.",
+                                                        created_at:
+                                                            "2026-02-07T13:20:00Z",
+                                                        author_name:
+                                                            "David Lee",
+                                                        author_avatar: null,
+                                                    },
+                                                ],
+                                            },
+                                        ],
                                     },
                                 },
                             },
@@ -171,7 +195,7 @@ export default {
                 },
             },
         },
-        "/api/community/posts/{id}/like": {
+        "/community/posts/{id}/like": {
             post: {
                 summary: "Toggle like on a post",
                 tags: ["Community"],
@@ -201,7 +225,8 @@ export default {
                                         },
                                         liked: {
                                             type: "boolean",
-                                            description: "True if liked, false if unliked",
+                                            description:
+                                                "True if liked, false if unliked",
                                             example: true,
                                         },
                                     },
@@ -221,7 +246,7 @@ export default {
                 },
             },
         },
-        "/api/community/posts/{id}/comment": {
+        "/community/posts/{id}/comment": {
             post: {
                 summary: "Add a comment to a post",
                 tags: ["Community"],
@@ -248,102 +273,108 @@ export default {
                                     content: {
                                         type: "string",
                                         description: "Comment text",
-                                        example: "Great post! Thanks for sharing.",
+                                        example:
+                                            "Great post! Thanks for sharing.",
                                     },
                                 },
                             },
                         },
                     },
                 },
-                "responses": {
-                    "201": {
-                        "description": "Comment added successfully",
-                        "content": {
-                        "application/json": {
-                            "schema": {
-                            "type": "object",
-                            "properties": {
-                                "message": {
-                                "type": "string",
-                                "example": "Comment added successfully"
+                responses: {
+                    201: {
+                        description: "Comment added successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: {
+                                            type: "string",
+                                            example:
+                                                "Comment added successfully",
+                                        },
+                                        comment: {
+                                            type: "object",
+                                            properties: {
+                                                id: {
+                                                    type: "integer",
+                                                    example: 1,
+                                                },
+                                                post_id: {
+                                                    type: "integer",
+                                                    example: 6,
+                                                },
+                                                author_id: {
+                                                    type: "string",
+                                                    format: "uuid",
+                                                    example:
+                                                        "f6c1fcd5-4d22-4914-87ed-ef86e4bae2e2",
+                                                },
+                                                content: {
+                                                    type: "string",
+                                                    example:
+                                                        "Great post! Thanks for sharing.",
+                                                },
+                                                created_at: {
+                                                    type: "string",
+                                                    format: "date-time",
+                                                    example:
+                                                        "2026-02-08T09:05:15.178Z",
+                                                },
+                                                users: {
+                                                    type: "object",
+                                                    properties: {
+                                                        id: {
+                                                            type: "string",
+                                                            format: "uuid",
+                                                            example:
+                                                                "f6c1fcd5-4d22-4914-87ed-ef86e4bae2e2",
+                                                        },
+                                                        full_name: {
+                                                            type: "string",
+                                                            example:
+                                                                "Magda Madbouly",
+                                                        },
+                                                        avatar_url: {
+                                                            type: "string",
+                                                            nullable: true,
+                                                            example: null,
+                                                        },
+                                                    },
+                                                },
+                                                author_name: {
+                                                    type: "string",
+                                                    example: "Magda Madbouly",
+                                                },
+                                                author_avatar: {
+                                                    type: "string",
+                                                    nullable: true,
+                                                    example: null,
+                                                },
+                                            },
+                                        },
+                                    },
                                 },
-                                "comment": {
-                                "type": "object",
-                                "properties": {
-                                    "id": {
-                                    "type": "integer",
-                                    "example": 1
-                                    },
-                                    "post_id": {
-                                    "type": "integer",
-                                    "example": 6
-                                    },
-                                    "author_id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "example": "f6c1fcd5-4d22-4914-87ed-ef86e4bae2e2"
-                                    },
-                                    "content": {
-                                    "type": "string",
-                                    "example": "Great post! Thanks for sharing."
-                                    },
-                                    "created_at": {
-                                    "type": "string",
-                                    "format": "date-time",
-                                    "example": "2026-02-08T09:05:15.178Z"
-                                    },
-                                    "users": {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "example": "f6c1fcd5-4d22-4914-87ed-ef86e4bae2e2"
-                                        },
-                                        "full_name": {
-                                        "type": "string",
-                                        "example": "Magda Madbouly"
-                                        },
-                                        "avatar_url": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "example": null
-                                        }
-                                    }
-                                    },
-                                    "author_name": {
-                                    "type": "string",
-                                    "example": "Magda Madbouly"
-                                    },
-                                    "author_avatar": {
-                                    "type": "string",
-                                    "nullable": true,
-                                    "example": null
-                                    }
-                                }
-                                }
-                            }
-                            }
-                        }
-                        }
+                            },
+                        },
                     },
-                    "400": {
-                        "description": "Bad request - content is required"
+                    400: {
+                        description: "Bad request - content is required",
                     },
-                    "401": {
-                        "description": "Unauthorized"
+                    401: {
+                        description: "Unauthorized",
                     },
-                    "404": {
-                        "description": "Post not found"
+                    404: {
+                        description: "Post not found",
                     },
-                    "500": {
-                        "description": "Internal server error"
-                    }
-                    }
-
+                    500: {
+                        description: "Internal server error",
+                    },
+                },
             },
         },
-        "/api/community/groups": {
+        "/community/groups": {
             post: {
                 summary: "Create a new community group",
                 description: "Create a new community group.",
@@ -365,14 +396,18 @@ export default {
                                     description: {
                                         type: "string",
                                         nullable: true,
-                                        description: "Optional description of the group",
-                                        example: "A community for students learning and mastering JavaScript",
+                                        description:
+                                            "Optional description of the group",
+                                        example:
+                                            "A community for students learning and mastering JavaScript",
                                     },
                                     avatar_url: {
                                         type: "string",
                                         nullable: true,
-                                        description: "Optional avatar URL for the group",
-                                        example: "https://example.com/group-avatar.jpg",
+                                        description:
+                                            "Optional avatar URL for the group",
+                                        example:
+                                            "https://example.com/group-avatar.jpg",
                                     },
                                 },
                             },
@@ -389,7 +424,8 @@ export default {
                                     properties: {
                                         message: {
                                             type: "string",
-                                            example: "Group created successfully",
+                                            example:
+                                                "Group created successfully",
                                         },
                                         group: {
                                             $ref: "#/components/schemas/CommunityGroup",
@@ -400,7 +436,8 @@ export default {
                         },
                     },
                     400: {
-                        description: "Bad request - name is required or group already exists",
+                        description:
+                            "Bad request - name is required or group already exists",
                         content: {
                             "application/json": {
                                 schema: {
@@ -408,7 +445,8 @@ export default {
                                     properties: {
                                         error: {
                                             type: "string",
-                                            example: "A group with this name already exists",
+                                            example:
+                                                "A group with this name already exists",
                                         },
                                     },
                                 },
@@ -419,7 +457,8 @@ export default {
                         description: "Unauthorized",
                     },
                     403: {
-                        description: "Forbidden - Students cannot create groups",
+                        description:
+                            "Forbidden - Students cannot create groups",
                         content: {
                             "application/json": {
                                 schema: {
@@ -440,7 +479,7 @@ export default {
                 },
             },
         },
-        "/api/community/groups/suggested": {
+        "/community/groups/suggested": {
             get: {
                 summary: "Get suggested groups (groups user hasn't joined)",
                 tags: ["Community"],
@@ -465,28 +504,37 @@ export default {
                                             {
                                                 id: 1,
                                                 name: "Computer Science Club",
-                                                description: "A community for CS students to collaborate and share knowledge",
-                                                avatar_url: "https://storage.example.com/groups/cs-club.jpg",
-                                                created_at: "2025-09-01T08:00:00Z",
-                                                members_count: 45
+                                                description:
+                                                    "A community for CS students to collaborate and share knowledge",
+                                                avatar_url:
+                                                    "https://storage.example.com/groups/cs-club.jpg",
+                                                created_at:
+                                                    "2025-09-01T08:00:00Z",
+                                                members_count: 45,
                                             },
                                             {
                                                 id: 3,
                                                 name: "AI & Machine Learning Enthusiasts",
-                                                description: "Exploring the future of artificial intelligence together",
-                                                avatar_url: "https://storage.example.com/groups/ai-ml.jpg",
-                                                created_at: "2025-10-15T10:30:00Z",
-                                                members_count: 32
+                                                description:
+                                                    "Exploring the future of artificial intelligence together",
+                                                avatar_url:
+                                                    "https://storage.example.com/groups/ai-ml.jpg",
+                                                created_at:
+                                                    "2025-10-15T10:30:00Z",
+                                                members_count: 32,
                                             },
                                             {
                                                 id: 5,
                                                 name: "Web Development Society",
-                                                description: "Building the web, one line of code at a time",
-                                                avatar_url: "https://storage.example.com/groups/webdev.jpg",
-                                                created_at: "2025-11-20T14:00:00Z",
-                                                members_count: 28
-                                            }
-                                        ]
+                                                description:
+                                                    "Building the web, one line of code at a time",
+                                                avatar_url:
+                                                    "https://storage.example.com/groups/webdev.jpg",
+                                                created_at:
+                                                    "2025-11-20T14:00:00Z",
+                                                members_count: 28,
+                                            },
+                                        ],
                                     },
                                 },
                             },
@@ -501,7 +549,7 @@ export default {
                 },
             },
         },
-        "/api/community/groups/{id}/join": {
+        "/community/groups/{id}/join": {
             post: {
                 summary: "Join a community group",
                 tags: ["Community"],
@@ -527,7 +575,8 @@ export default {
                                     properties: {
                                         message: {
                                             type: "string",
-                                            example: "Successfully joined the group",
+                                            example:
+                                                "Successfully joined the group",
                                         },
                                     },
                                 },
@@ -549,7 +598,7 @@ export default {
                 },
             },
         },
-        "/api/community/events": {
+        "/community/events": {
             get: {
                 summary: "Get all upcoming events",
                 tags: ["Community"],
@@ -576,10 +625,13 @@ export default {
                                                 title: "Annual Tech Conference 2026",
                                                 event_date: "2026-03-15",
                                                 time: "14:00",
-                                                location: "Main Auditorium, Building A",
-                                                img_url: "https://storage.example.com/events/tech-conf-2026.jpg",
+                                                location:
+                                                    "Main Auditorium, Building A",
+                                                img_url:
+                                                    "https://storage.example.com/events/tech-conf-2026.jpg",
                                                 link: "https://events.college.edu/tech-conf-2026",
-                                                description: "Join us for our annual tech conference featuring keynote speakers from leading tech companies and hands-on workshops."
+                                                description:
+                                                    "Join us for our annual tech conference featuring keynote speakers from leading tech companies and hands-on workshops.",
                                             },
                                             {
                                                 id: 2,
@@ -587,21 +639,26 @@ export default {
                                                 event_date: "2026-03-22",
                                                 time: "10:00",
                                                 location: "Student Center",
-                                                img_url: "https://storage.example.com/events/career-fair-spring.jpg",
+                                                img_url:
+                                                    "https://storage.example.com/events/career-fair-spring.jpg",
                                                 link: "https://careers.college.edu/spring-fair",
-                                                description: "Meet with top employers and explore internship and full-time opportunities."
+                                                description:
+                                                    "Meet with top employers and explore internship and full-time opportunities.",
                                             },
                                             {
                                                 id: 3,
                                                 title: "Hackathon 2026: Code for Good",
                                                 event_date: "2026-04-05",
                                                 time: "09:00",
-                                                location: "Innovation Lab, Building C",
-                                                img_url: "https://storage.example.com/events/hackathon-2026.jpg",
+                                                location:
+                                                    "Innovation Lab, Building C",
+                                                img_url:
+                                                    "https://storage.example.com/events/hackathon-2026.jpg",
                                                 link: "https://hackathon.college.edu/2026",
-                                                description: "24-hour coding challenge to create solutions for social impact. Prizes and mentorship included!"
-                                            }
-                                        ]
+                                                description:
+                                                    "24-hour coding challenge to create solutions for social impact. Prizes and mentorship included!",
+                                            },
+                                        ],
                                     },
                                 },
                             },
@@ -712,12 +769,14 @@ export default {
                     },
                     content: {
                         type: "string",
-                        example: "Just finished my final project for Database Systems! Really proud of what we accomplished as a team.",
+                        example:
+                            "Just finished my final project for Database Systems! Really proud of what we accomplished as a team.",
                     },
                     image_url: {
                         type: "string",
                         nullable: true,
-                        example: "https://storage.example.com/posts/project-demo.jpg",
+                        example:
+                            "https://storage.example.com/posts/project-demo.jpg",
                     },
                     likes_count: {
                         type: "integer",
@@ -757,7 +816,8 @@ export default {
                                 author_avatar: {
                                     type: "string",
                                     nullable: true,
-                                    example: "https://storage.example.com/avatars/sarah-j.jpg",
+                                    example:
+                                        "https://storage.example.com/avatars/sarah-j.jpg",
                                 },
                             },
                         },
@@ -782,7 +842,8 @@ export default {
                     },
                     content: {
                         type: "string",
-                        example: "Great post! Really inspiring to see your progress.",
+                        example:
+                            "Great post! Really inspiring to see your progress.",
                     },
                     created_at: {
                         type: "string",

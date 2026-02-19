@@ -124,9 +124,21 @@ export default {
         UploadExcelResponse: {
             type: "object",
             properties: {
-                message: { type: "string" },
-                addedCount: { type: "integer" },
-                skippedRows: { type: "integer" },
+                message: {
+                    type: "string",
+                    example: "Users processed successfully",
+                },
+                insertedCount: {
+                    type: "integer",
+                    description: "Number of users successfully inserted",
+                    example: 5,
+                },
+                skippedDueToValidation: {
+                    type: "integer",
+                    description:
+                        "Number of rows skipped due to validation errors",
+                    example: 0,
+                },
                 errors: {
                     type: "array",
                     items: {
@@ -136,6 +148,7 @@ export default {
                             error: { type: "string" },
                         },
                     },
+                    example: [],
                 },
             },
         },

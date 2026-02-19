@@ -103,16 +103,22 @@ export default {
             post: {
                 tags: ["Users"],
                 summary: "Upload an Excel file to create users in bulk",
+                description:
+                    "Upload an Excel file (.xlsx) with columns: Name, Email, Password, Role, StudentId. The first row should be headers. For students, StudentId is required. Duplicate emails will be skipped automatically.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
+                    required: true,
                     content: {
                         "multipart/form-data": {
                             schema: {
                                 type: "object",
+                                required: ["file"],
                                 properties: {
                                     file: {
                                         type: "string",
                                         format: "binary",
+                                        description:
+                                            "Excel file with columns: Name, Email, Password, Role, StudentId (required for students)",
                                     },
                                 },
                             },
@@ -121,17 +127,74 @@ export default {
                 },
                 responses: {
                     201: {
-                        description: "Users added",
+                        description: "Users processed successfully",
                         content: {
                             "application/json": {
                                 schema: {
                                     $ref: "#/components/schemas/UploadExcelResponse",
                                 },
+                                example: {
+                                    message: "Users processed successfully",
+                                    insertedCount: 5,
+                                    skippedDueToValidation: 0,
+                                    errors: [],
+                                },
                             },
                         },
                     },
                     400: {
-                        description: "Bad request",
+                        description:
+                            "Bad request - validation errors or no valid data",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        error: { type: "string" },
+                                        errors: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    row: { type: "integer" },
+                                                    error: { type: "string" },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                                examples: {
+                                    noFile: {
+                                        value: {
+                                            error: "No file uploaded",
+                                        },
+                                    },
+                                    noWorksheet: {
+                                        value: {
+                                            error: "No worksheet found in the Excel file",
+                                        },
+                                    },
+                                    noValidData: {
+                                        value: {
+                                            error: "No valid user data found",
+                                            errors: [
+                                                {
+                                                    row: 2,
+                                                    error: "Missing required fields",
+                                                },
+                                                {
+                                                    row: 5,
+                                                    error: "Student ID required for student role",
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
                         content: {
                             "application/json": {
                                 schema: {

@@ -102,6 +102,7 @@ app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));
 // Start the server
 let server = httpServer.listen(port, () => {
     logger.info(`Server is running at http://localhost:${port}`);
+    logger.info(`API documentation available at http://localhost:${port}/docs`);
     logger.info(`WebSocket server is ready on ws://localhost:${port}`);
 });
 

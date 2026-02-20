@@ -529,37 +529,55 @@ export default {
         TeacherScheduleSlot: {
             type: "object",
             properties: {
+                lectureId: {
+                    type: "integer",
+                    description: "Lecture ID (present for doctors/lectures)",
+                    nullable: true,
+                },
+                tutorialLabId: {
+                    type: "integer",
+                    description:
+                        "Tutorial/Lab ID (present for teaching assistants)",
+                    nullable: true,
+                },
                 startTime: {
                     type: "string",
-                    description: "Start time",
+                    description:
+                        "Start time in 12-hour format with AM/PM (Cairo timezone)",
+                    example: "9:00 AM",
                 },
                 endTime: {
                     type: "string",
-                    description: "End time",
+                    description:
+                        "End time in 12-hour format with AM/PM (Cairo timezone)",
+                    example: "10:30 AM",
                 },
                 courseCode: {
                     type: "string",
-                    nullable: true,
-                    description: "Course code (null for office hours)",
+                    description: "Course code",
+                    example: "CS101",
                 },
                 courseName: {
                     type: "string",
-                    nullable: true,
-                    description: "Course name (null for office hours)",
+                    description: "Course name",
+                    example: "Intro to Computer Science",
                 },
                 location: {
                     type: "string",
                     description: "Location",
+                    example: "Hall A",
                 },
                 type: {
                     type: "string",
-                    enum: ["lecture", "lab", "tutorial", "office_hours"],
+                    enum: ["lecture", "lab", "tutorial"],
                     description: "Type of slot",
+                    example: "lecture",
                 },
             },
             example: {
-                startTime: "09:00:00",
-                endTime: "10:30:00",
+                lectureId: 1,
+                startTime: "9:00 AM",
+                endTime: "10:30 AM",
                 courseCode: "CS101",
                 courseName: "Intro to Computer Science",
                 location: "Hall A",

@@ -107,8 +107,9 @@ export default {
                                             day: "Monday",
                                             slots: [
                                                 {
-                                                    startTime: "09:00:00",
-                                                    endTime: "10:30:00",
+                                                    lectureId: 1,
+                                                    startTime: "9:00 AM",
+                                                    endTime: "10:30 AM",
                                                     courseCode: "CS101",
                                                     courseName:
                                                         "Intro to Computer Science",
@@ -116,12 +117,14 @@ export default {
                                                     type: "lecture",
                                                 },
                                                 {
-                                                    startTime: "10:00:00",
-                                                    endTime: "12:00:00",
-                                                    courseCode: null,
-                                                    courseName: null,
-                                                    location: "Office 301",
-                                                    type: "office_hours",
+                                                    lectureId: 2,
+                                                    startTime: "11:00 AM",
+                                                    endTime: "12:30 PM",
+                                                    courseCode: "CS201",
+                                                    courseName:
+                                                        "Data Structures",
+                                                    location: "Hall B",
+                                                    type: "lecture",
                                                 },
                                             ],
                                         },
@@ -133,8 +136,9 @@ export default {
                                             day: "Wednesday",
                                             slots: [
                                                 {
-                                                    startTime: "13:00:00",
-                                                    endTime: "14:00:00",
+                                                    tutorialLabId: 5,
+                                                    startTime: "1:00 PM",
+                                                    endTime: "2:00 PM",
                                                     courseCode: "CS101",
                                                     courseName:
                                                         "Intro to Computer Science",
@@ -142,12 +146,14 @@ export default {
                                                     type: "tutorial",
                                                 },
                                                 {
-                                                    startTime: "14:00:00",
-                                                    endTime: "16:00:00",
-                                                    courseCode: null,
-                                                    courseName: null,
-                                                    location: "Office 301",
-                                                    type: "office_hours",
+                                                    tutorialLabId: 6,
+                                                    startTime: "2:00 PM",
+                                                    endTime: "3:30 PM",
+                                                    courseCode: "CS201",
+                                                    courseName:
+                                                        "Data Structures",
+                                                    location: "Lab 2",
+                                                    type: "lab",
                                                 },
                                             ],
                                         },

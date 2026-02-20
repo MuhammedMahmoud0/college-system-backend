@@ -127,6 +127,29 @@ export const getTeacherSchedule = async (req, res) => {
             return dayMap[day.toLowerCase()] || day;
         };
 
+        // Helper function to format time to HH:MM in Cairo timezone
+        const formatTime = (time) => {
+            if (!time) return null;
+
+            // If it's already a string in HH:MM format, convert to 12-hour format
+            if (typeof time === "string" && time.match(/^\d{2}:\d{2}/)) {
+                const [hours, minutes] = time.split(":");
+                const hour = parseInt(hours);
+                const period = hour >= 12 ? "PM" : "AM";
+                const hour12 = hour % 12 || 12;
+                return `${hour12}:${minutes} ${period}`;
+            }
+
+            // If it's a Date object, format it to Cairo timezone in 12-hour format
+            const date = new Date(time);
+            return date.toLocaleTimeString("en-US", {
+                timeZone: "Africa/Cairo",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+            });
+        };
+
         // Get teacher information
         const teacher = await prisma.users.findUnique({
             where: {
@@ -161,15 +184,16 @@ export const getTeacherSchedule = async (req, res) => {
         // Build schedule map by day
         const scheduleMap = new Map();
 
-        // Add lectures
+        // Add lectures (for doctors)
         teacher.lectures.forEach((lecture) => {
             const day = normalizeDayName(lecture.day_of_week);
             if (!scheduleMap.has(day)) {
                 scheduleMap.set(day, []);
             }
             scheduleMap.get(day).push({
-                startTime: lecture.start_time,
-                endTime: lecture.end_time,
+                lectureId: lecture.lecture_id,
+                startTime: formatTime(lecture.start_time),
+                endTime: formatTime(lecture.end_time),
                 courseCode: lecture.course_offerings.course_code,
                 courseName: lecture.course_offerings.courses.name,
                 location: lecture.location || "TBA",
@@ -177,15 +201,16 @@ export const getTeacherSchedule = async (req, res) => {
             });
         });
 
-        // Add tutorials/labs
+        // Add tutorials/labs (for teaching assistants)
         teacher.tutorials_labs.forEach((tutorialLab) => {
             const day = normalizeDayName(tutorialLab.day_of_week);
             if (!scheduleMap.has(day)) {
                 scheduleMap.set(day, []);
             }
             scheduleMap.get(day).push({
-                startTime: tutorialLab.start_time,
-                endTime: tutorialLab.end_time,
+                tutorialLabId: tutorialLab.tutorial_lab_id,
+                startTime: formatTime(tutorialLab.start_time),
+                endTime: formatTime(tutorialLab.end_time),
                 courseCode: tutorialLab.course_offerings.course_code,
                 courseName: tutorialLab.course_offerings.courses.name,
                 location: tutorialLab.location || "TBA",

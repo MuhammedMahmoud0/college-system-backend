@@ -1,0 +1,230 @@
+import { prisma } from "../config/connection.js";
+import logger from "../utils/logger.js";
+
+// Helper: format a Date object to "HH:mm"
+const formatHHmm = (date) => {
+    const d = new Date(date);
+    const hours = String(d.getUTCHours()).padStart(2, "0");
+    const minutes = String(d.getUTCMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+};
+
+// Helper: format announcement output
+const formatAnnouncement = (announcement) => ({
+    id: announcement.id,
+    author_id: announcement.author_id,
+    title: announcement.title,
+    content: announcement.content,
+    audience: announcement.audience,
+    publish_at: announcement.publish_at ? formatHHmm(announcement.publish_at) : null,
+    expire_at: announcement.expire_at ?? null,
+});
+
+// ─────────────────────────────────────────────
+// 1. Academic Calendar (Stateless)
+// ─────────────────────────────────────────────
+
+/**
+ * POST /api/v1/config/calendar
+ * Accept static calendar configuration and return it as confirmation.
+ * No database storage.
+ */
+export const setAcademicCalendar = (req, res) => {
+    const {
+        semester_start,
+        registration_deadline,
+        midterm_start,
+        holiday_name,
+        holiday_date,
+        semester_end,
+    } = req.body;
+
+    if (!semester_start || !semester_end) {
+        return res
+            .status(400)
+            .json({ error: "semester_start and semester_end are required." });
+    }
+
+    const calendar = {
+        semester_start,
+        registration_deadline: registration_deadline ?? null,
+        midterm_start: midterm_start ?? null,
+        holiday_name: holiday_name ?? null,
+        holiday_date: holiday_date ?? null,
+        semester_end,
+    };
+
+    return res.status(200).json({
+        message: "Academic calendar configuration received.",
+        data: calendar,
+    });
+};
+
+// ─────────────────────────────────────────────
+// 2. Announcements CRUD
+// ─────────────────────────────────────────────
+
+/**
+ * POST /api/v1/config/announcements
+ * Create a new announcement.
+ */
+export const createAnnouncement = async (req, res) => {
+    try {
+        const author_id = req.user.id;
+        const { title, content, audience, expire_at } = req.body;
+
+        if (!title || !content) {
+            return res.status(400).json({ error: "title and content are required." });
+        }
+
+        // Validate audience enum if provided
+        const validAudiences = ["All", "Students", "Faculty"];
+        if (audience && !validAudiences.includes(audience)) {
+            return res.status(400).json({
+                error: `audience must be one of: ${validAudiences.join(", ")}.`,
+            });
+        }
+
+        const now = new Date();
+
+        // Default expire_at: 2 weeks from now
+        let expireDate;
+        if (expire_at) {
+            expireDate = new Date(expire_at);
+            if (isNaN(expireDate.getTime())) {
+                return res.status(400).json({ error: "Invalid expire_at date format." });
+            }
+        } else {
+            expireDate = new Date(now);
+            expireDate.setDate(expireDate.getDate() + 14);
+        }
+
+        const announcement = await prisma.announcements.create({
+            data: {
+                author_id,
+                title,
+                content,
+                audience: audience ?? "All",
+                publish_at: now,
+                expire_at: expireDate,
+            },
+        });
+
+        return res.status(201).json({
+            message: "Announcement created successfully.",
+            data: formatAnnouncement(announcement),
+        });
+    } catch (err) {
+        logger.error("Error creating announcement:", err);
+        return res.status(500).json({ error: "Internal server error." });
+    }
+};
+
+/**
+ * GET /api/v1/config/announcements
+ * Retrieve all active announcements (expire_at > now).
+ */
+export const getAnnouncements = async (req, res) => {
+    try {
+        const now = new Date();
+
+        const announcements = await prisma.announcements.findMany({
+            where: {
+                expire_at: {
+                    gt: now,
+                },
+            },
+            orderBy: { publish_at: "desc" },
+        });
+
+        return res.status(200).json({
+            count: announcements.length,
+            data: announcements.map(formatAnnouncement),
+        });
+    } catch (err) {
+        logger.error("Error fetching announcements:", err);
+        return res.status(500).json({ error: "Internal server error." });
+    }
+};
+
+/**
+ * PATCH /api/v1/config/announcements/:id
+ * Update specific fields of an announcement.
+ */
+export const updateAnnouncement = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, content, audience, expire_at } = req.body;
+
+        // Validate audience enum if provided
+        const validAudiences = ["All", "Students", "Faculty"];
+        if (audience && !validAudiences.includes(audience)) {
+            return res.status(400).json({
+                error: `audience must be one of: ${validAudiences.join(", ")}.`,
+            });
+        }
+
+        // Build update payload with only provided fields
+        const updateData = {};
+        if (title !== undefined) updateData.title = title;
+        if (content !== undefined) updateData.content = content;
+        if (audience !== undefined) updateData.audience = audience;
+        if (expire_at !== undefined) {
+            const expireDate = new Date(expire_at);
+            if (isNaN(expireDate.getTime())) {
+                return res.status(400).json({ error: "Invalid expire_at date format." });
+            }
+            updateData.expire_at = expireDate;
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ error: "No updatable fields provided." });
+        }
+
+        const existing = await prisma.announcements.findUnique({
+            where: { id: parseInt(id) },
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: "Announcement not found." });
+        }
+
+        const updated = await prisma.announcements.update({
+            where: { id: parseInt(id) },
+            data: updateData,
+        });
+
+        return res.status(200).json({
+            message: "Announcement updated successfully.",
+            data: formatAnnouncement(updated),
+        });
+    } catch (err) {
+        logger.error("Error updating announcement:", err);
+        return res.status(500).json({ error: "Internal server error." });
+    }
+};
+
+/**
+ * DELETE /api/v1/config/announcements/:id
+ * Permanently remove an announcement.
+ */
+export const deleteAnnouncement = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const existing = await prisma.announcements.findUnique({
+            where: { id: parseInt(id) },
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: "Announcement not found." });
+        }
+
+        await prisma.announcements.delete({ where: { id: parseInt(id) } });
+
+        return res.status(200).json({ message: "Announcement deleted successfully." });
+    } catch (err) {
+        logger.error("Error deleting announcement:", err);
+        return res.status(500).json({ error: "Internal server error." });
+    }
+};

@@ -364,3 +364,228 @@ export const getUpcomingEvents = async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+// POST /api/community/events - Create a new event
+export const createEvent = async (req, res) => {
+    try {
+        const { title, event_date, time, location, img_url, link, description } = req.body;
+
+        if (!title || !event_date) {
+            return res.status(400).json({ error: "Title and event_date are required" });
+        }
+
+        const event = await prisma.events.create({
+            data: {
+                title,
+                event_date,
+                time: time || null,
+                location: location || null,
+                img_url: img_url || null,
+                link: link || null,
+                description: description || null,
+            }
+        });
+
+        res.status(201).json({ message: "Event created successfully", event });
+    } catch (err) {
+        logger.error("Error creating event:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// PATCH /api/community/events/:id - Update an event
+export const updateEvent = async (req, res) => {
+    try {
+        const eventId = parseInt(req.params.id);
+        const { title, event_date, time, location, img_url, link, description } = req.body;
+
+        const event = await prisma.events.findUnique({ where: { id: eventId } });
+        if (!event) {
+            return res.status(404).json({ error: "Event not found" });
+        }
+
+        const updated = await prisma.events.update({
+            where: { id: eventId },
+            data: {
+                ...(title && { title }),
+                ...(event_date && { event_date }),
+                ...(time !== undefined && { time }),
+                ...(location !== undefined && { location }),
+                ...(img_url !== undefined && { img_url }),
+                ...(link !== undefined && { link }),
+                ...(description !== undefined && { description }),
+            }
+        });
+
+        res.status(200).json({ message: "Event updated successfully", event: updated });
+    } catch (err) {
+        logger.error("Error updating event:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// DELETE /api/community/events/:id - Delete an event
+export const deleteEvent = async (req, res) => {
+    try {
+        const eventId = parseInt(req.params.id);
+
+        const event = await prisma.events.findUnique({ where: { id: eventId } });
+        if (!event) {
+            return res.status(404).json({ error: "Event not found" });
+        }
+
+        await prisma.events.delete({ where: { id: eventId } });
+        res.status(200).json({ message: "Event deleted successfully" });
+    } catch (err) {
+        logger.error("Error deleting event:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// PATCH /api/community/posts/:id - Update a post
+export const updatePost = async (req, res) => {
+    try {
+        const postId = parseInt(req.params.id);
+        const userId = req.user.id;
+        const { content, image_url } = req.body;
+
+        const post = await prisma.community_posts.findUnique({ where: { id: postId } });
+        if (!post) {
+            return res.status(404).json({ error: "Post not found" });
+        }
+
+        if (post.author_id !== userId) {
+            return res.status(403).json({ error: "You can only edit your own posts" });
+        }
+
+        const updated = await prisma.community_posts.update({
+            where: { id: postId },
+            data: {
+                ...(content && { content }),
+                ...(image_url !== undefined && { image_url }),
+            },
+            include: {
+                users: { select: { id: true, full_name: true, avatar_url: true } },
+                community_groups: { select: { id: true, name: true } }
+            }
+        });
+
+        res.status(200).json({ message: "Post updated successfully", post: updated });
+    } catch (err) {
+        logger.error("Error updating post:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// DELETE /api/community/posts/:id - Delete a post
+export const deletePost = async (req, res) => {
+    try {
+        const postId = parseInt(req.params.id);
+        const userId = req.user.id;
+        const userRole = req.user.role;
+
+        const post = await prisma.community_posts.findUnique({ where: { id: postId } });
+        if (!post) {
+            return res.status(404).json({ error: "Post not found" });
+        }
+
+        const isAdmin = ['admin', 'super_admin'].includes(userRole);
+        if (post.author_id !== userId && !isAdmin) {
+            return res.status(403).json({ error: "You can only delete your own posts" });
+        }
+
+        await prisma.community_posts.delete({ where: { id: postId } });
+        res.status(200).json({ message: "Post deleted successfully" });
+    } catch (err) {
+        logger.error("Error deleting post:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// PATCH /api/community/groups/:id - Update a group
+export const updateGroup = async (req, res) => {
+    try {
+        const groupId = parseInt(req.params.id);
+        const { name, description, avatar_url } = req.body;
+
+        const group = await prisma.community_groups.findUnique({ where: { id: groupId } });
+        if (!group) {
+            return res.status(404).json({ error: "Group not found" });
+        }
+
+        if (name) {
+            const nameConflict = await prisma.community_groups.findFirst({
+                where: { name, id: { not: groupId } }
+            });
+            if (nameConflict) {
+                return res.status(400).json({ error: "A group with this name already exists" });
+            }
+        }
+
+        const updated = await prisma.community_groups.update({
+            where: { id: groupId },
+            data: {
+                ...(name && { name }),
+                ...(description !== undefined && { description }),
+                ...(avatar_url !== undefined && { avatar_url }),
+            },
+            include: { _count: { select: { group_members: true } } }
+        });
+
+        res.status(200).json({
+            message: "Group updated successfully",
+            group: { ...updated, members_count: updated._count.group_members }
+        });
+    } catch (err) {
+        logger.error("Error updating group:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// DELETE /api/community/groups/:id - Delete a group
+export const deleteGroup = async (req, res) => {
+    try {
+        const groupId = parseInt(req.params.id);
+
+        const group = await prisma.community_groups.findUnique({ where: { id: groupId } });
+        if (!group) {
+            return res.status(404).json({ error: "Group not found" });
+        }
+
+        await prisma.community_groups.delete({ where: { id: groupId } });
+        res.status(200).json({ message: "Group deleted successfully" });
+    } catch (err) {
+        logger.error("Error deleting group:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// GET /api/community/groups/my - Get groups the current user has joined
+export const getMyGroups = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const memberships = await prisma.group_members.findMany({
+            where: { user_id: userId },
+            include: {
+                community_groups: {
+                    include: {
+                        _count: { select: { group_members: true } }
+                    }
+                }
+            },
+            orderBy: { joined_at: 'desc' }
+        });
+
+        const groups = memberships.map(m => ({
+            ...m.community_groups,
+            members_count: m.community_groups._count.group_members,
+            joined_at: m.joined_at
+        }));
+
+        res.status(200).json({ groups });
+    } catch (err) {
+        logger.error("Error fetching user groups:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

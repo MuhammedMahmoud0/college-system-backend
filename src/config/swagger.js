@@ -17,6 +17,7 @@ import exam from "../swagger/exam.swagger.js";
 import registration from "../swagger/registration.swagger.js";
 import community from "../swagger/community.swagger.js";
 import attendance from "../swagger/attendance.swagger.js";
+import systemConfig from "../swagger/systemConfig.swagger.js";
 
 export const swaggerSpec = {
   ...base,
@@ -29,6 +30,7 @@ export const swaggerSpec = {
       ...course.schemas,
       ...courseOffering.schemas,
       ...registration.components.schemas,
+      ...systemConfig.schemas,
     },
   },
   paths: {
@@ -47,6 +49,7 @@ export const swaggerSpec = {
     ...registration.paths,
     ...community.paths,
     ...attendance.paths,
+    ...systemConfig.paths,
   },
 };
 

@@ -645,19 +645,6 @@ export default {
                                                 description:
                                                     "Meet with top employers and explore internship and full-time opportunities.",
                                             },
-                                            {
-                                                id: 3,
-                                                title: "Hackathon 2026: Code for Good",
-                                                event_date: "2026-04-05",
-                                                time: "09:00",
-                                                location:
-                                                    "Innovation Lab, Building C",
-                                                img_url:
-                                                    "https://storage.example.com/events/hackathon-2026.jpg",
-                                                link: "https://hackathon.college.edu/2026",
-                                                description:
-                                                    "24-hour coding challenge to create solutions for social impact. Prizes and mentorship included!",
-                                            },
                                         ],
                                     },
                                 },
@@ -670,6 +657,367 @@ export default {
                     500: {
                         description: "Internal server error",
                     },
+                },
+            },
+            post: {
+                summary: "Create a new event",
+                description: "Admin and super_admin only.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                required: ["title", "event_date"],
+                                properties: {
+                                    title: {
+                                        type: "string",
+                                        example: "Hackathon 2026",
+                                    },
+                                    event_date: {
+                                        type: "string",
+                                        example: "2026-04-05",
+                                    },
+                                    time: {
+                                        type: "string",
+                                        nullable: true,
+                                        example: "09:00",
+                                    },
+                                    location: {
+                                        type: "string",
+                                        nullable: true,
+                                        example: "Innovation Lab, Building C",
+                                    },
+                                    img_url: {
+                                        type: "string",
+                                        nullable: true,
+                                        example: "https://example.com/event.jpg",
+                                    },
+                                    link: {
+                                        type: "string",
+                                        nullable: true,
+                                        example: "https://example.com/register",
+                                    },
+                                    description: {
+                                        type: "string",
+                                        nullable: true,
+                                        example: "24-hour coding challenge.",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    201: {
+                        description: "Event created successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: { type: "string", example: "Event created successfully" },
+                                        event: { $ref: "#/components/schemas/Event" },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Bad request - title and event_date are required" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden - admins only" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/community/events/{id}": {
+            patch: {
+                summary: "Update an event",
+                description: "Admin and super_admin only.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Event ID",
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                properties: {
+                                    title: { type: "string", example: "Updated Event Title" },
+                                    event_date: { type: "string", example: "2026-05-10" },
+                                    time: { type: "string", nullable: true, example: "15:00" },
+                                    location: { type: "string", nullable: true, example: "Room 204" },
+                                    img_url: { type: "string", nullable: true, example: "https://example.com/img.jpg" },
+                                    link: { type: "string", nullable: true, example: "https://example.com" },
+                                    description: { type: "string", nullable: true, example: "Updated description." },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Event updated successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: { type: "string", example: "Event updated successfully" },
+                                        event: { $ref: "#/components/schemas/Event" },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden - admins only" },
+                    404: { description: "Event not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+            delete: {
+                summary: "Delete an event",
+                description: "Admin and super_admin only.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Event ID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Event deleted successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: { type: "string", example: "Event deleted successfully" },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden - admins only" },
+                    404: { description: "Event not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/community/posts/{id}": {
+            patch: {
+                summary: "Update a post",
+                description: "Only the post author can update their post.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Post ID",
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                properties: {
+                                    content: { type: "string", example: "Updated post content." },
+                                    image_url: { type: "string", nullable: true, example: "https://example.com/new-image.jpg" },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Post updated successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: { type: "string", example: "Post updated successfully" },
+                                        post: { $ref: "#/components/schemas/CommunityPost" },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden - not your post" },
+                    404: { description: "Post not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+            delete: {
+                summary: "Delete a post",
+                description: "The post author or an admin/super_admin can delete a post.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Post ID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Post deleted successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: { type: "string", example: "Post deleted successfully" },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden - not your post" },
+                    404: { description: "Post not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/community/groups/my": {
+            get: {
+                summary: "Get groups the current user has joined",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "Successfully retrieved user's groups",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        groups: {
+                                            type: "array",
+                                            items: { $ref: "#/components/schemas/CommunityGroup" },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/community/groups/{id}": {
+            patch: {
+                summary: "Update a community group",
+                description: "Admin and super_admin only.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Group ID",
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                properties: {
+                                    name: { type: "string", example: "Updated Group Name" },
+                                    description: { type: "string", nullable: true, example: "Updated description." },
+                                    avatar_url: { type: "string", nullable: true, example: "https://example.com/avatar.jpg" },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Group updated successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: { type: "string", example: "Group updated successfully" },
+                                        group: { $ref: "#/components/schemas/CommunityGroup" },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Group name already exists" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden - admins only" },
+                    404: { description: "Group not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+            delete: {
+                summary: "Delete a community group",
+                description: "Admin and super_admin only.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Group ID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Group deleted successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: { type: "string", example: "Group deleted successfully" },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden - admins only" },
+                    404: { description: "Group not found" },
+                    500: { description: "Internal server error" },
                 },
             },
         },
@@ -890,6 +1238,13 @@ export default {
                     members_count: {
                         type: "integer",
                         example: 45,
+                    },
+                    joined_at: {
+                        type: "string",
+                        format: "date-time",
+                        nullable: true,
+                        description: "Only present in /groups/my response",
+                        example: "2026-01-15T10:00:00Z",
                     },
                 },
             },

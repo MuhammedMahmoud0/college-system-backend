@@ -17,6 +17,7 @@ import examRoutes from "./routes/examRoutes.js";
 import registrationRoutes from "./routes/registrationRoutes.js";
 import studentSettingsRoutes from "./routes/studentSettingsRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
+import systemConfigRoutes from "./routes/systemConfigRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 import { initializeSocketIO } from "./utils/socketIO.js";
@@ -95,6 +96,9 @@ app.use("/api/v1/student-settings", studentSettingsRoutes);
 
 // mount attendance routes (WebSocket-enabled)
 app.use("/api/v1/attendance", attendanceRoutes);
+
+// mount system configuration routes
+app.use("/api/v1/config", systemConfigRoutes);
 
 // Swagger API documentation route
 app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));

@@ -5,6 +5,9 @@ import {
     scanQRCode,
     endAttendanceSession,
     getActiveSessions,
+    toggleStudentAttendance,
+    updateAttendanceRecord,
+    getStudentsAttendance,
 } from "../controllers/attendanceController.js";
 import {
     authMiddleware,
@@ -46,6 +49,30 @@ router.post(
     authMiddleware,
     authorizationMiddleware("doctor", "teaching_assistant", "admin"),
     endAttendanceSession
+);
+
+// Manually toggle student attendance during active session - Only doctors and teaching assistants
+router.put(
+    "/sessions/:sessionId/toggle",
+    authMiddleware,
+    authorizationMiddleware("doctor", "teaching_assistant", "admin"),
+    toggleStudentAttendance
+);
+
+// Update attendance record (even after session ended) - Only doctors and teaching assistants
+router.put(
+    "/records/update",
+    authMiddleware,
+    authorizationMiddleware("doctor", "teaching_assistant", "admin"),
+    updateAttendanceRecord
+);
+
+// Get all students with attendance summary for a lecture/tutorial owned by the instructor
+router.get(
+    "/students",
+    authMiddleware,
+    authorizationMiddleware("doctor", "teaching_assistant", "admin"),
+    getStudentsAttendance
 );
 
 export default router;

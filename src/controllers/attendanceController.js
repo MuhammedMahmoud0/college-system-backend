@@ -396,5 +396,399 @@ export const getActiveSessions = async (req, res) => {
     }
 };
 
+/**
+ * Manually toggle student attendance during active session
+ * PUT /api/v1/attendance/sessions/:sessionId/toggle
+ */
+export const toggleStudentAttendance = async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { student_user_id } = req.body;
+        const instructorId = req.user.userId;
+
+        if (!student_user_id) {
+            return res.status(400).json({
+                error: "student_user_id is required",
+            });
+        }
+
+        const session = activeSessions.get(sessionId);
+        if (!session) {
+            return res.status(404).json({
+                error: "Session not found or already ended",
+            });
+        }
+
+        // Verify instructor authorization
+        if (session.lectureId) {
+            const lecture = await prisma.lectures.findUnique({
+                where: { lecture_id: session.lectureId },
+            });
+            if (lecture.instructor_user_id !== instructorId) {
+                return res.status(403).json({ error: "Unauthorized" });
+            }
+        }
+
+        if (session.tutorialLabId) {
+            const tutorial = await prisma.tutorials_labs.findUnique({
+                where: { tutorial_lab_id: session.tutorialLabId },
+            });
+            if (tutorial.assistant_user_id !== instructorId) {
+                return res.status(403).json({ error: "Unauthorized" });
+            }
+        }
+
+        // Check if student is enrolled
+        const studentInfo = session.enrolledStudents.find(
+            (student) => student.user_id === student_user_id
+        );
+
+        if (!studentInfo) {
+            return res.status(404).json({
+                error: "Student not enrolled in this lecture/tutorial",
+            });
+        }
+
+        // Toggle attendance
+        let newStatus;
+        if (session.attendees.has(student_user_id)) {
+            session.attendees.delete(student_user_id);
+            newStatus = "absent";
+            logger.info(
+                `Student ${student_user_id} manually marked absent in session ${sessionId}`
+            );
+        } else {
+            session.attendees.add(student_user_id);
+            newStatus = "present";
+            logger.info(
+                `Student ${student_user_id} manually marked present in session ${sessionId}`
+            );
+        }
+
+        res.status(200).json({
+            message: "Attendance toggled successfully",
+            student: {
+                ...studentInfo,
+                status: newStatus,
+            },
+            presentCount: session.attendees.size,
+            totalCount: session.enrolledStudents.length,
+        });
+    } catch (err) {
+        logger.error("Error toggling attendance:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Manually update attendance record (even after session ended)
+ * PUT /api/v1/attendance/records/update
+ */
+export const updateAttendanceRecord = async (req, res) => {
+    try {
+        const {
+            student_user_id,
+            lecture_id,
+            tutorial_lab_id,
+            session_date,
+            status,
+        } = req.body;
+        const instructorId = req.user.userId;
+
+        // Validate required fields
+        if (!student_user_id || !session_date || !status) {
+            return res.status(400).json({
+                error: "student_user_id, session_date, and status are required",
+            });
+        }
+
+        if (!lecture_id && !tutorial_lab_id) {
+            return res.status(400).json({
+                error: "Either lecture_id or tutorial_lab_id is required",
+            });
+        }
+
+        // Validate status
+        if (!["present", "absent"].includes(status)) {
+            return res.status(400).json({
+                error: 'Status must be either "present" or "absent"',
+            });
+        }
+
+        // Verify instructor authorization
+        if (lecture_id) {
+            const lecture = await prisma.lectures.findUnique({
+                where: { lecture_id: parseInt(lecture_id) },
+            });
+
+            if (!lecture) {
+                return res.status(404).json({ error: "Lecture not found" });
+            }
+
+            if (lecture.instructor_user_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to update attendance for this lecture",
+                });
+            }
+        }
+
+        if (tutorial_lab_id) {
+            const tutorial = await prisma.tutorials_labs.findUnique({
+                where: { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            });
+
+            if (!tutorial) {
+                return res.status(404).json({
+                    error: "Tutorial/Lab not found",
+                });
+            }
+
+            if (tutorial.assistant_user_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to update attendance for this tutorial",
+                });
+            }
+        }
+
+        // Check if student is enrolled
+        const enrollment = await prisma.enrollments.findFirst({
+            where: {
+                student_user_id: student_user_id,
+                ...(lecture_id
+                    ? { lecture_id: parseInt(lecture_id) }
+                    : { tutorial_lab_id: parseInt(tutorial_lab_id) }),
+            },
+        });
+
+        if (!enrollment) {
+            return res.status(404).json({
+                error: "Student not enrolled in this lecture/tutorial",
+            });
+        }
+
+        // Upsert attendance record
+        const attendanceRecord = await prisma.attendance.upsert({
+            where: {
+                // Composite unique key
+                id: 0, // Dummy value, will use create/update based on unique constraint
+            },
+            update: {
+                status: status,
+            },
+            create: {
+                student_user_id: student_user_id,
+                lecture_id: lecture_id ? parseInt(lecture_id) : null,
+                tutorial_lab_id: tutorial_lab_id
+                    ? parseInt(tutorial_lab_id)
+                    : null,
+                session_date: new Date(session_date),
+                status: status,
+            },
+        });
+
+        // Since upsert with composite key is tricky, use a simpler approach
+        const existingRecord = await prisma.attendance.findFirst({
+            where: {
+                student_user_id: student_user_id,
+                lecture_id: lecture_id ? parseInt(lecture_id) : null,
+                tutorial_lab_id: tutorial_lab_id
+                    ? parseInt(tutorial_lab_id)
+                    : null,
+                session_date: new Date(session_date),
+            },
+        });
+
+        let updatedRecord;
+        if (existingRecord) {
+            // Update existing record
+            updatedRecord = await prisma.attendance.update({
+                where: { id: existingRecord.id },
+                data: { status: status },
+            });
+        } else {
+            // Create new record
+            updatedRecord = await prisma.attendance.create({
+                data: {
+                    student_user_id: student_user_id,
+                    lecture_id: lecture_id ? parseInt(lecture_id) : null,
+                    tutorial_lab_id: tutorial_lab_id
+                        ? parseInt(tutorial_lab_id)
+                        : null,
+                    session_date: new Date(session_date),
+                    status: status,
+                },
+            });
+        }
+
+        logger.info(
+            `Attendance record updated: Student ${student_user_id} marked ${status} for ${session_date}`
+        );
+
+        res.status(200).json({
+            message: "Attendance record updated successfully",
+            record: updatedRecord,
+        });
+    } catch (err) {
+        logger.error("Error updating attendance record:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Get all students assigned to the doctor's lecture/tutorial with their attendance summary
+ * GET /api/v1/attendance/students?lecture_id=&tutorial_lab_id=&session_date=
+ *
+ * - lecture_id OR tutorial_lab_id required
+ * - session_date optional: if provided, returns per-session status for that date
+ *   otherwise returns overall attendance summary (total sessions, present count, absent count)
+ */
+export const getStudentsAttendance = async (req, res) => {
+    try {
+        const { lecture_id, tutorial_lab_id, session_date } = req.query;
+        const instructorId = req.user.userId;
+
+        if (!lecture_id && !tutorial_lab_id) {
+            return res.status(400).json({
+                error: "Either lecture_id or tutorial_lab_id is required",
+            });
+        }
+        if (lecture_id && tutorial_lab_id) {
+            return res.status(400).json({
+                error: "Provide either lecture_id or tutorial_lab_id, not both",
+            });
+        }
+
+        // Verify the instructor owns this lecture/tutorial
+        if (lecture_id) {
+            const lecture = await prisma.lectures.findUnique({
+                where: { lecture_id: parseInt(lecture_id) },
+            });
+            if (!lecture) {
+                return res.status(404).json({ error: "Lecture not found" });
+            }
+            if (lecture.instructor_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to view students for this lecture",
+                });
+            }
+        }
+
+        if (tutorial_lab_id) {
+            const tutorial = await prisma.tutorials_labs.findUnique({
+                where: { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            });
+            if (!tutorial) {
+                return res
+                    .status(404)
+                    .json({ error: "Tutorial/Lab not found" });
+            }
+            if (tutorial.ta_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to view students for this tutorial",
+                });
+            }
+        }
+
+        // Build the where clause for attendance lookup
+        const attendanceWhere = lecture_id
+            ? { lecture_id: parseInt(lecture_id) }
+            : { tutorial_lab_id: parseInt(tutorial_lab_id) };
+
+        if (session_date) {
+            attendanceWhere.session_date = new Date(session_date);
+        }
+
+        // Fetch enrolled students
+        const enrollments = await prisma.enrollments.findMany({
+            where: lecture_id
+                ? { lecture_id: parseInt(lecture_id) }
+                : { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                        avatar_url: true,
+                        student_profiles: {
+                            select: { student_id: true },
+                        },
+                    },
+                },
+            },
+        });
+
+        // Fetch all attendance records for this lecture/tutorial
+        const attendanceRecords = await prisma.attendance.findMany({
+            where: attendanceWhere,
+            orderBy: { session_date: "asc" },
+        });
+
+        // Build a lookup: { studentId -> [record, ...] }
+        const recordsByStudent = {};
+        for (const record of attendanceRecords) {
+            if (!recordsByStudent[record.student_user_id]) {
+                recordsByStudent[record.student_user_id] = [];
+            }
+            recordsByStudent[record.student_user_id].push(record);
+        }
+
+        // Build the response
+        const students = enrollments.map((enrollment) => {
+            const user = enrollment.users;
+            const records = recordsByStudent[user.id] || [];
+
+            const presentCount = records.filter(
+                (r) => r.status === "present"
+            ).length;
+            const absentCount = records.filter(
+                (r) => r.status === "absent"
+            ).length;
+            const totalSessions = records.length;
+            const attendancePercentage =
+                totalSessions > 0
+                    ? Math.round((presentCount / totalSessions) * 100)
+                    : null;
+
+            const studentData = {
+                student_user_id: user.id,
+                student_id: user.student_profiles?.student_id ?? null,
+                full_name: user.full_name,
+                email: user.email,
+                avatar_url: user.avatar_url ?? null,
+                total_sessions: totalSessions,
+                present_count: presentCount,
+                absent_count: absentCount,
+                attendance_percentage: attendancePercentage,
+            };
+
+            // If a specific date was requested, include the status for that session
+            if (session_date) {
+                const dateRecord = records.find(
+                    (r) =>
+                        new Date(r.session_date).toISOString().split("T")[0] ===
+                        session_date
+                );
+                studentData.session_status = dateRecord
+                    ? dateRecord.status
+                    : "not_recorded";
+            }
+
+            return studentData;
+        });
+
+        res.status(200).json({
+            total_students: students.length,
+            lecture_id: lecture_id ? parseInt(lecture_id) : null,
+            tutorial_lab_id: tutorial_lab_id ? parseInt(tutorial_lab_id) : null,
+            session_date: session_date ?? null,
+            students,
+        });
+    } catch (err) {
+        logger.error("Error fetching students attendance:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 // Export for WebSocket handler
 export { activeSessions, generateQRCode, QR_REFRESH_INTERVAL };

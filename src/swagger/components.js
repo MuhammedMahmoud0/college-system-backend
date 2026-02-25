@@ -391,6 +391,53 @@ export default {
                 },
             },
         },
+        ToggleAttendanceRequest: {
+            type: "object",
+            required: ["student_user_id"],
+            properties: {
+                student_user_id: {
+                    type: "string",
+                    description:
+                        "UUID of the student whose attendance to toggle",
+                    example: "550e8400-e29b-41d4-a716-446655440000",
+                },
+            },
+        },
+        UpdateAttendanceRecordRequest: {
+            type: "object",
+            required: ["student_user_id", "session_date", "status"],
+            properties: {
+                student_user_id: {
+                    type: "string",
+                    description: "UUID of the student",
+                    example: "550e8400-e29b-41d4-a716-446655440000",
+                },
+                lecture_id: {
+                    type: "integer",
+                    description:
+                        "Lecture ID (required if tutorial_lab_id not provided)",
+                    example: 1,
+                },
+                tutorial_lab_id: {
+                    type: "integer",
+                    description:
+                        "Tutorial/Lab ID (required if lecture_id not provided)",
+                    example: 1,
+                },
+                session_date: {
+                    type: "string",
+                    format: "date",
+                    description: "Session date (YYYY-MM-DD)",
+                    example: "2026-02-25",
+                },
+                status: {
+                    type: "string",
+                    enum: ["present", "absent"],
+                    description: "New attendance status",
+                    example: "present",
+                },
+            },
+        },
         // Schedule
         ClassSession: {
             type: "object",

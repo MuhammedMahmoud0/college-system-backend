@@ -169,6 +169,120 @@ export function initializeSocketIO(httpServer) {
         });
 
         /**
+         * Instructor manually toggles student attendance (WebSocket version)
+         */
+        socket.on(
+            "toggle-attendance",
+            async ({ sessionId, student_user_id }) => {
+                try {
+                    const instructorId = socket.user.userId;
+
+                    if (!sessionId || !student_user_id) {
+                        socket.emit("toggle-error", {
+                            message:
+                                "sessionId and student_user_id are required",
+                        });
+                        return;
+                    }
+
+                    const session = activeSessions.get(sessionId);
+                    if (!session) {
+                        socket.emit("toggle-error", {
+                            message: "Session not found or already ended",
+                        });
+                        return;
+                    }
+
+                    // Verify instructor authorization
+                    const { prisma } = await import("../config/connection.js");
+
+                    if (session.lectureId) {
+                        const lecture = await prisma.lectures.findUnique({
+                            where: { lecture_id: session.lectureId },
+                        });
+                        if (lecture.instructor_user_id !== instructorId) {
+                            socket.emit("toggle-error", {
+                                message: "Unauthorized",
+                            });
+                            return;
+                        }
+                    }
+
+                    if (session.tutorialLabId) {
+                        const tutorial = await prisma.tutorials_labs.findUnique(
+                            {
+                                where: {
+                                    tutorial_lab_id: session.tutorialLabId,
+                                },
+                            }
+                        );
+                        if (tutorial.assistant_user_id !== instructorId) {
+                            socket.emit("toggle-error", {
+                                message: "Unauthorized",
+                            });
+                            return;
+                        }
+                    }
+
+                    // Check if student is enrolled
+                    const studentInfo = session.enrolledStudents.find(
+                        (student) => student.user_id === student_user_id
+                    );
+
+                    if (!studentInfo) {
+                        socket.emit("toggle-error", {
+                            message:
+                                "Student not enrolled in this lecture/tutorial",
+                        });
+                        return;
+                    }
+
+                    // Toggle attendance
+                    let newStatus;
+                    if (session.attendees.has(student_user_id)) {
+                        session.attendees.delete(student_user_id);
+                        newStatus = "absent";
+                        logger.info(
+                            `Student ${student_user_id} manually marked absent by instructor in session ${sessionId}`
+                        );
+                    } else {
+                        session.attendees.add(student_user_id);
+                        newStatus = "present";
+                        logger.info(
+                            `Student ${student_user_id} manually marked present by instructor in session ${sessionId}`
+                        );
+                    }
+
+                    // Notify the instructor who made the change
+                    socket.emit("toggle-success", {
+                        message: "Attendance toggled successfully",
+                        student: {
+                            ...studentInfo,
+                            status: newStatus,
+                        },
+                        presentCount: session.attendees.size,
+                        totalCount: session.enrolledStudents.length,
+                    });
+
+                    // Broadcast to all clients in the session room
+                    io.to(`session:${sessionId}`).emit("attendance-toggled", {
+                        student: {
+                            ...studentInfo,
+                            status: newStatus,
+                        },
+                        presentCount: session.attendees.size,
+                        totalCount: session.enrolledStudents.length,
+                    });
+                } catch (err) {
+                    logger.error("WebSocket toggle-attendance error:", err);
+                    socket.emit("toggle-error", {
+                        message: "Internal server error",
+                    });
+                }
+            }
+        );
+
+        /**
          * Leave session room
          */
         socket.on("leave-session", (sessionId) => {

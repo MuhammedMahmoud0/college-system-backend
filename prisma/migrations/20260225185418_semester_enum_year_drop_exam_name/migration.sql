@@ -9,10 +9,14 @@
 -- CreateEnum
 CREATE TYPE "semester_type" AS ENUM ('Spring', 'Fall', 'Summer', 'Winter');
 
--- AlterTable
-ALTER TABLE "course_offerings" ADD COLUMN     "year" INTEGER NOT NULL,
-DROP COLUMN "semester",
-ADD COLUMN     "semester" "semester_type" NOT NULL;
+-- AlterTable: add year with a temporary default to handle existing rows
+ALTER TABLE "course_offerings" ADD COLUMN "year" INTEGER NOT NULL DEFAULT 2025;
+ALTER TABLE "course_offerings" ALTER COLUMN "year" DROP DEFAULT;
+
+-- AlterTable: replace text semester with enum semester
+ALTER TABLE "course_offerings" DROP COLUMN "semester";
+ALTER TABLE "course_offerings" ADD COLUMN "semester" "semester_type" NOT NULL DEFAULT 'Fall';
+ALTER TABLE "course_offerings" ALTER COLUMN "semester" DROP DEFAULT;
 
 -- AlterTable
 ALTER TABLE "exams" DROP COLUMN "exam_name";

@@ -349,7 +349,11 @@ export default {
               name: { type: "string" },
               credits: { type: "integer" },
               instructor: { type: "string" },
-              semester: { type: "string" },
+              semester: {
+                type: "string",
+                enum: ["Spring", "Fall", "Summer", "Winter"],
+              },
+              year: { type: "integer", example: 2026 },
               grade: { type: "string" },
               status: { type: "string" },
             },
@@ -393,7 +397,12 @@ export default {
         name: { type: "string", example: "Data Structures" },
         code: { type: "string", example: "CS201" },
         credits: { type: "integer", example: 3 },
-        semester: { type: "string", example: "Spring 2026" },
+        semester: {
+          type: "string",
+          enum: ["Spring", "Fall", "Summer", "Winter"],
+          example: "Spring",
+        },
+        year: { type: "integer", example: 2026 },
         lectures: {
           type: "array",
           items: {

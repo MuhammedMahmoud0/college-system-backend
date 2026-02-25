@@ -34,6 +34,7 @@ export const getAllCourseOfferings = async (req, res) => {
       course_name: offering.courses.name,
       credits: offering.courses.credits,
       semester: offering.semester,
+      year: offering.year,
       lectures_count: offering._count.lectures,
       tutorials_labs_count: offering._count.tutorials_labs,
       exams_count: offering._count.exams,
@@ -60,13 +61,31 @@ export const getAllCourseOfferings = async (req, res) => {
  */
 export const createCourseOffering = async (req, res) => {
   try {
-    const { course_code, semester } = req.body;
+    const { course_code, semester, year } = req.body;
 
     // Validate required fields
-    if (!course_code || !semester) {
+    if (!course_code || !semester || !year) {
       return res.status(400).json({
         success: false,
-        error: "Missing required fields: course_code, semester",
+        error: "Missing required fields: course_code, semester, year",
+      });
+    }
+
+    // Validate semester enum value
+    const validSemesters = ["Spring", "Fall", "Summer", "Winter"];
+    if (!validSemesters.includes(semester)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid semester. Must be one of: Spring, Fall, Summer, Winter",
+      });
+    }
+
+    // Validate year is a positive integer
+    const yearInt = parseInt(year);
+    if (isNaN(yearInt) || yearInt < 2000 || yearInt > 2100) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid year. Must be an integer between 2000 and 2100",
       });
     }
 
@@ -82,18 +101,20 @@ export const createCourseOffering = async (req, res) => {
       });
     }
 
-    // Check if offering already exists for this course and semester
+    // Check if offering already exists for this course, semester and year
     const existingOffering = await prisma.course_offerings.findFirst({
       where: {
         course_code,
         semester,
+        year: yearInt,
       },
     });
 
     if (existingOffering) {
       return res.status(409).json({
         success: false,
-        error: "Course offering already exists for this course and semester",
+        error:
+          "Course offering already exists for this course, semester and year",
       });
     }
 
@@ -102,6 +123,7 @@ export const createCourseOffering = async (req, res) => {
       data: {
         course_code,
         semester,
+        year: yearInt,
       },
       include: {
         courses: true,
@@ -116,6 +138,7 @@ export const createCourseOffering = async (req, res) => {
         course_code: newOffering.course_code,
         course_name: newOffering.courses.name,
         semester: newOffering.semester,
+        year: newOffering.year,
         credits: newOffering.courses.credits,
       },
     });
@@ -136,7 +159,7 @@ export const createCourseOffering = async (req, res) => {
 export const updateCourseOffering = async (req, res) => {
   try {
     const { offering_id } = req.params;
-    const { semester } = req.body;
+    const { semester, year } = req.body;
 
     // Validate offering exists
     const existingOffering = await prisma.course_offerings.findUnique({
@@ -150,9 +173,34 @@ export const updateCourseOffering = async (req, res) => {
       });
     }
 
-    // Update only semester (course_code should not change)
+    // Validate semester enum value if provided
+    if (semester !== undefined) {
+      const validSemesters = ["Spring", "Fall", "Summer", "Winter"];
+      if (!validSemesters.includes(semester)) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Invalid semester. Must be one of: Spring, Fall, Summer, Winter",
+        });
+      }
+    }
+
+    // Validate year if provided
+    let yearInt;
+    if (year !== undefined) {
+      yearInt = parseInt(year);
+      if (isNaN(yearInt) || yearInt < 2000 || yearInt > 2100) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid year. Must be an integer between 2000 and 2100",
+        });
+      }
+    }
+
+    // Update semester and/or year (course_code should not change)
     const updateData = {};
     if (semester !== undefined) updateData.semester = semester;
+    if (yearInt !== undefined) updateData.year = yearInt;
 
     const updatedOffering = await prisma.course_offerings.update({
       where: { offering_id: parseInt(offering_id) },
@@ -170,6 +218,7 @@ export const updateCourseOffering = async (req, res) => {
         course_code: updatedOffering.course_code,
         course_name: updatedOffering.courses.name,
         semester: updatedOffering.semester,
+        year: updatedOffering.year,
         credits: updatedOffering.courses.credits,
       },
     });

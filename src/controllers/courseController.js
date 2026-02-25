@@ -31,6 +31,7 @@ export const getStudentCourses = async (req, res) => {
       credits: en.lectures.course_offerings.courses.credits,
       instructor: en.lectures.users.full_name,
       semester: en.lectures.course_offerings.semester,
+      year: en.lectures.course_offerings.year,
       grade: en.grade || "N/A",
       status: en.status,
     }));
@@ -172,6 +173,7 @@ export const getCourseDetails = async (req, res) => {
       code: offering.course_code,
       credits: offering.courses.credits,
       semester: offering.semester,
+      year: offering.year,
       lectures: lectures,
       tutorialsLabs: tutorialsLabs,
     });

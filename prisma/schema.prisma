@@ -42,21 +42,21 @@ model attendance {
 }
 
 model community_groups {
-  id            Int             @id @default(autoincrement())
-  name          String
-  description   String?
-  avatar_url    String?
-  created_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  id              Int               @id @default(autoincrement())
+  name            String
+  description     String?
+  avatar_url      String?
+  created_at      DateTime?         @default(now()) @db.Timestamptz(6)
   community_posts community_posts[]
   group_members   group_members[]
 }
 
 model group_members {
-  group_id   Int
-  user_id    String           @db.Uuid
-  joined_at  DateTime?        @default(now()) @db.Timestamptz(6)
+  group_id         Int
+  user_id          String           @db.Uuid
+  joined_at        DateTime?        @default(now()) @db.Timestamptz(6)
   community_groups community_groups @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  users      users            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users            users            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([group_id, user_id])
   @@index([user_id])
@@ -64,17 +64,17 @@ model group_members {
 }
 
 model community_posts {
-  id         Int             @id @default(autoincrement())
-  group_id   Int?
-  author_id  String          @db.Uuid
-  content    String
-  image_url  String?
-  is_pinned  Boolean?        @default(false)
-  created_at DateTime?       @default(now()) @db.Timestamptz(6)
+  id               Int               @id @default(autoincrement())
+  group_id         Int?
+  author_id        String            @db.Uuid
+  content          String
+  image_url        String?
+  is_pinned        Boolean?          @default(false)
+  created_at       DateTime?         @default(now()) @db.Timestamptz(6)
   community_groups community_groups? @relation(fields: [group_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  users      users           @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  post_comments post_comments[]
-  post_likes post_likes[]
+  users            users             @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  post_comments    post_comments[]
+  post_likes       post_likes[]
 
   @@index([author_id])
   @@index([group_id])
@@ -82,13 +82,13 @@ model community_posts {
 }
 
 model post_comments {
-  id         Int             @id @default(autoincrement())
-  post_id    Int
-  author_id  String          @db.Uuid
-  content    String
-  created_at DateTime?       @default(now()) @db.Timestamptz(6)
+  id              Int             @id @default(autoincrement())
+  post_id         Int
+  author_id       String          @db.Uuid
+  content         String
+  created_at      DateTime?       @default(now()) @db.Timestamptz(6)
   community_posts community_posts @relation(fields: [post_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  users      users           @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users           users           @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([post_id])
   @@index([author_id])
@@ -112,7 +112,8 @@ model course_materials {
 model course_offerings {
   offering_id    Int              @id @default(autoincrement())
   course_code    String
-  semester       String
+  semester       semester_type
+  year           Int
   courses        courses          @relation(fields: [course_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
   exams          exams[]
   lectures       lectures[]
@@ -164,7 +165,7 @@ model enrollments {
 }
 
 model events {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   title       String
   event_date  String
   time        String?
@@ -179,7 +180,6 @@ model events {
 model exams {
   exam_id          Int              @id @default(autoincrement())
   offering_id      Int
-  exam_name        String
   exam_type        String
   exam_date        DateTime         @db.Date
   day_of_week      String
@@ -259,16 +259,16 @@ model post_likes {
 }
 
 model student_profiles {
-  user_id           String       @id @db.Uuid
-  student_id        String       @unique
-  year_level        Int?
-  cgpa              Float?
-  department_id     String?      @db.Uuid
-  faculty_advisor_id String?     @db.Uuid
-  total_credits     Int?
-  departments       departments? @relation(fields: [department_id], references: [department_id], onDelete: NoAction, onUpdate: NoAction)
-  users             users        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  faculty_advisor   users?       @relation("FacultyAdvisor", fields: [faculty_advisor_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  user_id            String       @id @db.Uuid
+  student_id         String       @unique
+  year_level         Int?
+  cgpa               Float?
+  department_id      String?      @db.Uuid
+  faculty_advisor_id String?      @db.Uuid
+  total_credits      Int?
+  departments        departments? @relation(fields: [department_id], references: [department_id], onDelete: NoAction, onUpdate: NoAction)
+  users              users        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  faculty_advisor    users?       @relation("FacultyAdvisor", fields: [faculty_advisor_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([student_id])
   @@index([department_id])
@@ -329,31 +329,31 @@ model tutorials_labs {
 }
 
 model users {
-  id                      String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  full_name               String
-  email                   String             @unique
-  password_hash           String
-  role                    user_role
-  avatar_url              String?
-  phone                   String?
-  national_id             String?
-  address                 String?
-  created_at              DateTime?          @default(now()) @db.Timestamptz(6)
-  updated_at              DateTime?          @default(now()) @db.Timestamptz(6)
-  announcements           announcements[]
-  attendance              attendance[]
-  community_posts         community_posts[]
-  enrollments             enrollments[]
-  files                   files[]
-  group_members           group_members[]
-  lectures                lectures[]
-  notifications           notifications[]
-  post_comments           post_comments[]
-  post_likes              post_likes[]
-  student_profiles        student_profiles?
-  advised_students        student_profiles[] @relation("FacultyAdvisor")
-  task_submissions        task_submissions[]
-  tutorials_labs          tutorials_labs[]
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name        String
+  email            String             @unique
+  password_hash    String
+  role             user_role
+  avatar_url       String?
+  phone            String?
+  national_id      String?
+  address          String?
+  created_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  announcements    announcements[]
+  attendance       attendance[]
+  community_posts  community_posts[]
+  enrollments      enrollments[]
+  files            files[]
+  group_members    group_members[]
+  lectures         lectures[]
+  notifications    notifications[]
+  post_comments    post_comments[]
+  post_likes       post_likes[]
+  student_profiles student_profiles?
+  advised_students student_profiles[] @relation("FacultyAdvisor")
+  task_submissions task_submissions[]
+  tutorials_labs   tutorials_labs[]
 
   @@index([email])
   @@index([role])
@@ -363,6 +363,13 @@ enum audience_type {
   All
   Students
   Faculty
+}
+
+enum semester_type {
+  Spring
+  Fall
+  Summer
+  Winter
 }
 
 enum enrollment_status {

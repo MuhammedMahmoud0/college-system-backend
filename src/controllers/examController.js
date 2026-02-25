@@ -45,7 +45,6 @@ export const getAllExams = async (req, res) => {
       exam_id: exam.exam_id,
       course_code: exam.course_offerings.course_code,
       course_name: exam.course_offerings.courses.name,
-      exam_name: exam.exam_name,
       exam_type: exam.exam_type,
       exam_date: exam.exam_date,
       day_of_week: exam.day_of_week,
@@ -53,6 +52,7 @@ export const getAllExams = async (req, res) => {
       end_time: formatTime(exam.end_time),
       location: exam.location,
       semester: exam.course_offerings.semester,
+      year: exam.course_offerings.year,
       credits: exam.course_offerings.courses.credits,
     }));
 
@@ -103,6 +103,7 @@ export const getActiveCourses = async (req, res) => {
       course_name: offering.courses.name,
       credits: offering.courses.credits,
       semester: offering.semester,
+      year: offering.year,
       lectures_count: offering._count.lectures,
       exams_count: offering._count.exams,
     }));
@@ -176,7 +177,6 @@ export const examSchedule = async (req, res) => {
             exam_id: exam.exam_id,
             course_code: offering.course_code,
             course_name: course.name,
-            exam_name: exam.exam_name,
             exam_type: exam.exam_type,
             exam_date: exam.exam_date,
             day_of_week: exam.day_of_week,
@@ -184,6 +184,7 @@ export const examSchedule = async (req, res) => {
             end_time: formatTime(exam.end_time),
             location: exam.location,
             semester: offering.semester,
+            year: offering.year,
             instructor: enrollment.lectures.users.full_name,
           });
         }
@@ -216,7 +217,6 @@ export const examSet = async (req, res) => {
   try {
     const {
       offering_id,
-      exam_name,
       exam_type,
       exam_date,
       day_of_week,
@@ -228,7 +228,6 @@ export const examSet = async (req, res) => {
     // Validate required fields
     if (
       !offering_id ||
-      !exam_name ||
       !exam_type ||
       !exam_date ||
       !day_of_week ||
@@ -238,7 +237,7 @@ export const examSet = async (req, res) => {
       return res.status(400).json({
         success: false,
         error:
-          "Missing required fields: offering_id, exam_name, exam_type, exam_date, day_of_week, start_time, end_time",
+          "Missing required fields: offering_id, exam_type, exam_date, day_of_week, start_time, end_time",
       });
     }
 
@@ -259,7 +258,6 @@ export const examSet = async (req, res) => {
     const exam = await prisma.exams.create({
       data: {
         offering_id: parseInt(offering_id),
-        exam_name,
         exam_type,
         exam_date: new Date(exam_date),
         day_of_week,
@@ -283,7 +281,6 @@ export const examSet = async (req, res) => {
         exam_id: exam.exam_id,
         course_code: exam.course_offerings.course_code,
         course_name: exam.course_offerings.courses.name,
-        exam_name: exam.exam_name,
         exam_type: exam.exam_type,
         exam_date: exam.exam_date,
         day_of_week: exam.day_of_week,
@@ -291,6 +288,7 @@ export const examSet = async (req, res) => {
         end_time: formatTime(exam.end_time),
         location: exam.location,
         semester: exam.course_offerings.semester,
+        year: exam.course_offerings.year,
       },
     });
   } catch (err) {
@@ -311,7 +309,6 @@ export const updateExamSet = async (req, res) => {
   try {
     const { exam_id } = req.params;
     const {
-      exam_name,
       exam_type,
       exam_date,
       day_of_week,
@@ -334,7 +331,6 @@ export const updateExamSet = async (req, res) => {
 
     // Build update data object (only include provided fields)
     const updateData = {};
-    if (exam_name !== undefined) updateData.exam_name = exam_name;
     if (exam_type !== undefined) updateData.exam_type = exam_type;
     if (exam_date !== undefined) updateData.exam_date = new Date(exam_date);
     if (day_of_week !== undefined) updateData.day_of_week = day_of_week;
@@ -364,7 +360,6 @@ export const updateExamSet = async (req, res) => {
         exam_id: updatedExam.exam_id,
         course_code: updatedExam.course_offerings.course_code,
         course_name: updatedExam.course_offerings.courses.name,
-        exam_name: updatedExam.exam_name,
         exam_type: updatedExam.exam_type,
         exam_date: updatedExam.exam_date,
         day_of_week: updatedExam.day_of_week,
@@ -372,6 +367,7 @@ export const updateExamSet = async (req, res) => {
         end_time: formatTime(updatedExam.end_time),
         location: updatedExam.location,
         semester: updatedExam.course_offerings.semester,
+        year: updatedExam.course_offerings.year,
       },
     });
   } catch (err) {

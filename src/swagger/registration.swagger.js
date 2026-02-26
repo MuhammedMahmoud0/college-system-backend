@@ -4,8 +4,17 @@ export default {
             get: {
                 tags: ["Registration"],
                 summary: "Get available course offerings for registration",
-                description: "Fetches all course offerings for the current semester that the student is eligible to register for. Filters out completed courses and checks prerequisites.",
+                description: "Role-aware endpoint.\n\n**Students / Leaders**: Returns only the courses the student is eligible for — completed courses and courses with unmet prerequisites are excluded. Each lecture/lab includes an `enrolled` flag indicating current registration status.\n\n**Doctor / Teaching Assistant / Admin / Super Admin**: Returns all course offerings for the semester with no filtering.",
                 security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "semester",
+                        in: "query",
+                        required: false,
+                        schema: { type: "string", example: "Fall 2025" },
+                        description: "Semester to fetch offerings for. Defaults to the latest available semester.",
+                    },
+                ],
                 responses: {
                     200: {
                         description: "Available course offerings retrieved successfully",

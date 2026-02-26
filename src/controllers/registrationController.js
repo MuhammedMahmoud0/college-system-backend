@@ -30,13 +30,12 @@ const formatTime = (time) => {
 // GET /api/registration/available-offerings
 export const getAvailableOfferings = async (req, res) => {
     try {
-        const userId = req.user.id; // From auth middleware
+        const userId = req.user.id;
+        const userRole = req.user.role;
 
-        // Get semester from query parameter or use the latest available semester
+        // Resolve semester
         let currentSemester = req.query.semester;
-        
         if (!currentSemester) {
-            // If no semester provided, get the latest semester from database
             const latestOffering = await prisma.course_offerings.findFirst({
                 orderBy: { semester: 'desc' },
                 select: { semester: true }
@@ -44,72 +43,85 @@ export const getAvailableOfferings = async (req, res) => {
             currentSemester = latestOffering?.semester || "Fall 2025";
         }
 
-        // Fetch all course offerings for the current semester
+        // Fetch all course offerings for the semester (shared base query)
         const courseOfferings = await prisma.course_offerings.findMany({
             where: { semester: currentSemester },
             include: {
                 courses: true,
                 lectures: {
                     include: {
-                        users: {
-                            select: {
-                                full_name: true
-                            }
-                        }
+                        users: { select: { full_name: true } }
                     }
                 },
                 tutorials_labs: {
                     include: {
-                        users: {
-                            select: {
-                                full_name: true
-                            }
-                        }
+                        users: { select: { full_name: true } }
                     }
                 }
             }
         });
 
-        // Get all enrollments for the student with status 'completed'
+        // --- Staff / Admin view: return all offerings with no filtering ---
+        if (['doctor', 'teaching_assistant', 'admin', 'super_admin'].includes(userRole)) {
+            const offerings = courseOfferings.map(offering => ({
+                offeringId: offering.offering_id,
+                courseName: offering.courses.name,
+                courseCode: offering.course_code,
+                creditHours: offering.courses.credits,
+                lectures: offering.lectures.map(lecture => ({
+                    id: lecture.lecture_id,
+                    group_number: lecture.group || "1",
+                    day_of_week: lecture.day_of_week,
+                    start_time: formatTime(lecture.start_time),
+                    end_time: formatTime(lecture.end_time),
+                    location: lecture.location || "TBD",
+                    instructor: lecture.users.full_name,
+                    capacity: lecture.capacity,
+                    type: "LECTURE",
+                })),
+                labs: offering.tutorials_labs.map(lab => ({
+                    id: lab.tutorial_lab_id,
+                    group_number: lab.group,
+                    day_of_week: lab.day_of_week,
+                    start_time: formatTime(lab.start_time),
+                    end_time: formatTime(lab.end_time),
+                    location: lab.location || "TBD",
+                    instructor: lab.users.full_name,
+                    capacity: lab.capacity,
+                    type: lab.type,
+                })),
+            }));
+
+            return res.status(200).json({
+                semester: currentSemester,
+                total: offerings.length,
+                offerings,
+            });
+        }
+
+        // --- Student / Leader view: filter by eligibility ---
+
+        // Courses the student has already completed
         const completedEnrollments = await prisma.enrollments.findMany({
-            where: {
-                student_user_id: userId,
-                status: 'completed'
-            },
+            where: { student_user_id: userId, status: 'completed' },
             include: {
-                lectures: {
-                    include: {
-                        course_offerings: true
-                    }
-                }
+                lectures: { include: { course_offerings: true } }
             }
         });
-
-        // Extract course codes that the student has already completed
         const completedCourseCodes = new Set(
             completedEnrollments.map(en => en.lectures.course_offerings.course_code)
         );
 
-        // Get current enrollments (enrolled or enrolled status) to mark as enrolled
+        // Current active enrollments to mark as already enrolled
         const currentEnrollments = await prisma.enrollments.findMany({
-            where: {
-                student_user_id: userId,
-                status: 'enrolled'
-            },
-            select: {
-                lecture_id: true,
-                tutorial_lab_id: true
-            }
+            where: { student_user_id: userId, status: 'enrolled' },
+            select: { lecture_id: true, tutorial_lab_id: true }
         });
-
-        // Create sets of enrolled lecture IDs and tutorial/lab IDs
         const enrolledLectureIds = new Set(currentEnrollments.map(en => en.lecture_id));
         const enrolledTutorialLabIds = new Set(currentEnrollments.map(en => en.tutorial_lab_id));
 
-        // Get all prerequisites
+        // Build prerequisite map: course_code -> [prerequisite_codes]
         const prerequisites = await prisma.course_prerequisites.findMany();
-
-        // Build a map of course_code -> [prerequisite_codes]
         const prerequisiteMap = new Map();
         prerequisites.forEach(prereq => {
             if (!prerequisiteMap.has(prereq.course_code)) {
@@ -118,29 +130,19 @@ export const getAvailableOfferings = async (req, res) => {
             prerequisiteMap.get(prereq.course_code).push(prereq.prerequisite_code);
         });
 
-        // Filter and format the available offerings
         const availableOfferings = [];
 
         for (const offering of courseOfferings) {
             const courseCode = offering.course_code;
 
-            // Skip if student has already completed this course
-            if (completedCourseCodes.has(courseCode)) {
-                continue;
-            }
+            // Skip already completed courses
+            if (completedCourseCodes.has(courseCode)) continue;
 
-            // Check prerequisites
+            // Skip if prerequisites not met
             const requiredPrereqs = prerequisiteMap.get(courseCode) || [];
-            const hasAllPrereqs = requiredPrereqs.every(prereq => 
-                completedCourseCodes.has(prereq)
-            );
+            const hasAllPrereqs = requiredPrereqs.every(prereq => completedCourseCodes.has(prereq));
+            if (!hasAllPrereqs) continue;
 
-            // Skip if prerequisites are not met
-            if (!hasAllPrereqs) {
-                continue;
-            }
-
-            // Format lectures
             const lectures = offering.lectures.map(lecture => ({
                 id: lecture.lecture_id,
                 group_number: lecture.group || "1",
@@ -154,7 +156,6 @@ export const getAvailableOfferings = async (req, res) => {
                 enrolled: enrolledLectureIds.has(lecture.lecture_id)
             }));
 
-            // Format labs (tutorials_labs with type = 'LAB' or 'Tutorial')
             const labs = offering.tutorials_labs.map(lab => ({
                 id: lab.tutorial_lab_id,
                 group_number: lab.group,
@@ -164,12 +165,12 @@ export const getAvailableOfferings = async (req, res) => {
                 location: lab.location || "TBD",
                 instructor: lab.users.full_name,
                 capacity: lab.capacity,
-                type: "LAB",
+                type: lab.type,
                 enrolled: enrolledTutorialLabIds.has(lab.tutorial_lab_id)
             }));
 
-            // Add to available offerings
             availableOfferings.push({
+                offeringId: offering.offering_id,
                 courseName: offering.courses.name,
                 courseCode: offering.course_code,
                 creditHours: offering.courses.credits,

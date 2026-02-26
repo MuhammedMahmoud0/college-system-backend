@@ -531,6 +531,110 @@ export const createLecture = async (req, res) => {
   }
 };
 
+// PATCH /api/courses/lectures/:lectureId
+export const updateLecture = async (req, res) => {
+  try {
+    const { lectureId } = req.params;
+    const {
+      instructorId,
+      capacity,
+      dayOfWeek,
+      startTime,
+      endTime,
+      location,
+      group,
+    } = req.body;
+
+    const existing = await prisma.lectures.findUnique({
+      where: { lecture_id: parseInt(lectureId) },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: "Lecture not found" });
+    }
+
+    if (instructorId) {
+      const instructor = await prisma.users.findUnique({
+        where: { id: instructorId },
+      });
+      if (!instructor) {
+        return res.status(404).json({ error: "Instructor not found" });
+      }
+    }
+
+    const data = {};
+    if (instructorId) data.instructor_id = instructorId;
+    if (capacity !== undefined) data.capacity = parseInt(capacity);
+    if (dayOfWeek) data.day_of_week = dayOfWeek;
+    if (startTime) {
+      const [h, m] = startTime.split(":").map(Number);
+      const d = new Date();
+      d.setUTCHours(h, m, 0, 0);
+      data.start_time = d;
+    }
+    if (endTime) {
+      const [h, m] = endTime.split(":").map(Number);
+      const d = new Date();
+      d.setUTCHours(h, m, 0, 0);
+      data.end_time = d;
+    }
+    if (location !== undefined) data.location = location;
+    if (group !== undefined) data.group = group;
+
+    const updated = await prisma.lectures.update({
+      where: { lecture_id: parseInt(lectureId) },
+      data,
+      include: {
+        course_offerings: { include: { courses: true } },
+        users: { select: { full_name: true, email: true } },
+      },
+    });
+
+    res.status(200).json({
+      message: "Lecture updated successfully",
+      lecture: {
+        lectureId: updated.lecture_id,
+        courseName: updated.course_offerings.courses.name,
+        courseCode: updated.course_offerings.course_code,
+        instructor: updated.users.full_name,
+        capacity: updated.capacity,
+        dayOfWeek: updated.day_of_week,
+        startTime: formatTime(updated.start_time),
+        endTime: formatTime(updated.end_time),
+        location: updated.location,
+        group: updated.group,
+      },
+    });
+  } catch (err) {
+    logger.error("Error updating lecture:", err);
+    res.status(500).json({ error: "Internal server error", details: err.message });
+  }
+};
+
+// DELETE /api/courses/lectures/:lectureId
+export const deleteLecture = async (req, res) => {
+  try {
+    const { lectureId } = req.params;
+
+    const existing = await prisma.lectures.findUnique({
+      where: { lecture_id: parseInt(lectureId) },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: "Lecture not found" });
+    }
+
+    await prisma.lectures.delete({
+      where: { lecture_id: parseInt(lectureId) },
+    });
+
+    res.status(200).json({ message: "Lecture deleted successfully" });
+  } catch (err) {
+    logger.error("Error deleting lecture:", err);
+    res.status(500).json({ error: "Internal server error", details: err.message });
+  }
+};
+
 // POST /api/courses/tutorials-labs
 export const createTutorialLab = async (req, res) => {
   try {
@@ -648,5 +752,102 @@ export const createTutorialLab = async (req, res) => {
     res
       .status(500)
       .json({ error: "Internal server error", details: err.message });
+  }
+};
+
+// PATCH /api/courses/tutorials-labs/:tutorialLabId
+export const updateTutorialLab = async (req, res) => {
+  try {
+    const { tutorialLabId } = req.params;
+    const { taId, type, capacity, dayOfWeek, startTime, endTime, location, group } =
+      req.body;
+
+    const existing = await prisma.tutorials_labs.findUnique({
+      where: { tutorial_lab_id: parseInt(tutorialLabId) },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: "Tutorial/Lab not found" });
+    }
+
+    if (taId) {
+      const ta = await prisma.users.findUnique({ where: { id: taId } });
+      if (!ta) {
+        return res.status(404).json({ error: "Teaching assistant not found" });
+      }
+    }
+
+    const data = {};
+    if (taId) data.ta_id = taId;
+    if (type) data.type = type;
+    if (capacity !== undefined) data.capacity = parseInt(capacity);
+    if (dayOfWeek) data.day_of_week = dayOfWeek;
+    if (startTime) {
+      const [h, m] = startTime.split(":").map(Number);
+      const d = new Date();
+      d.setUTCHours(h, m, 0, 0);
+      data.start_time = d;
+    }
+    if (endTime) {
+      const [h, m] = endTime.split(":").map(Number);
+      const d = new Date();
+      d.setUTCHours(h, m, 0, 0);
+      data.end_time = d;
+    }
+    if (location !== undefined) data.location = location;
+    if (group !== undefined) data.group = group;
+
+    const updated = await prisma.tutorials_labs.update({
+      where: { tutorial_lab_id: parseInt(tutorialLabId) },
+      data,
+      include: {
+        course_offerings: { include: { courses: true } },
+        users: { select: { full_name: true, email: true } },
+      },
+    });
+
+    res.status(200).json({
+      message: "Tutorial/Lab updated successfully",
+      tutorialLab: {
+        tutorialLabId: updated.tutorial_lab_id,
+        courseName: updated.course_offerings.courses.name,
+        courseCode: updated.course_offerings.course_code,
+        ta: updated.users.full_name,
+        type: updated.type,
+        capacity: updated.capacity,
+        dayOfWeek: updated.day_of_week,
+        startTime: formatTime(updated.start_time),
+        endTime: formatTime(updated.end_time),
+        location: updated.location,
+        group: updated.group,
+      },
+    });
+  } catch (err) {
+    logger.error("Error updating tutorial/lab:", err);
+    res.status(500).json({ error: "Internal server error", details: err.message });
+  }
+};
+
+// DELETE /api/courses/tutorials-labs/:tutorialLabId
+export const deleteTutorialLab = async (req, res) => {
+  try {
+    const { tutorialLabId } = req.params;
+
+    const existing = await prisma.tutorials_labs.findUnique({
+      where: { tutorial_lab_id: parseInt(tutorialLabId) },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: "Tutorial/Lab not found" });
+    }
+
+    await prisma.tutorials_labs.delete({
+      where: { tutorial_lab_id: parseInt(tutorialLabId) },
+    });
+
+    res.status(200).json({ message: "Tutorial/Lab deleted successfully" });
+  } catch (err) {
+    logger.error("Error deleting tutorial/lab:", err);
+    res.status(500).json({ error: "Internal server error", details: err.message });
   }
 };

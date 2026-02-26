@@ -49,11 +49,35 @@ router.post(
   authorizationMiddleware("admin", "super_admin"),
   courseController.createLecture,
 );
+router.patch(
+  "/lectures/:lectureId",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.updateLecture,
+);
+router.delete(
+  "/lectures/:lectureId",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.deleteLecture,
+);
 router.post(
   "/tutorials-labs",
   authMiddleware,
   authorizationMiddleware("admin", "super_admin"),
   courseController.createTutorialLab,
+);
+router.patch(
+  "/tutorials-labs/:tutorialLabId",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.updateTutorialLab,
+);
+router.delete(
+  "/tutorials-labs/:tutorialLabId",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  courseController.deleteTutorialLab,
 );
 router.patch(
   "/:code",

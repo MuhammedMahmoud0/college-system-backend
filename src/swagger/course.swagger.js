@@ -190,6 +190,120 @@ export default {
         },
       },
     },
+    "/courses/lectures/{lectureId}": {
+      patch: {
+        tags: ["Courses"],
+        summary: "Update a lecture",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "lectureId",
+            in: "path",
+            required: true,
+            schema: { type: "integer" },
+            description: "Lecture ID",
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                $ref: "#/components/schemas/LectureUpdateRequest",
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Lecture updated successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/LectureCreateResponse",
+                },
+              },
+            },
+          },
+          404: { description: "Lecture or instructor not found" },
+        },
+      },
+      delete: {
+        tags: ["Courses"],
+        summary: "Delete a lecture",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "lectureId",
+            in: "path",
+            required: true,
+            schema: { type: "integer" },
+            description: "Lecture ID",
+          },
+        ],
+        responses: {
+          200: { description: "Lecture deleted successfully" },
+          404: { description: "Lecture not found" },
+        },
+      },
+    },
+    "/courses/tutorials-labs/{tutorialLabId}": {
+      patch: {
+        tags: ["Courses"],
+        summary: "Update a tutorial/lab session",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "tutorialLabId",
+            in: "path",
+            required: true,
+            schema: { type: "integer" },
+            description: "Tutorial/Lab ID",
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                $ref: "#/components/schemas/TutorialLabUpdateRequest",
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Tutorial/Lab updated successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/TutorialLabCreateResponse",
+                },
+              },
+            },
+          },
+          404: { description: "Tutorial/Lab or teaching assistant not found" },
+        },
+      },
+      delete: {
+        tags: ["Courses"],
+        summary: "Delete a tutorial/lab session",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "tutorialLabId",
+            in: "path",
+            required: true,
+            schema: { type: "integer" },
+            description: "Tutorial/Lab ID",
+          },
+        ],
+        responses: {
+          200: { description: "Tutorial/Lab deleted successfully" },
+          404: { description: "Tutorial/Lab not found" },
+        },
+      },
+    },
     "/courses/{code}": {
       patch: {
         tags: ["Courses"],
@@ -474,6 +588,30 @@ export default {
         group: { type: "string", example: "1" },
       },
     },
+    LectureUpdateRequest: {
+      type: "object",
+      properties: {
+        instructorId: {
+          type: "string",
+          format: "uuid",
+          example: "550e8400-e29b-41d4-a716-446655440000",
+        },
+        capacity: { type: "integer", example: 40 },
+        dayOfWeek: { type: "string", example: "Monday" },
+        startTime: {
+          type: "string",
+          example: "08:30",
+          description: "Time in HH:MM format",
+        },
+        endTime: {
+          type: "string",
+          example: "10:00",
+          description: "Time in HH:MM format",
+        },
+        location: { type: "string", example: "Room 101" },
+        group: { type: "string", example: "1" },
+      },
+    },
     LectureCreateResponse: {
       type: "object",
       properties: {
@@ -509,6 +647,31 @@ export default {
       ],
       properties: {
         offeringId: { type: "integer", example: 1 },
+        taId: {
+          type: "string",
+          format: "uuid",
+          example: "550e8400-e29b-41d4-a716-446655440000",
+        },
+        type: { type: "string", example: "LAB" },
+        capacity: { type: "integer", example: 20 },
+        dayOfWeek: { type: "string", example: "Wednesday" },
+        startTime: {
+          type: "string",
+          example: "14:00",
+          description: "Time in HH:MM format",
+        },
+        endTime: {
+          type: "string",
+          example: "16:00",
+          description: "Time in HH:MM format",
+        },
+        location: { type: "string", example: "Lab A" },
+        group: { type: "string", example: "1" },
+      },
+    },
+    TutorialLabUpdateRequest: {
+      type: "object",
+      properties: {
         taId: {
           type: "string",
           format: "uuid",

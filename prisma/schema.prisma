@@ -149,9 +149,10 @@ model departments {
 }
 
 model enrollments {
+  id              Int               @id @default(autoincrement())
   student_user_id String            @db.Uuid
   lecture_id      Int
-  tutorial_lab_id Int
+  tutorial_lab_id Int?
   mid_score       Float?
   work_score      Float?
   final_score     Float?
@@ -159,9 +160,9 @@ model enrollments {
   status          enrollment_status @default(enrolled)
   lectures        lectures          @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
   users           users             @relation(fields: [student_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tutorials_labs  tutorials_labs    @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
+  tutorials_labs  tutorials_labs?   @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@id([student_user_id, lecture_id, tutorial_lab_id])
+  @@unique([student_user_id, lecture_id])
 }
 
 model events {

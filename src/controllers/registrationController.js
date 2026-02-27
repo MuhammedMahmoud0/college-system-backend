@@ -426,23 +426,20 @@ export const registerCourses = async (req, res) => {
                             );
                         }
 
-                        // Check if student is already enrolled in this lecture-lab combination
+                        // Check if student is already enrolled in this lecture
                         const existingEnrollment =
                             await tx.enrollments.findUnique({
                                 where: {
-                                    student_user_id_lecture_id_tutorial_lab_id:
-                                        {
-                                            student_user_id: studentId,
-                                            lecture_id: lecture.lecture_id,
-                                            tutorial_lab_id:
-                                                lab.tutorial_lab_id,
-                                        },
+                                    student_user_id_lecture_id: {
+                                        student_user_id: studentId,
+                                        lecture_id: lecture.lecture_id,
+                                    },
                                 },
                             });
 
                         if (existingEnrollment) {
                             throw new Error(
-                                `Already enrolled in ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) with this lecture and lab combination`
+                                `Already enrolled in ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code})`
                             );
                         }
 
@@ -505,14 +502,25 @@ export const registerLab = async (req, res) => {
             return res.status(404).json({ error: "Lecture not found" });
         }
 
-        // Verify the student is already enrolled in this lecture
-        const existingLectureEnrollment = await prisma.enrollments.findFirst({
-            where: { student_user_id: studentId, lecture_id: parseInt(lectureId) },
+        // Check if already enrolled in this lecture
+        const existingLectureEnrollment = await prisma.enrollments.findUnique({
+            where: {
+                student_user_id_lecture_id: {
+                    student_user_id: studentId,
+                    lecture_id: parseInt(lectureId),
+                },
+            },
         });
 
         if (!existingLectureEnrollment) {
             return res.status(400).json({
                 error: "You are not enrolled in this lecture. Register for the full course first.",
+            });
+        }
+
+        if (existingLectureEnrollment.tutorial_lab_id !== null) {
+            return res.status(400).json({
+                error: "You already have a lab assigned for this lecture. Unregister from the current lab first.",
             });
         }
 
@@ -532,38 +540,31 @@ export const registerLab = async (req, res) => {
             });
         }
 
-        // Check if already enrolled in this exact lecture+lab pair
-        const alreadyEnrolled = await prisma.enrollments.findUnique({
-            where: {
-                student_user_id_lecture_id_tutorial_lab_id: {
-                    student_user_id: studentId,
-                    lecture_id: parseInt(lectureId),
-                    tutorial_lab_id: parseInt(labId),
-                },
-            },
-        });
-
-        if (alreadyEnrolled) {
-            return res.status(400).json({
-                error: "You are already enrolled in this lecture and lab combination.",
-            });
-        }
-
         // Check lab capacity
         const labCount = await prisma.enrollments.count({
             where: { tutorial_lab_id: parseInt(labId) },
         });
 
         if (labCount >= lab.capacity) {
-            return res.status(400).json({ error: `Lab ${lab.group} for ${lab.course_offerings.courses.name} is full` });
+            return res.status(400).json({
+                error: `Lab ${lab.group} for ${lab.course_offerings.courses.name} is full`,
+            });
         }
 
         // Check schedule conflict: new lab vs all existing enrolled sessions
         const existingEnrollments = await prisma.enrollments.findMany({
             where: { student_user_id: studentId, status: "enrolled" },
             include: {
-                lectures: { include: { course_offerings: { include: { courses: true } } } },
-                tutorials_labs: { include: { course_offerings: { include: { courses: true } } } },
+                lectures: {
+                    include: {
+                        course_offerings: { include: { courses: true } },
+                    },
+                },
+                tutorials_labs: {
+                    include: {
+                        course_offerings: { include: { courses: true } },
+                    },
+                },
             },
         });
 
@@ -579,27 +580,61 @@ export const registerLab = async (req, res) => {
 
         for (const en of existingEnrollments) {
             const sessions = [];
-            if (en.lectures) sessions.push({ id: en.lectures.lecture_id, type: "lecture", day_of_week: en.lectures.day_of_week, start_time: en.lectures.start_time, end_time: en.lectures.end_time, courseName: en.lectures.course_offerings.courses.name, courseCode: en.lectures.course_offerings.course_code });
-            if (en.tutorials_labs) sessions.push({ id: en.tutorials_labs.tutorial_lab_id, type: "lab", day_of_week: en.tutorials_labs.day_of_week, start_time: en.tutorials_labs.start_time, end_time: en.tutorials_labs.end_time, courseName: en.tutorials_labs.course_offerings.courses.name, courseCode: en.tutorials_labs.course_offerings.course_code });
+            if (en.lectures)
+                sessions.push({
+                    id: en.lectures.lecture_id,
+                    type: "lecture",
+                    day_of_week: en.lectures.day_of_week,
+                    start_time: en.lectures.start_time,
+                    end_time: en.lectures.end_time,
+                    courseName: en.lectures.course_offerings.courses.name,
+                    courseCode: en.lectures.course_offerings.course_code,
+                });
+            if (en.tutorials_labs)
+                sessions.push({
+                    id: en.tutorials_labs.tutorial_lab_id,
+                    type: "lab",
+                    day_of_week: en.tutorials_labs.day_of_week,
+                    start_time: en.tutorials_labs.start_time,
+                    end_time: en.tutorials_labs.end_time,
+                    courseName: en.tutorials_labs.course_offerings.courses.name,
+                    courseCode: en.tutorials_labs.course_offerings.course_code,
+                });
             for (const s of sessions) {
-                if (s.id === newLabSession.id && s.type === newLabSession.type) continue;
+                if (s.id === newLabSession.id && s.type === newLabSession.type)
+                    continue;
                 if (s.day_of_week !== newLabSession.day_of_week) continue;
-                if (timesOverlap(newLabSession.start_time, newLabSession.end_time, s.start_time, s.end_time)) {
+                if (
+                    timesOverlap(
+                        newLabSession.start_time,
+                        newLabSession.end_time,
+                        s.start_time,
+                        s.end_time
+                    )
+                ) {
                     return res.status(400).json({
-                        error: `Schedule conflict on ${newLabSession.day_of_week}: ${newLabSession.courseName} (${newLabSession.courseCode}) [${formatTime(newLabSession.start_time)}-${formatTime(newLabSession.end_time)}] overlaps with ${s.courseName} (${s.courseCode}) [${formatTime(s.start_time)}-${formatTime(s.end_time)}]`,
+                        error: `Schedule conflict on ${
+                            newLabSession.day_of_week
+                        }: ${newLabSession.courseName} (${
+                            newLabSession.courseCode
+                        }) [${formatTime(
+                            newLabSession.start_time
+                        )}-${formatTime(
+                            newLabSession.end_time
+                        )}] overlaps with ${s.courseName} (${
+                            s.courseCode
+                        }) [${formatTime(s.start_time)}-${formatTime(
+                            s.end_time
+                        )}]`,
                     });
                 }
             }
         }
 
-        // Create the new enrollment
-        const enrollment = await prisma.enrollments.create({
-            data: {
-                student_user_id: studentId,
-                lecture_id: parseInt(lectureId),
-                tutorial_lab_id: parseInt(labId),
-                status: "enrolled",
-            },
+        // Update the existing enrollment row with the new lab
+        const enrollment = await prisma.enrollments.update({
+            where: { id: existingLectureEnrollment.id },
+            data: { tutorial_lab_id: parseInt(labId) },
         });
 
         return res.status(201).json({
@@ -671,7 +706,9 @@ export const unregisterSession = async (req, res) => {
             });
 
             if (!tutorialLab) {
-                return res.status(404).json({ error: "Tutorial/Lab not found" });
+                return res
+                    .status(404)
+                    .json({ error: "Tutorial/Lab not found" });
             }
 
             const enrollment = await prisma.enrollments.findFirst({
@@ -687,14 +724,9 @@ export const unregisterSession = async (req, res) => {
                 });
             }
 
-            await prisma.enrollments.delete({
-                where: {
-                    student_user_id_lecture_id_tutorial_lab_id: {
-                        student_user_id: studentId,
-                        lecture_id: enrollment.lecture_id,
-                        tutorial_lab_id: parseInt(tutorialLabId),
-                    },
-                },
+            await prisma.enrollments.update({
+                where: { id: enrollment.id },
+                data: { tutorial_lab_id: null },
             });
 
             return res.status(200).json({

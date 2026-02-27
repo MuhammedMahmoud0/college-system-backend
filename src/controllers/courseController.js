@@ -7,7 +7,9 @@ export const getStudentCourses = async (req, res) => {
         const userId = req.user.id; // From auth middleware
 
         const enrollments = await prisma.enrollments.findMany({
-            where: { student_user_id: userId },
+            where: {
+                student_user_id: userId,
+            },
             include: {
                 lectures: {
                     include: {
@@ -24,17 +26,19 @@ export const getStudentCourses = async (req, res) => {
             where: { user_id: userId },
         });
 
-        const formattedCourses = enrollments.map((en) => ({
-            id: en.lecture_id.toString(),
-            code: en.lectures.course_offerings.course_code,
-            name: en.lectures.course_offerings.courses.name,
-            credits: en.lectures.course_offerings.courses.credits,
-            instructor: en.lectures.users.full_name,
-            semester: en.lectures.course_offerings.semester,
-            year: en.lectures.course_offerings.year,
-            grade: en.grade || "N/A",
-            status: en.status,
-        }));
+        const formattedCourses = enrollments
+            .filter((en) => en.lecture_id !== null)
+            .map((en) => ({
+                id: en.lecture_id.toString(),
+                code: en.lectures.course_offerings.course_code,
+                name: en.lectures.course_offerings.courses.name,
+                credits: en.lectures.course_offerings.courses.credits,
+                instructor: en.lectures.users.full_name,
+                semester: en.lectures.course_offerings.semester,
+                year: en.lectures.course_offerings.year,
+                grade: en.grade || "N/A",
+                status: en.status,
+            }));
 
         res.status(200).json({
             courses: formattedCourses,
@@ -55,7 +59,6 @@ export const getStudentLabs = async (req, res) => {
         const enrollments = await prisma.enrollments.findMany({
             where: {
                 student_user_id: userId,
-                tutorial_lab_id: { not: null },
             },
             include: {
                 tutorials_labs: {
@@ -69,19 +72,21 @@ export const getStudentLabs = async (req, res) => {
             },
         });
 
-        const formattedLabs = enrollments.map((en) => ({
-            id: en.tutorial_lab_id.toString(),
-            code: en.tutorials_labs.course_offerings.course_code,
-            name: en.tutorials_labs.course_offerings.courses.name,
-            credits: en.tutorials_labs.course_offerings.courses.credits,
-            instructor: en.tutorials_labs.users.full_name,
-            type: en.tutorials_labs.type,
-            group: en.tutorials_labs.group,
-            semester: en.tutorials_labs.course_offerings.semester,
-            year: en.tutorials_labs.course_offerings.year,
-            grade: en.grade || "N/A",
-            status: en.status,
-        }));
+        const formattedLabs = enrollments
+            .filter((en) => en.tutorial_lab_id !== null)
+            .map((en) => ({
+                id: en.tutorial_lab_id.toString(),
+                code: en.tutorials_labs.course_offerings.course_code,
+                name: en.tutorials_labs.course_offerings.courses.name,
+                credits: en.tutorials_labs.course_offerings.courses.credits,
+                instructor: en.tutorials_labs.users.full_name,
+                type: en.tutorials_labs.type,
+                group: en.tutorials_labs.group,
+                semester: en.tutorials_labs.course_offerings.semester,
+                year: en.tutorials_labs.course_offerings.year,
+                grade: en.grade || "N/A",
+                status: en.status,
+            }));
 
         res.status(200).json({ labs: formattedLabs });
     } catch (err) {

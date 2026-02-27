@@ -8,6 +8,7 @@ Rules:
 -   Prefer modifying existing files over creating new ones.
 -   Respect database schema and Prisma models.
 -   Keep code minimal and consistent with the current style.
+-   Always update swagger documentation and tests when adding or changing functionality.
 
 Before writing code:
 

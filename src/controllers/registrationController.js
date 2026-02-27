@@ -236,8 +236,47 @@ export const registerCourses = async (req, res) => {
             }
         });
 
-        // Combine all sessions for conflict checking
-        const allSessions = [
+        // Fetch already-enrolled sessions for this student to check conflicts against
+        const existingEnrollments = await prisma.enrollments.findMany({
+            where: { student_user_id: studentId, status: 'enrolled' },
+            include: {
+                lectures: {
+                    include: { course_offerings: { include: { courses: true } } }
+                },
+                tutorials_labs: {
+                    include: { course_offerings: { include: { courses: true } } }
+                }
+            }
+        });
+
+        const existingSessions = [];
+        existingEnrollments.forEach(en => {
+            if (en.lectures) {
+                existingSessions.push({
+                    id: en.lectures.lecture_id,
+                    type: 'lecture',
+                    day_of_week: en.lectures.day_of_week,
+                    start_time: en.lectures.start_time,
+                    end_time: en.lectures.end_time,
+                    courseName: en.lectures.course_offerings.courses.name,
+                    courseCode: en.lectures.course_offerings.course_code
+                });
+            }
+            if (en.tutorials_labs) {
+                existingSessions.push({
+                    id: en.tutorials_labs.tutorial_lab_id,
+                    type: 'lab',
+                    day_of_week: en.tutorials_labs.day_of_week,
+                    start_time: en.tutorials_labs.start_time,
+                    end_time: en.tutorials_labs.end_time,
+                    courseName: en.tutorials_labs.course_offerings.courses.name,
+                    courseCode: en.tutorials_labs.course_offerings.course_code
+                });
+            }
+        });
+
+        // New sessions being registered in this request
+        const newSessions = [
             ...lectures.map(lecture => ({
                 id: lecture.lecture_id,
                 type: 'lecture',
@@ -258,28 +297,37 @@ export const registerCourses = async (req, res) => {
             }))
         ];
 
-        // Check for time conflicts
-        for (let i = 0; i < allSessions.length; i++) {
-            for (let j = i + 1; j < allSessions.length; j++) {
-                const sessionA = allSessions[i];
-                const sessionB = allSessions[j];
+        /**
+         * Check conflicts: 
+         * 1. Among newly selected sessions with each other
+         * 2. Each new session against all existing enrolled sessions
+         */
+        const checkConflict = (sessionA, sessionB) => {
+            if (sessionA.id === sessionB.id && sessionA.type === sessionB.type) return;
+            if (sessionA.day_of_week !== sessionB.day_of_week) return;
+            if (timesOverlap(sessionA.start_time, sessionA.end_time, sessionB.start_time, sessionB.end_time)) {
+                throw {
+                    status: 400,
+                    message: `Schedule conflict on ${sessionA.day_of_week}: ${sessionA.courseName} (${sessionA.courseCode}) [${formatTime(sessionA.start_time)}-${formatTime(sessionA.end_time)}] overlaps with ${sessionB.courseName} (${sessionB.courseCode}) [${formatTime(sessionB.start_time)}-${formatTime(sessionB.end_time)}]`
+                };
+            }
+        };
 
-                // Only check if they're on the same day
-                if (sessionA.day_of_week === sessionB.day_of_week) {
-                    const conflict = timesOverlap(
-                        sessionA.start_time,
-                        sessionA.end_time,
-                        sessionB.start_time,
-                        sessionB.end_time
-                    );
-
-                    if (conflict) {
-                        return res.status(400).json({
-                            error: `Conflict on ${sessionA.day_of_week}: ${sessionA.courseName} (${sessionA.courseCode}) [${formatTime(sessionA.start_time)}-${formatTime(sessionA.end_time)}] overlaps with ${sessionB.courseName} (${sessionB.courseCode}) [${formatTime(sessionB.start_time)}-${formatTime(sessionB.end_time)}]`
-                        });
-                    }
+        try {
+            // Check new vs new
+            for (let i = 0; i < newSessions.length; i++) {
+                for (let j = i + 1; j < newSessions.length; j++) {
+                    checkConflict(newSessions[i], newSessions[j]);
                 }
             }
+            // Check new vs existing
+            for (const newSession of newSessions) {
+                for (const existingSession of existingSessions) {
+                    checkConflict(newSession, existingSession);
+                }
+            }
+        } catch (conflictErr) {
+            return res.status(conflictErr.status || 400).json({ error: conflictErr.message });
         }
 
         // Start database transaction

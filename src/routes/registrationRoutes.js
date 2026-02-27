@@ -10,6 +10,9 @@ router.get('/available-offerings', authMiddleware, registrationController.getAva
 // POST /api/registration/register - Only students and leaders can register
 router.post('/register', authMiddleware, authorizationMiddleware('student', 'leader'), registrationController.registerCourses);
 
+// POST /api/registration/register-lab - Register a replacement lab for an already-enrolled lecture
+router.post('/register-lab', authMiddleware, authorizationMiddleware('student', 'leader'), registrationController.registerLab);
+
 // DELETE /api/registration/unregister - Only students and leaders can unregister
 router.delete('/unregister', authMiddleware, authorizationMiddleware('student', 'leader'), registrationController.unregisterSession);
 

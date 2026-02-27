@@ -483,93 +483,225 @@ export const registerCourses = async (req, res) => {
 };
 
 // DELETE /api/registration/unregister
+// POST /api/registration/register-lab
+export const registerLab = async (req, res) => {
+    try {
+        const studentId = req.user.id;
+        const { lectureId, labId } = req.body;
+
+        if (!lectureId || !labId) {
+            return res.status(400).json({
+                error: "Both lectureId and labId are required",
+            });
+        }
+
+        // Verify the lecture exists and belongs to an offering
+        const lecture = await prisma.lectures.findUnique({
+            where: { lecture_id: parseInt(lectureId) },
+            include: { course_offerings: { include: { courses: true } } },
+        });
+
+        if (!lecture) {
+            return res.status(404).json({ error: "Lecture not found" });
+        }
+
+        // Verify the student is already enrolled in this lecture
+        const existingLectureEnrollment = await prisma.enrollments.findFirst({
+            where: { student_user_id: studentId, lecture_id: parseInt(lectureId) },
+        });
+
+        if (!existingLectureEnrollment) {
+            return res.status(400).json({
+                error: "You are not enrolled in this lecture. Register for the full course first.",
+            });
+        }
+
+        // Verify the lab exists and belongs to the same offering
+        const lab = await prisma.tutorials_labs.findUnique({
+            where: { tutorial_lab_id: parseInt(labId) },
+            include: { course_offerings: { include: { courses: true } } },
+        });
+
+        if (!lab) {
+            return res.status(404).json({ error: "Lab not found" });
+        }
+
+        if (lab.offering_id !== lecture.offering_id) {
+            return res.status(400).json({
+                error: "The selected lab does not belong to the same course offering as the lecture.",
+            });
+        }
+
+        // Check if already enrolled in this exact lecture+lab pair
+        const alreadyEnrolled = await prisma.enrollments.findUnique({
+            where: {
+                student_user_id_lecture_id_tutorial_lab_id: {
+                    student_user_id: studentId,
+                    lecture_id: parseInt(lectureId),
+                    tutorial_lab_id: parseInt(labId),
+                },
+            },
+        });
+
+        if (alreadyEnrolled) {
+            return res.status(400).json({
+                error: "You are already enrolled in this lecture and lab combination.",
+            });
+        }
+
+        // Check lab capacity
+        const labCount = await prisma.enrollments.count({
+            where: { tutorial_lab_id: parseInt(labId) },
+        });
+
+        if (labCount >= lab.capacity) {
+            return res.status(400).json({ error: `Lab ${lab.group} for ${lab.course_offerings.courses.name} is full` });
+        }
+
+        // Check schedule conflict: new lab vs all existing enrolled sessions
+        const existingEnrollments = await prisma.enrollments.findMany({
+            where: { student_user_id: studentId, status: "enrolled" },
+            include: {
+                lectures: { include: { course_offerings: { include: { courses: true } } } },
+                tutorials_labs: { include: { course_offerings: { include: { courses: true } } } },
+            },
+        });
+
+        const newLabSession = {
+            id: lab.tutorial_lab_id,
+            type: "lab",
+            day_of_week: lab.day_of_week,
+            start_time: lab.start_time,
+            end_time: lab.end_time,
+            courseName: lab.course_offerings.courses.name,
+            courseCode: lab.course_offerings.course_code,
+        };
+
+        for (const en of existingEnrollments) {
+            const sessions = [];
+            if (en.lectures) sessions.push({ id: en.lectures.lecture_id, type: "lecture", day_of_week: en.lectures.day_of_week, start_time: en.lectures.start_time, end_time: en.lectures.end_time, courseName: en.lectures.course_offerings.courses.name, courseCode: en.lectures.course_offerings.course_code });
+            if (en.tutorials_labs) sessions.push({ id: en.tutorials_labs.tutorial_lab_id, type: "lab", day_of_week: en.tutorials_labs.day_of_week, start_time: en.tutorials_labs.start_time, end_time: en.tutorials_labs.end_time, courseName: en.tutorials_labs.course_offerings.courses.name, courseCode: en.tutorials_labs.course_offerings.course_code });
+            for (const s of sessions) {
+                if (s.id === newLabSession.id && s.type === newLabSession.type) continue;
+                if (s.day_of_week !== newLabSession.day_of_week) continue;
+                if (timesOverlap(newLabSession.start_time, newLabSession.end_time, s.start_time, s.end_time)) {
+                    return res.status(400).json({
+                        error: `Schedule conflict on ${newLabSession.day_of_week}: ${newLabSession.courseName} (${newLabSession.courseCode}) [${formatTime(newLabSession.start_time)}-${formatTime(newLabSession.end_time)}] overlaps with ${s.courseName} (${s.courseCode}) [${formatTime(s.start_time)}-${formatTime(s.end_time)}]`,
+                    });
+                }
+            }
+        }
+
+        // Create the new enrollment
+        const enrollment = await prisma.enrollments.create({
+            data: {
+                student_user_id: studentId,
+                lecture_id: parseInt(lectureId),
+                tutorial_lab_id: parseInt(labId),
+                status: "enrolled",
+            },
+        });
+
+        return res.status(201).json({
+            message: `Successfully registered for lab ${lab.group} in ${lab.course_offerings.courses.name}.`,
+            courseCode: lab.course_offerings.course_code,
+            enrollment,
+        });
+    } catch (err) {
+        logger.error("Error registering lab:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// DELETE /api/registration/unregister
 export const unregisterSession = async (req, res) => {
     try {
-        const studentId = req.user.id; // Get studentId from authenticated user token
+        const studentId = req.user.id;
         const { lectureId, tutorialLabId } = req.body;
 
-        // Validate that at least one ID is provided
         if (!lectureId && !tutorialLabId) {
             return res.status(400).json({
                 error: "Must provide either lectureId or tutorialLabId",
             });
         }
 
-        let offeringId;
-        let sessionType;
-
-        // Determine which type of session to delete and get the offering_id
+        // --- Unregister from a lecture (and its associated lab) ---
         if (lectureId) {
             const lecture = await prisma.lectures.findUnique({
                 where: { lecture_id: parseInt(lectureId) },
-                select: { offering_id: true },
+                include: { course_offerings: { include: { courses: true } } },
             });
 
             if (!lecture) {
                 return res.status(404).json({ error: "Lecture not found" });
             }
 
-            offeringId = lecture.offering_id;
-            sessionType = "lecture";
-        } else {
+            const enrollments = await prisma.enrollments.findMany({
+                where: {
+                    student_user_id: studentId,
+                    lecture_id: parseInt(lectureId),
+                },
+            });
+
+            if (enrollments.length === 0) {
+                return res.status(404).json({
+                    error: "No enrollment found for this lecture",
+                });
+            }
+
+            const deleteResult = await prisma.enrollments.deleteMany({
+                where: {
+                    student_user_id: studentId,
+                    lecture_id: parseInt(lectureId),
+                },
+            });
+
+            return res.status(200).json({
+                message: `Successfully unregistered from ${lecture.course_offerings.courses.name}. Lecture and associated lab removed.`,
+                courseCode: lecture.course_offerings.course_code,
+                enrollmentsDeleted: deleteResult.count,
+            });
+        }
+
+        // --- Unregister from a lab only (lecture enrollment is kept) ---
+        if (tutorialLabId) {
             const tutorialLab = await prisma.tutorials_labs.findUnique({
                 where: { tutorial_lab_id: parseInt(tutorialLabId) },
-                select: { offering_id: true },
+                include: { course_offerings: { include: { courses: true } } },
             });
 
             if (!tutorialLab) {
-                return res
-                    .status(404)
-                    .json({ error: "Tutorial/Lab not found" });
+                return res.status(404).json({ error: "Tutorial/Lab not found" });
             }
 
-            offeringId = tutorialLab.offering_id;
-            sessionType = "tutorialLab";
-        }
-
-        // Find all enrollments for this student in this course offering
-        const enrollments = await prisma.enrollments.findMany({
-            where: {
-                student_user_id: studentId,
-                lectures: {
-                    offering_id: offeringId,
+            const enrollment = await prisma.enrollments.findFirst({
+                where: {
+                    student_user_id: studentId,
+                    tutorial_lab_id: parseInt(tutorialLabId),
                 },
-            },
-            include: {
-                lectures: {
-                    include: {
-                        course_offerings: {
-                            include: {
-                                courses: true,
-                            },
-                        },
+            });
+
+            if (!enrollment) {
+                return res.status(404).json({
+                    error: "No enrollment found for this lab",
+                });
+            }
+
+            await prisma.enrollments.delete({
+                where: {
+                    student_user_id_lecture_id_tutorial_lab_id: {
+                        student_user_id: studentId,
+                        lecture_id: enrollment.lecture_id,
+                        tutorial_lab_id: parseInt(tutorialLabId),
                     },
                 },
-            },
-        });
+            });
 
-        if (enrollments.length === 0) {
-            return res
-                .status(404)
-                .json({ error: "No enrollment found for this course" });
+            return res.status(200).json({
+                message: `Successfully unregistered from lab for ${tutorialLab.course_offerings.courses.name}. You can now register the same lecture with a different lab.`,
+                courseCode: tutorialLab.course_offerings.course_code,
+            });
         }
-
-        // Delete all enrollments for this student in this course offering
-        // This will remove both lecture and lab registrations together
-        const deleteResult = await prisma.enrollments.deleteMany({
-            where: {
-                student_user_id: studentId,
-                lectures: {
-                    offering_id: offeringId,
-                },
-            },
-        });
-
-        res.status(200).json({
-            message: `Successfully unregistered from ${enrollments[0].lectures.course_offerings.courses.name}`,
-            courseCode: enrollments[0].lectures.course_offerings.course_code,
-            enrollmentsDeleted: deleteResult.count,
-        });
     } catch (err) {
         logger.error("Error unregistering from course:", err);
         res.status(500).json({ error: "Internal server error" });

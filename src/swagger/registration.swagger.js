@@ -123,81 +123,49 @@ export default {
                 },
             },
         },
-        "/registration/unregister": {
-            delete: {
+        "/registration/register-lab": {
+            post: {
                 tags: ["Registration"],
-                summary: "Unregister from a course",
-                description: "Unregister from a course by providing either lectureId or tutorialLabId. This will remove both lecture and lab enrollments for the course.",
+                summary: "Register a lab for an already-enrolled lecture",
+                description: "Use this endpoint after unregistering from a lab to pick a different lab for a course you are already enrolled in. The student must already have an active enrollment for the given `lectureId`.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
                     content: {
                         "application/json": {
                             schema: {
-                                $ref: "#/components/schemas/UnregisterRequest",
+                                type: "object",
+                                required: ["lectureId", "labId"],
+                                properties: {
+                                    lectureId: {
+                                        type: "integer",
+                                        description: "ID of the lecture the student is already enrolled in",
+                                        example: 5,
+                                    },
+                                    labId: {
+                                        type: "integer",
+                                        description: "ID of the new lab to register for",
+                                        example: 12,
+                                    },
+                                },
                             },
                         },
                     },
                 },
                 responses: {
-                    200: {
-                        description: "Successfully unregistered from course",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/UnregisterResponse",
-                                },
-                            },
-                        },
-                    },
-                    400: {
-                        description: "Bad request - must provide either lectureId or tutorialLabId",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/ErrorResponse",
-                                },
-                            },
-                        },
-                    },
-                    404: {
-                        description: "Lecture/Lab or enrollment not found",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/ErrorResponse",
-                                },
-                            },
-                        },
-                    },
-                    401: {
-                        description: "Not authenticated",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/ErrorResponse",
-                                },
-                            },
-                        },
-                    },
-                    500: {
-                        description: "Internal server error",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/ErrorResponse",
-                                },
-                            },
-                        },
-                    },
+                    201: { description: "Lab registered successfully" },
+                    400: { description: "Validation error, conflict, or capacity issue" },
+                    404: { description: "Lecture or lab not found" },
+                    401: { description: "Not authenticated" },
+                    500: { description: "Internal server error" },
                 },
             },
         },
         "/registration/unregister": {
             delete: {
                 tags: ["Registration"],
-                summary: "Unregister from a course",
-                description: "Unregister from a course by providing either lectureId or tutorialLabId. This will remove both lecture and lab enrollments for the course.",
+                summary: "Unregister from a course or lab",
+                description: "Provide `lectureId` to unregister from the entire course (lecture + lab removed). Provide `tutorialLabId` to unregister from the lab only — the lecture enrollment is removed for that pairing and you can re-register the same lecture with a different lab.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
@@ -211,7 +179,7 @@ export default {
                 },
                 responses: {
                     200: {
-                        description: "Successfully unregistered from course",
+                        description: "Successfully unregistered",
                         content: {
                             "application/json": {
                                 schema: {
@@ -437,12 +405,12 @@ export default {
                 properties: {
                     lectureId: {
                         type: "integer",
-                        description: "ID of the lecture to unregister from (provide either this or tutorialLabId)",
+                        description: "ID of the lecture to unregister from. Removes the lecture and all its associated lab enrollments.",
                         example: 101,
                     },
                     tutorialLabId: {
                         type: "integer",
-                        description: "ID of the tutorial/lab to unregister from (provide either this or lectureId)",
+                        description: "ID of the lab to unregister from. Removes only this lab pairing; you can then register the same lecture with a different lab.",
                         example: 201,
                     },
                 },

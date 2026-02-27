@@ -204,6 +204,10 @@ export const getMaterials = async (req, res) => {
             orderBy: { uploaded_at: "desc" },
         });
 
+        if (materials.length === 0) {
+            return res.status(404).json({ message: "No materials found" });
+        }
+
         res.json(materials);
     } catch (err) {
         res.status(500).json({ message: "Failed to fetch materials" });

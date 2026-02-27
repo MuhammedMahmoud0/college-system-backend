@@ -19,11 +19,11 @@ const timesOverlap = (startA, endA, startB, endB) => {
  * @returns {string} - Formatted time string (HH:MM)
  */
 const formatTime = (time) => {
-    if (!time) return '';
-    return new Date(time).toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        hour12: false 
+    if (!time) return "";
+    return new Date(time).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
     });
 };
 
@@ -37,8 +37,8 @@ export const getAvailableOfferings = async (req, res) => {
         let currentSemester = req.query.semester;
         if (!currentSemester) {
             const latestOffering = await prisma.course_offerings.findFirst({
-                orderBy: { semester: 'desc' },
-                select: { semester: true }
+                orderBy: { semester: "desc" },
+                select: { semester: true },
             });
             currentSemester = latestOffering?.semester || "Fall 2025";
         }
@@ -50,25 +50,29 @@ export const getAvailableOfferings = async (req, res) => {
                 courses: true,
                 lectures: {
                     include: {
-                        users: { select: { full_name: true } }
-                    }
+                        users: { select: { full_name: true } },
+                    },
                 },
                 tutorials_labs: {
                     include: {
-                        users: { select: { full_name: true } }
-                    }
-                }
-            }
+                        users: { select: { full_name: true } },
+                    },
+                },
+            },
         });
 
         // --- Staff / Admin view: return all offerings with no filtering ---
-        if (['doctor', 'teaching_assistant', 'admin', 'super_admin'].includes(userRole)) {
-            const offerings = courseOfferings.map(offering => ({
+        if (
+            ["doctor", "teaching_assistant", "admin", "super_admin"].includes(
+                userRole
+            )
+        ) {
+            const offerings = courseOfferings.map((offering) => ({
                 offeringId: offering.offering_id,
                 courseName: offering.courses.name,
                 courseCode: offering.course_code,
                 creditHours: offering.courses.credits,
-                lectures: offering.lectures.map(lecture => ({
+                lectures: offering.lectures.map((lecture) => ({
                     id: lecture.lecture_id,
                     group_number: lecture.group || "1",
                     day_of_week: lecture.day_of_week,
@@ -79,7 +83,7 @@ export const getAvailableOfferings = async (req, res) => {
                     capacity: lecture.capacity,
                     type: "LECTURE",
                 })),
-                labs: offering.tutorials_labs.map(lab => ({
+                labs: offering.tutorials_labs.map((lab) => ({
                     id: lab.tutorial_lab_id,
                     group_number: lab.group,
                     day_of_week: lab.day_of_week,
@@ -103,31 +107,39 @@ export const getAvailableOfferings = async (req, res) => {
 
         // Courses the student has already completed
         const completedEnrollments = await prisma.enrollments.findMany({
-            where: { student_user_id: userId, status: 'completed' },
+            where: { student_user_id: userId, status: "completed" },
             include: {
-                lectures: { include: { course_offerings: true } }
-            }
+                lectures: { include: { course_offerings: true } },
+            },
         });
         const completedCourseCodes = new Set(
-            completedEnrollments.map(en => en.lectures.course_offerings.course_code)
+            completedEnrollments.map(
+                (en) => en.lectures.course_offerings.course_code
+            )
         );
 
         // Current active enrollments to mark as already enrolled
         const currentEnrollments = await prisma.enrollments.findMany({
-            where: { student_user_id: userId, status: 'enrolled' },
-            select: { lecture_id: true, tutorial_lab_id: true }
+            where: { student_user_id: userId, status: "enrolled" },
+            select: { lecture_id: true, tutorial_lab_id: true },
         });
-        const enrolledLectureIds = new Set(currentEnrollments.map(en => en.lecture_id));
-        const enrolledTutorialLabIds = new Set(currentEnrollments.map(en => en.tutorial_lab_id));
+        const enrolledLectureIds = new Set(
+            currentEnrollments.map((en) => en.lecture_id)
+        );
+        const enrolledTutorialLabIds = new Set(
+            currentEnrollments.map((en) => en.tutorial_lab_id)
+        );
 
         // Build prerequisite map: course_code -> [prerequisite_codes]
         const prerequisites = await prisma.course_prerequisites.findMany();
         const prerequisiteMap = new Map();
-        prerequisites.forEach(prereq => {
+        prerequisites.forEach((prereq) => {
             if (!prerequisiteMap.has(prereq.course_code)) {
                 prerequisiteMap.set(prereq.course_code, []);
             }
-            prerequisiteMap.get(prereq.course_code).push(prereq.prerequisite_code);
+            prerequisiteMap
+                .get(prereq.course_code)
+                .push(prereq.prerequisite_code);
         });
 
         const availableOfferings = [];
@@ -140,10 +152,12 @@ export const getAvailableOfferings = async (req, res) => {
 
             // Skip if prerequisites not met
             const requiredPrereqs = prerequisiteMap.get(courseCode) || [];
-            const hasAllPrereqs = requiredPrereqs.every(prereq => completedCourseCodes.has(prereq));
+            const hasAllPrereqs = requiredPrereqs.every((prereq) =>
+                completedCourseCodes.has(prereq)
+            );
             if (!hasAllPrereqs) continue;
 
-            const lectures = offering.lectures.map(lecture => ({
+            const lectures = offering.lectures.map((lecture) => ({
                 id: lecture.lecture_id,
                 group_number: lecture.group || "1",
                 day_of_week: lecture.day_of_week,
@@ -153,10 +167,10 @@ export const getAvailableOfferings = async (req, res) => {
                 instructor: lecture.users.full_name,
                 capacity: lecture.capacity,
                 type: "LECTURE",
-                enrolled: enrolledLectureIds.has(lecture.lecture_id)
+                enrolled: enrolledLectureIds.has(lecture.lecture_id),
             }));
 
-            const labs = offering.tutorials_labs.map(lab => ({
+            const labs = offering.tutorials_labs.map((lab) => ({
                 id: lab.tutorial_lab_id,
                 group_number: lab.group,
                 day_of_week: lab.day_of_week,
@@ -166,7 +180,7 @@ export const getAvailableOfferings = async (req, res) => {
                 instructor: lab.users.full_name,
                 capacity: lab.capacity,
                 type: lab.type,
-                enrolled: enrolledTutorialLabIds.has(lab.tutorial_lab_id)
+                enrolled: enrolledTutorialLabIds.has(lab.tutorial_lab_id),
             }));
 
             availableOfferings.push({
@@ -175,13 +189,13 @@ export const getAvailableOfferings = async (req, res) => {
                 courseCode: offering.course_code,
                 creditHours: offering.courses.credits,
                 lectures,
-                labs
+                labs,
             });
         }
 
         res.status(200).json({
             semester: currentSemester,
-            offerings: availableOfferings
+            offerings: availableOfferings,
         });
     } catch (err) {
         logger.error("Error fetching available offerings:", err);
@@ -196,119 +210,142 @@ export const registerCourses = async (req, res) => {
         const { selectedLectureIds, selectedLabIds } = req.body;
 
         // Validate input
-        if (!Array.isArray(selectedLectureIds) || !Array.isArray(selectedLabIds)) {
-            return res.status(400).json({ 
-                error: "Invalid input. Required: selectedLectureIds (array), selectedLabIds (array)" 
+        if (
+            !Array.isArray(selectedLectureIds) ||
+            !Array.isArray(selectedLabIds)
+        ) {
+            return res.status(400).json({
+                error: "Invalid input. Required: selectedLectureIds (array), selectedLabIds (array)",
             });
         }
 
         if (selectedLectureIds.length === 0 && selectedLabIds.length === 0) {
-            return res.status(400).json({ 
-                error: "Must select at least one lecture or lab" 
+            return res.status(400).json({
+                error: "Must select at least one lecture or lab",
             });
         }
 
         // Fetch all selected lectures
         const lectures = await prisma.lectures.findMany({
             where: {
-                lecture_id: { in: selectedLectureIds }
+                lecture_id: { in: selectedLectureIds },
             },
             include: {
                 course_offerings: {
                     include: {
-                        courses: true
-                    }
-                }
-            }
+                        courses: true,
+                    },
+                },
+            },
         });
 
         // Fetch all selected labs
         const labs = await prisma.tutorials_labs.findMany({
             where: {
-                tutorial_lab_id: { in: selectedLabIds }
+                tutorial_lab_id: { in: selectedLabIds },
             },
             include: {
                 course_offerings: {
                     include: {
-                        courses: true
-                    }
-                }
-            }
+                        courses: true,
+                    },
+                },
+            },
         });
 
         // Fetch already-enrolled sessions for this student to check conflicts against
         const existingEnrollments = await prisma.enrollments.findMany({
-            where: { student_user_id: studentId, status: 'enrolled' },
+            where: { student_user_id: studentId, status: "enrolled" },
             include: {
                 lectures: {
-                    include: { course_offerings: { include: { courses: true } } }
+                    include: {
+                        course_offerings: { include: { courses: true } },
+                    },
                 },
                 tutorials_labs: {
-                    include: { course_offerings: { include: { courses: true } } }
-                }
-            }
+                    include: {
+                        course_offerings: { include: { courses: true } },
+                    },
+                },
+            },
         });
 
         const existingSessions = [];
-        existingEnrollments.forEach(en => {
+        existingEnrollments.forEach((en) => {
             if (en.lectures) {
                 existingSessions.push({
                     id: en.lectures.lecture_id,
-                    type: 'lecture',
+                    type: "lecture",
                     day_of_week: en.lectures.day_of_week,
                     start_time: en.lectures.start_time,
                     end_time: en.lectures.end_time,
                     courseName: en.lectures.course_offerings.courses.name,
-                    courseCode: en.lectures.course_offerings.course_code
+                    courseCode: en.lectures.course_offerings.course_code,
                 });
             }
             if (en.tutorials_labs) {
                 existingSessions.push({
                     id: en.tutorials_labs.tutorial_lab_id,
-                    type: 'lab',
+                    type: "lab",
                     day_of_week: en.tutorials_labs.day_of_week,
                     start_time: en.tutorials_labs.start_time,
                     end_time: en.tutorials_labs.end_time,
                     courseName: en.tutorials_labs.course_offerings.courses.name,
-                    courseCode: en.tutorials_labs.course_offerings.course_code
+                    courseCode: en.tutorials_labs.course_offerings.course_code,
                 });
             }
         });
 
         // New sessions being registered in this request
         const newSessions = [
-            ...lectures.map(lecture => ({
+            ...lectures.map((lecture) => ({
                 id: lecture.lecture_id,
-                type: 'lecture',
+                type: "lecture",
                 day_of_week: lecture.day_of_week,
                 start_time: lecture.start_time,
                 end_time: lecture.end_time,
                 courseName: lecture.course_offerings.courses.name,
-                courseCode: lecture.course_offerings.course_code
+                courseCode: lecture.course_offerings.course_code,
             })),
-            ...labs.map(lab => ({
+            ...labs.map((lab) => ({
                 id: lab.tutorial_lab_id,
-                type: 'lab',
+                type: "lab",
                 day_of_week: lab.day_of_week,
                 start_time: lab.start_time,
                 end_time: lab.end_time,
                 courseName: lab.course_offerings.courses.name,
-                courseCode: lab.course_offerings.course_code
-            }))
+                courseCode: lab.course_offerings.course_code,
+            })),
         ];
 
         /**
-         * Check conflicts: 
+         * Check conflicts:
          * 1. Among newly selected sessions with each other
          * 2. Each new session against all existing enrolled sessions
          */
         const checkConflict = (sessionA, sessionB) => {
-            if (sessionA.id === sessionB.id && sessionA.type === sessionB.type) return;
+            if (sessionA.id === sessionB.id && sessionA.type === sessionB.type)
+                return;
             if (sessionA.day_of_week !== sessionB.day_of_week) return;
-            if (timesOverlap(sessionA.start_time, sessionA.end_time, sessionB.start_time, sessionB.end_time)) {
+            if (
+                timesOverlap(
+                    sessionA.start_time,
+                    sessionA.end_time,
+                    sessionB.start_time,
+                    sessionB.end_time
+                )
+            ) {
                 throw {
                     status: 400,
-                    message: `Schedule conflict on ${sessionA.day_of_week}: ${sessionA.courseName} (${sessionA.courseCode}) [${formatTime(sessionA.start_time)}-${formatTime(sessionA.end_time)}] overlaps with ${sessionB.courseName} (${sessionB.courseCode}) [${formatTime(sessionB.start_time)}-${formatTime(sessionB.end_time)}]`
+                    message: `Schedule conflict on ${sessionA.day_of_week}: ${
+                        sessionA.courseName
+                    } (${sessionA.courseCode}) [${formatTime(
+                        sessionA.start_time
+                    )}-${formatTime(sessionA.end_time)}] overlaps with ${
+                        sessionB.courseName
+                    } (${sessionB.courseCode}) [${formatTime(
+                        sessionB.start_time
+                    )}-${formatTime(sessionB.end_time)}]`,
                 };
             }
         };
@@ -327,7 +364,9 @@ export const registerCourses = async (req, res) => {
                 }
             }
         } catch (conflictErr) {
-            return res.status(conflictErr.status || 400).json({ error: conflictErr.message });
+            return res
+                .status(conflictErr.status || 400)
+                .json({ error: conflictErr.message });
         }
 
         // Start database transaction
@@ -340,11 +379,11 @@ export const registerCourses = async (req, res) => {
                 const lecturesByOffering = new Map();
                 const labsByOffering = new Map();
 
-                lectures.forEach(lecture => {
+                lectures.forEach((lecture) => {
                     lecturesByOffering.set(lecture.offering_id, lecture);
                 });
 
-                labs.forEach(lab => {
+                labs.forEach((lab) => {
                     if (!labsByOffering.has(lab.offering_id)) {
                         labsByOffering.set(lab.offering_id, []);
                     }
@@ -355,43 +394,56 @@ export const registerCourses = async (req, res) => {
                 for (const lecture of lectures) {
                     // Check lecture capacity
                     const lectureEnrollmentCount = await tx.enrollments.count({
-                        where: { lecture_id: lecture.lecture_id }
+                        where: { lecture_id: lecture.lecture_id },
                     });
 
                     if (lectureEnrollmentCount >= lecture.capacity) {
-                        throw new Error(`Lecture ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) is full`);
+                        throw new Error(
+                            `Lecture ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) is full`
+                        );
                     }
 
                     // Find corresponding lab(s) for this offering
-                    const courseLabs = labs.filter(lab => lab.offering_id === lecture.offering_id);
+                    const courseLabs = labs.filter(
+                        (lab) => lab.offering_id === lecture.offering_id
+                    );
 
                     if (courseLabs.length === 0) {
-                        throw new Error(`No lab selected for course ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code})`);
+                        throw new Error(
+                            `No lab selected for course ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code})`
+                        );
                     }
 
                     for (const lab of courseLabs) {
                         // Check lab capacity
                         const labEnrollmentCount = await tx.enrollments.count({
-                            where: { tutorial_lab_id: lab.tutorial_lab_id }
+                            where: { tutorial_lab_id: lab.tutorial_lab_id },
                         });
 
                         if (labEnrollmentCount >= lab.capacity) {
-                            throw new Error(`Lab ${lab.group} for ${lecture.course_offerings.courses.name} is full`);
+                            throw new Error(
+                                `Lab ${lab.group} for ${lecture.course_offerings.courses.name} is full`
+                            );
                         }
 
                         // Check if student is already enrolled in this lecture-lab combination
-                        const existingEnrollment = await tx.enrollments.findUnique({
-                            where: {
-                                student_user_id_lecture_id_tutorial_lab_id: {
-                                    student_user_id: studentId,
-                                    lecture_id: lecture.lecture_id,
-                                    tutorial_lab_id: lab.tutorial_lab_id
-                                }
-                            }
-                        });
+                        const existingEnrollment =
+                            await tx.enrollments.findUnique({
+                                where: {
+                                    student_user_id_lecture_id_tutorial_lab_id:
+                                        {
+                                            student_user_id: studentId,
+                                            lecture_id: lecture.lecture_id,
+                                            tutorial_lab_id:
+                                                lab.tutorial_lab_id,
+                                        },
+                                },
+                            });
 
                         if (existingEnrollment) {
-                            throw new Error(`Already enrolled in ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) with this lecture and lab combination`);
+                            throw new Error(
+                                `Already enrolled in ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) with this lecture and lab combination`
+                            );
                         }
 
                         // Create enrollment
@@ -400,8 +452,8 @@ export const registerCourses = async (req, res) => {
                                 student_user_id: studentId,
                                 lecture_id: lecture.lecture_id,
                                 tutorial_lab_id: lab.tutorial_lab_id,
-                                status: 'enrolled'
-                            }
+                                status: "enrolled",
+                            },
                         });
 
                         enrollmentsCreated.push(enrollment);
@@ -414,12 +466,14 @@ export const registerCourses = async (req, res) => {
             res.status(201).json({
                 message: "Registration successful",
                 enrollments: result.length,
-                details: result
+                details: result,
             });
         } catch (transactionError) {
             logger.error("Transaction error:", transactionError);
-            return res.status(400).json({ 
-                error: transactionError.message || "Registration failed due to capacity or validation issues" 
+            return res.status(400).json({
+                error:
+                    transactionError.message ||
+                    "Registration failed due to capacity or validation issues",
             });
         }
     } catch (err) {
@@ -436,8 +490,8 @@ export const unregisterSession = async (req, res) => {
 
         // Validate that at least one ID is provided
         if (!lectureId && !tutorialLabId) {
-            return res.status(400).json({ 
-                error: "Must provide either lectureId or tutorialLabId" 
+            return res.status(400).json({
+                error: "Must provide either lectureId or tutorialLabId",
             });
         }
 
@@ -448,7 +502,7 @@ export const unregisterSession = async (req, res) => {
         if (lectureId) {
             const lecture = await prisma.lectures.findUnique({
                 where: { lecture_id: parseInt(lectureId) },
-                select: { offering_id: true }
+                select: { offering_id: true },
             });
 
             if (!lecture) {
@@ -456,19 +510,21 @@ export const unregisterSession = async (req, res) => {
             }
 
             offeringId = lecture.offering_id;
-            sessionType = 'lecture';
+            sessionType = "lecture";
         } else {
             const tutorialLab = await prisma.tutorials_labs.findUnique({
                 where: { tutorial_lab_id: parseInt(tutorialLabId) },
-                select: { offering_id: true }
+                select: { offering_id: true },
             });
 
             if (!tutorialLab) {
-                return res.status(404).json({ error: "Tutorial/Lab not found" });
+                return res
+                    .status(404)
+                    .json({ error: "Tutorial/Lab not found" });
             }
 
             offeringId = tutorialLab.offering_id;
-            sessionType = 'tutorialLab';
+            sessionType = "tutorialLab";
         }
 
         // Find all enrollments for this student in this course offering
@@ -476,24 +532,26 @@ export const unregisterSession = async (req, res) => {
             where: {
                 student_user_id: studentId,
                 lectures: {
-                    offering_id: offeringId
-                }
+                    offering_id: offeringId,
+                },
             },
             include: {
                 lectures: {
                     include: {
                         course_offerings: {
                             include: {
-                                courses: true
-                            }
-                        }
-                    }
-                }
-            }
+                                courses: true,
+                            },
+                        },
+                    },
+                },
+            },
         });
 
         if (enrollments.length === 0) {
-            return res.status(404).json({ error: "No enrollment found for this course" });
+            return res
+                .status(404)
+                .json({ error: "No enrollment found for this course" });
         }
 
         // Delete all enrollments for this student in this course offering
@@ -502,15 +560,15 @@ export const unregisterSession = async (req, res) => {
             where: {
                 student_user_id: studentId,
                 lectures: {
-                    offering_id: offeringId
-                }
-            }
+                    offering_id: offeringId,
+                },
+            },
         });
 
         res.status(200).json({
             message: `Successfully unregistered from ${enrollments[0].lectures.course_offerings.courses.name}`,
             courseCode: enrollments[0].lectures.course_offerings.course_code,
-            enrollmentsDeleted: deleteResult.count
+            enrollmentsDeleted: deleteResult.count,
         });
     } catch (err) {
         logger.error("Error unregistering from course:", err);

@@ -353,24 +353,89 @@ export default {
                 },
             },
         },
+        "/notifications/preferences": {
+            get: {
+                tags: ["Notifications"],
+                summary:
+                    "Get notification preferences for the authenticated user",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "Notification preferences",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/NotificationPreferencesResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    500: { description: "Internal server error" },
+                },
+            },
+            put: {
+                tags: ["Notifications"],
+                summary: "Save notification preferences (the settings panel)",
+                description:
+                    "Update which notification categories the user wishes to receive. Only provided fields are updated.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/UpdateNotificationPreferencesRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Preferences saved",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/NotificationPreferencesResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "No valid preference field provided" },
+                    401: { description: "Unauthorized" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
     },
     schemas: {
+        NotificationType: {
+            type: "string",
+            enum: [
+                "new_grade",
+                "exam_deadline",
+                "community_activity",
+                "campus_announcement",
+                "general",
+            ],
+            description: "Category of the notification",
+        },
         // Notification object
         Notification: {
             type: "object",
             properties: {
                 id: { type: "integer" },
                 message: { type: "string" },
-                type: { type: "string", nullable: true },
+                type: { $ref: "#/components/schemas/NotificationType" },
                 is_read: { type: "boolean" },
                 created_at: { type: "string", format: "date-time" },
             },
             example: {
                 id: 1,
-                message: "Your grades have been published",
-                type: "grades",
+                message: "Your mid-term grades have been published",
+                type: "new_grade",
                 is_read: false,
-                created_at: "2026-01-27T10:30:00.000Z",
+                created_at: "2026-03-01T10:30:00.000Z",
             },
         },
         // GET /notifications response
@@ -396,12 +461,8 @@ export default {
         // GET /notifications/unread-count response
         UnreadCountResponse: {
             type: "object",
-            properties: {
-                unreadCount: { type: "integer" },
-            },
-            example: {
-                unreadCount: 5,
-            },
+            properties: { unreadCount: { type: "integer" } },
+            example: { unreadCount: 5 },
         },
         // PATCH /notifications/:id/read response
         MarkAsReadResponse: {
@@ -443,22 +504,18 @@ export default {
                 user_id: {
                     type: "string",
                     format: "uuid",
-                    description: "Target user ID",
+                    description: "Target user UUID",
                 },
                 message: {
                     type: "string",
-                    description: "Notification message",
+                    description: "Notification message text",
                 },
-                type: {
-                    type: "string",
-                    nullable: true,
-                    description: "Notification type/category",
-                },
+                type: { $ref: "#/components/schemas/NotificationType" },
             },
             example: {
                 user_id: "550e8400-e29b-41d4-a716-446655440000",
                 message: "Your assignment has been graded",
-                type: "grades",
+                type: "new_grade",
             },
         },
         // POST /notifications response
@@ -477,25 +534,18 @@ export default {
                 user_ids: {
                     type: "array",
                     items: { type: "string", format: "uuid" },
-                    description: "Array of user IDs",
+                    description: "Array of target user UUIDs",
                 },
                 message: {
                     type: "string",
-                    description: "Notification message",
+                    description: "Notification message text",
                 },
-                type: {
-                    type: "string",
-                    nullable: true,
-                    description: "Notification type/category",
-                },
+                type: { $ref: "#/components/schemas/NotificationType" },
             },
             example: {
-                user_ids: [
-                    "550e8400-e29b-41d4-a716-446655440000",
-                    "550e8400-e29b-41d4-a716-446655440001",
-                ],
-                message: "Exam schedule has been updated",
-                type: "schedule",
+                user_ids: ["550e8400-e29b-41d4-a716-446655440000"],
+                message: "Final exam schedule updated",
+                type: "exam_deadline",
             },
         },
         // POST /notifications/bulk response
@@ -503,11 +553,82 @@ export default {
             type: "object",
             properties: {
                 message: { type: "string" },
-                createdCount: { type: "integer" },
+                sentCount: {
+                    type: "integer",
+                    description:
+                        "Notifications actually delivered (after preference filtering)",
+                },
+                totalRequested: { type: "integer" },
             },
             example: {
-                message: "Notifications created successfully",
-                createdCount: 25,
+                message: "Notifications sent",
+                sentCount: 48,
+                totalRequested: 50,
+            },
+        },
+        // GET /notifications/preferences response
+        NotificationPreferencesResponse: {
+            type: "object",
+            properties: {
+                preferences: {
+                    type: "object",
+                    properties: {
+                        new_grade: {
+                            type: "boolean",
+                            description: "New Grades Posted",
+                        },
+                        exam_deadline: {
+                            type: "boolean",
+                            description: "Assignment & Exam Deadlines",
+                        },
+                        community_activity: {
+                            type: "boolean",
+                            description: "Community Hub Activity",
+                        },
+                        campus_announcement: {
+                            type: "boolean",
+                            description: "Campus Events & Announcements",
+                        },
+                    },
+                },
+            },
+            example: {
+                preferences: {
+                    new_grade: true,
+                    exam_deadline: true,
+                    community_activity: false,
+                    campus_announcement: true,
+                },
+            },
+        },
+        // PUT /notifications/preferences request
+        UpdateNotificationPreferencesRequest: {
+            type: "object",
+            description:
+                "Provide one or more preference fields to update. All fields are optional.",
+            properties: {
+                new_grade: {
+                    type: "boolean",
+                    description: "New Grades Posted",
+                },
+                exam_deadline: {
+                    type: "boolean",
+                    description: "Assignment & Exam Deadlines",
+                },
+                community_activity: {
+                    type: "boolean",
+                    description: "Community Hub Activity",
+                },
+                campus_announcement: {
+                    type: "boolean",
+                    description: "Campus Events & Announcements",
+                },
+            },
+            example: {
+                new_grade: true,
+                exam_deadline: true,
+                community_activity: false,
+                campus_announcement: true,
             },
         },
     },

@@ -18,39 +18,45 @@ import registration from "../swagger/registration.swagger.js";
 import community from "../swagger/community.swagger.js";
 import attendance from "../swagger/attendance.swagger.js";
 import systemConfig from "../swagger/systemConfig.swagger.js";
+import grade from "../swagger/grade.swagger.js";
+import task from "../swagger/task.swagger.js";
 
 export const swaggerSpec = {
-  ...base,
-  components: {
-    ...components,
-    schemas: {
-      ...components.schemas,
-      ...notification.schemas,
-      ...materials.schemas,
-      ...course.schemas,
-      ...courseOffering.schemas,
-      ...registration.components.schemas,
-      ...systemConfig.schemas,
+    ...base,
+    components: {
+        ...components,
+        schemas: {
+            ...components.schemas,
+            ...notification.schemas,
+            ...materials.schemas,
+            ...course.schemas,
+            ...courseOffering.schemas,
+            ...registration.components.schemas,
+            ...systemConfig.schemas,
+            ...grade.schemas,
+            ...task.schemas,
+        },
     },
-  },
-  paths: {
-    ...auth.paths,
-    ...users.paths,
-    ...studentProfile.paths,
-    ...studentSettings.paths,
-    ...leaderboard.paths,
-    ...schedule.paths,
-    ...teacher.paths,
-    ...notification.paths,
-    ...materials.paths,
-    ...course.paths,
-    ...courseOffering.paths,
-    ...exam.paths,
-    ...registration.paths,
-    ...community.paths,
-    ...attendance.paths,
-    ...systemConfig.paths,
-  },
+    paths: {
+        ...auth.paths,
+        ...users.paths,
+        ...studentProfile.paths,
+        ...studentSettings.paths,
+        ...leaderboard.paths,
+        ...schedule.paths,
+        ...teacher.paths,
+        ...notification.paths,
+        ...materials.paths,
+        ...course.paths,
+        ...courseOffering.paths,
+        ...exam.paths,
+        ...registration.paths,
+        ...community.paths,
+        ...attendance.paths,
+        ...systemConfig.paths,
+        ...grade.paths,
+        ...task.paths,
+    },
 };
 
 export const swaggerUiHandler = swaggerUi;

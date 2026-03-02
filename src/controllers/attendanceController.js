@@ -3,6 +3,10 @@ import logger from "../utils/logger.js";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { error } from "console";
+import {
+    sendNotification,
+    sendBulkNotification,
+} from "../utils/notificationService.js";
 
 // Store active attendance sessions
 // Structure: { sessionId: { lectureId, tutorialId, qrCode, qrExpiry, attendees: Set, enrolledStudents: [] } }
@@ -48,9 +52,11 @@ export const startAttendanceSession = async (req, res) => {
         }
 
         // Verify instructor is teaching this lecture/tutorial
+        let sessionCourseName = null;
         if (lecture_id) {
             const lecture = await prisma.lectures.findUnique({
                 where: { lecture_id: parseInt(lecture_id) },
+                include: { course_offerings: { include: { courses: true } } },
             });
 
             if (!lecture) {
@@ -62,11 +68,13 @@ export const startAttendanceSession = async (req, res) => {
                     error: "You are not authorized to start attendance for this lecture",
                 });
             }
+            sessionCourseName = lecture.course_offerings?.courses?.name || null;
         }
 
         if (tutorial_lab_id) {
             const tutorial = await prisma.tutorials_labs.findUnique({
                 where: { tutorial_lab_id: parseInt(tutorial_lab_id) },
+                include: { course_offerings: { include: { courses: true } } },
             });
 
             if (!tutorial) {
@@ -80,6 +88,8 @@ export const startAttendanceSession = async (req, res) => {
                     error: "You are not authorized to start attendance for this tutorial",
                 });
             }
+            sessionCourseName =
+                tutorial.course_offerings?.courses?.name || null;
         }
 
         // Get enrolled students
@@ -128,6 +138,22 @@ export const startAttendanceSession = async (req, res) => {
             enrolledStudents,
             createdAt: Date.now(),
         });
+
+        // Notify enrolled students that the session has started
+        const enrolledUserIds = enrolledStudents.map((s) => s.user_id);
+        if (enrolledUserIds.length > 0) {
+            const io = req.app.get("io");
+            sendBulkNotification({
+                userIds: enrolledUserIds,
+                message: `Attendance session started for ${
+                    sessionCourseName || "your course"
+                }. Scan the QR code to mark your attendance.`,
+                type: "general",
+                io,
+            }).catch((err) =>
+                logger.error("Error sending session-start notifications:", err)
+            );
+        }
 
         logger.info(`Attendance session started: ${sessionId}`);
 
@@ -247,8 +273,17 @@ export const scanQRCode = async (req, res) => {
             `Student ${studentId} marked present in session ${sessionId}`
         );
 
-        // This will be handled by WebSocket to notify all connected clients
-        // For REST API, just return success
+        // Notify the student that they have been marked present
+        const io = req.app.get("io");
+        sendNotification({
+            userId: studentId,
+            message: "Your attendance has been marked successfully.",
+            type: "general",
+            io,
+        }).catch((err) =>
+            logger.error("Error sending attendance notification:", err)
+        );
+
         res.status(200).json({
             message: "Attendance marked successfully",
             status: "present",
@@ -309,6 +344,33 @@ export const endAttendanceSession = async (req, res) => {
             data: attendanceRecords,
             skipDuplicates: true, // Skip if already exists
         });
+
+        // Check for students with 3 absences and send warning notifications
+        const io = req.app.get("io");
+        const absentStudents = session.enrolledStudents.filter(
+            (s) => !session.attendees.has(s.user_id)
+        );
+        for (const student of absentStudents) {
+            const absenceCount = await prisma.attendance.count({
+                where: {
+                    student_user_id: student.user_id,
+                    lecture_id: session.lectureId || undefined,
+                    tutorial_lab_id: session.tutorialLabId || undefined,
+                    status: "absent",
+                },
+            });
+            if (absenceCount === 3) {
+                sendNotification({
+                    userId: student.user_id,
+                    message:
+                        "Warning: You have accumulated 3 absences. Further absences may affect your academic standing.",
+                    type: "general",
+                    io,
+                }).catch((err) =>
+                    logger.error("Error sending absence warning:", err)
+                );
+            }
+        }
 
         // Remove session from active sessions
         activeSessions.delete(sessionId);

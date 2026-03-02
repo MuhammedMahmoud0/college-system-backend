@@ -18,9 +18,12 @@ import registrationRoutes from "./routes/registrationRoutes.js";
 import studentSettingsRoutes from "./routes/studentSettingsRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import systemConfigRoutes from "./routes/systemConfigRoutes.js";
+import gradeRoutes from "./routes/gradeRoutes.js";
+import taskRoutes from "./routes/taskRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 import { initializeSocketIO } from "./utils/socketIO.js";
+import { startExamReminderJob } from "./utils/examReminderJob.js";
 
 config();
 connectDB();
@@ -34,6 +37,9 @@ const io = initializeSocketIO(httpServer);
 
 // Make io accessible in routes (optional)
 app.set("io", io);
+
+// Start exam reminder background job
+startExamReminderJob(io);
 
 // Middleware to parse JSON bodies
 app.use(express.json());
@@ -99,6 +105,12 @@ app.use("/api/v1/attendance", attendanceRoutes);
 
 // mount system configuration routes
 app.use("/api/v1/config", systemConfigRoutes);
+
+// mount grade routes
+app.use("/api/v1/grades", gradeRoutes);
+
+// mount task routes
+app.use("/api/v1/tasks", taskRoutes);
 
 // Swagger API documentation route
 app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));

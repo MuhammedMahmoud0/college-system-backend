@@ -1,5 +1,6 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
+import { sendNotification } from "../utils/notificationService.js";
 
 /**
  * Helper function to check if two time slots overlap
@@ -460,6 +461,19 @@ export const registerCourses = async (req, res) => {
                 return enrollmentsCreated;
             });
 
+            const courseNames = [
+                ...new Set(newSessions.map((s) => s.courseName)),
+            ];
+            const io = req.app.get("io");
+            await sendNotification({
+                userId: studentId,
+                message: `You have successfully registered for: ${courseNames.join(
+                    ", "
+                )}.`,
+                type: "general",
+                io,
+            });
+
             res.status(201).json({
                 message: "Registration successful",
                 enrollments: result.length,
@@ -637,6 +651,14 @@ export const registerLab = async (req, res) => {
             data: { tutorial_lab_id: parseInt(labId) },
         });
 
+        const io = req.app.get("io");
+        await sendNotification({
+            userId: studentId,
+            message: `You have been registered for lab ${lab.group} in ${lab.course_offerings.courses.name}.`,
+            type: "general",
+            io,
+        });
+
         return res.status(201).json({
             message: `Successfully registered for lab ${lab.group} in ${lab.course_offerings.courses.name}.`,
             courseCode: lab.course_offerings.course_code,
@@ -691,6 +713,14 @@ export const unregisterSession = async (req, res) => {
                 },
             });
 
+            const io = req.app.get("io");
+            await sendNotification({
+                userId: studentId,
+                message: `You have been unregistered from ${lecture.course_offerings.courses.name}.`,
+                type: "general",
+                io,
+            });
+
             return res.status(200).json({
                 message: `Successfully unregistered from ${lecture.course_offerings.courses.name}. Lecture and associated lab removed.`,
                 courseCode: lecture.course_offerings.course_code,
@@ -727,6 +757,14 @@ export const unregisterSession = async (req, res) => {
             await prisma.enrollments.update({
                 where: { id: enrollment.id },
                 data: { tutorial_lab_id: null },
+            });
+
+            const unregIo = req.app.get("io");
+            await sendNotification({
+                userId: studentId,
+                message: `You have been unregistered from the lab for ${tutorialLab.course_offerings.courses.name}.`,
+                type: "general",
+                io: unregIo,
             });
 
             return res.status(200).json({

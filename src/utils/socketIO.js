@@ -36,7 +36,18 @@ export function initializeSocketIO(httpServer) {
     });
 
     io.on("connection", (socket) => {
-        logger.info(`WebSocket client connected: ${socket.user.userId}`);
+        const userId = socket.user.userId;
+        logger.info(`WebSocket client connected: ${userId}`);
+
+        /**
+         * Auto-join the user's personal notification room on connect.
+         * Room name: notifications:<userId>
+         * The client receives:
+         *   - "new-notification"  when a new notification is created for them
+         *   - "unread-count"      whenever the unread count changes
+         */
+        socket.join(`notifications:${userId}`);
+        logger.info(`User ${userId} joined personal notification room`);
 
         /**
          * Instructor joins an attendance session room
@@ -53,9 +64,7 @@ export function initializeSocketIO(httpServer) {
             // Join the session room
             socket.join(`session:${sessionId}`);
 
-            logger.info(
-                `User ${socket.user.userId} joined session ${sessionId}`
-            );
+            logger.info(`User ${userId} joined session ${sessionId}`);
 
             // Send current session state
             const studentsWithStatus = session.enrolledStudents.map(
@@ -82,8 +91,6 @@ export function initializeSocketIO(httpServer) {
          */
         socket.on("scan-qr", async ({ qrCode }) => {
             try {
-                const studentId = socket.user.userId;
-
                 if (!qrCode) {
                     socket.emit("scan-error", {
                         message: "QR code is required",
@@ -118,6 +125,7 @@ export function initializeSocketIO(httpServer) {
                 }
 
                 // Check enrollment
+                const studentId = userId;
                 const studentInfo = session.enrolledStudents.find(
                     (student) => student.user_id === studentId
                 );
@@ -175,7 +183,7 @@ export function initializeSocketIO(httpServer) {
             "toggle-attendance",
             async ({ sessionId, student_user_id }) => {
                 try {
-                    const instructorId = socket.user.userId;
+                    const instructorId = userId;
 
                     if (!sessionId || !student_user_id) {
                         socket.emit("toggle-error", {
@@ -287,14 +295,14 @@ export function initializeSocketIO(httpServer) {
          */
         socket.on("leave-session", (sessionId) => {
             socket.leave(`session:${sessionId}`);
-            logger.info(`User ${socket.user.userId} left session ${sessionId}`);
+            logger.info(`User ${userId} left session ${sessionId}`);
         });
 
         /**
          * Disconnect handler
          */
         socket.on("disconnect", () => {
-            logger.info(`WebSocket client disconnected: ${socket.user.userId}`);
+            logger.info(`WebSocket client disconnected: ${userId}`);
         });
     });
 

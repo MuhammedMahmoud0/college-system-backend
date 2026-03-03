@@ -1,5 +1,6 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
+import { sendBulkNotification } from "../utils/notificationService.js";
 
 // Helper: format a Date object to "HH:mm"
 const formatHHmm = (date) => {
@@ -16,7 +17,9 @@ const formatAnnouncement = (announcement) => ({
     title: announcement.title,
     content: announcement.content,
     audience: announcement.audience,
-    publish_at: announcement.publish_at ? formatHHmm(announcement.publish_at) : null,
+    publish_at: announcement.publish_at
+        ? formatHHmm(announcement.publish_at)
+        : null,
     expire_at: announcement.expire_at ?? null,
 });
 
@@ -74,7 +77,9 @@ export const createAnnouncement = async (req, res) => {
         const { title, content, audience, expire_at } = req.body;
 
         if (!title || !content) {
-            return res.status(400).json({ error: "title and content are required." });
+            return res
+                .status(400)
+                .json({ error: "title and content are required." });
         }
 
         // Validate audience enum if provided
@@ -92,7 +97,9 @@ export const createAnnouncement = async (req, res) => {
         if (expire_at) {
             expireDate = new Date(expire_at);
             if (isNaN(expireDate.getTime())) {
-                return res.status(400).json({ error: "Invalid expire_at date format." });
+                return res
+                    .status(400)
+                    .json({ error: "Invalid expire_at date format." });
             }
         } else {
             expireDate = new Date(now);
@@ -110,12 +117,79 @@ export const createAnnouncement = async (req, res) => {
             },
         });
 
+        // Notify users based on announcement audience (fire-and-forget)
+        const io = req.app.get("io");
+        const effectiveAudience = announcement.audience ?? "All";
+        const roleFilter =
+            effectiveAudience === "Students"
+                ? "student"
+                : effectiveAudience === "Faculty"
+                ? "doctor"
+                : null; // null = All
+
+        const whereClause = roleFilter ? { role: roleFilter } : {};
+        const recipients = await prisma.users.findMany({
+            where: whereClause,
+            select: { id: true },
+        });
+
+        const recipientIds = recipients.map((u) => u.id);
+        if (recipientIds.length > 0) {
+            sendBulkNotification({
+                userIds: recipientIds,
+                message: `[Announcement] ${title}: ${content}`,
+                type: "campus_announcement",
+                io,
+            }).catch((err) =>
+                logger.error("Error sending announcement notifications:", err)
+            );
+        }
+
         return res.status(201).json({
             message: "Announcement created successfully.",
             data: formatAnnouncement(announcement),
         });
     } catch (err) {
         logger.error("Error creating announcement:", err);
+        return res.status(500).json({ error: "Internal server error." });
+    }
+};
+
+/**
+ * POST /api/v1/config/registration-open
+ * Notify all students that registration has opened.
+ */
+export const openRegistration = async (req, res) => {
+    try {
+        const io = req.app.get("io");
+
+        const students = await prisma.users.findMany({
+            where: { role: "student" },
+            select: { id: true },
+        });
+
+        const studentIds = students.map((s) => s.id);
+
+        if (studentIds.length > 0) {
+            sendBulkNotification({
+                userIds: studentIds,
+                message:
+                    "Course registration is now open! Head to the registration portal to enroll in your courses.",
+                type: "campus_announcement",
+                io,
+            }).catch((err) =>
+                logger.error(
+                    "Error sending registration-open notifications:",
+                    err
+                )
+            );
+        }
+
+        return res.status(200).json({
+            message: `Registration-open notification sent to ${studentIds.length} students.`,
+        });
+    } catch (err) {
+        logger.error("Error sending registration-open notification:", err);
         return res.status(500).json({ error: "Internal server error." });
     }
 };
@@ -172,13 +246,17 @@ export const updateAnnouncement = async (req, res) => {
         if (expire_at !== undefined) {
             const expireDate = new Date(expire_at);
             if (isNaN(expireDate.getTime())) {
-                return res.status(400).json({ error: "Invalid expire_at date format." });
+                return res
+                    .status(400)
+                    .json({ error: "Invalid expire_at date format." });
             }
             updateData.expire_at = expireDate;
         }
 
         if (Object.keys(updateData).length === 0) {
-            return res.status(400).json({ error: "No updatable fields provided." });
+            return res
+                .status(400)
+                .json({ error: "No updatable fields provided." });
         }
 
         const existing = await prisma.announcements.findUnique({
@@ -222,7 +300,9 @@ export const deleteAnnouncement = async (req, res) => {
 
         await prisma.announcements.delete({ where: { id: parseInt(id) } });
 
-        return res.status(200).json({ message: "Announcement deleted successfully." });
+        return res
+            .status(200)
+            .json({ message: "Announcement deleted successfully." });
     } catch (err) {
         logger.error("Error deleting announcement:", err);
         return res.status(500).json({ error: "Internal server error." });

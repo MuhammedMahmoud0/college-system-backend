@@ -10,15 +10,22 @@ const router = express.Router();
 // Apply authentication to all notification routes
 router.use(authMiddleware);
 
-// User routes - get own notifications
+// ── User routes ─────────────────────────────────────────────────────────────
+// Listing & read-state management
 router.get("/", notificationController.getNotifications);
 router.get("/unread-count", notificationController.getUnreadCount);
-router.patch("/:id/read", notificationController.markAsRead);
 router.patch("/mark-all-read", notificationController.markAllAsRead);
-router.delete("/:id", notificationController.deleteNotification);
-router.delete("/", notificationController.deleteAllNotifications);
+router.patch("/:id/read", notificationController.markAsRead);
 
-// Admin routes - create notifications for users
+// Delete
+router.delete("/", notificationController.deleteAllNotifications);
+router.delete("/:id", notificationController.deleteNotification);
+
+// Notification preferences (the settings panel from the UI)
+router.get("/preferences", notificationController.getPreferences);
+router.put("/preferences", notificationController.updatePreferences);
+
+// ── Admin routes ─────────────────────────────────────────────────────────────
 router.post(
     "/",
     authorizationMiddleware("admin", "super_admin"),

@@ -5,6 +5,7 @@ import {
     getAnnouncements,
     updateAnnouncement,
     deleteAnnouncement,
+    openRegistration,
 } from "../controllers/systemConfigController.js";
 import {
     authMiddleware,
@@ -19,6 +20,9 @@ router.use(authorizationMiddleware("admin", "super_admin"));
 
 // ── Academic Calendar ──────────────────────────────────────────────────────
 router.post("/calendar", setAcademicCalendar);
+
+// ── Registration ───────────────────────────────────────────────────────────
+router.post("/registration-open", openRegistration);
 
 // ── Announcements ──────────────────────────────────────────────────────────
 router.post("/announcements", createAnnouncement);

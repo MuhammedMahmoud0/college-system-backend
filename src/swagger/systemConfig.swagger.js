@@ -20,7 +20,8 @@ export default {
                 },
                 responses: {
                     200: {
-                        description: "Calendar configuration received successfully.",
+                        description:
+                            "Calendar configuration received successfully.",
                         content: {
                             "application/json": {
                                 schema: {
@@ -33,7 +34,9 @@ export default {
                         description: "Missing required fields.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -41,7 +44,9 @@ export default {
                         description: "Unauthorized.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -49,7 +54,69 @@ export default {
                         description: "Forbidden – Admin or Super Admin only.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+
+        // ── Registration Open ─────────────────────────────────────────────
+        "/config/registration-open": {
+            post: {
+                tags: ["System Configuration"],
+                summary: "Notify all students that registration is open",
+                description:
+                    "Sends a campus_announcement notification to every student in the system, informing them that course registration has opened. Requires Admin or Super Admin role.",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "Notifications dispatched successfully.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: {
+                                            type: "string",
+                                            example:
+                                                "Registration-open notification sent to 320 students.",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Unauthorized.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Forbidden – Admin or Super Admin only.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -80,7 +147,9 @@ export default {
                         description: "Unauthorized.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -88,7 +157,9 @@ export default {
                         description: "Forbidden – Admin or Super Admin only.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -96,7 +167,9 @@ export default {
                         description: "Internal server error.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -133,7 +206,9 @@ export default {
                         description: "Validation error.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -141,7 +216,9 @@ export default {
                         description: "Unauthorized.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -149,7 +226,9 @@ export default {
                         description: "Forbidden – Admin or Super Admin only.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -157,7 +236,9 @@ export default {
                         description: "Internal server error.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -203,10 +284,13 @@ export default {
                         },
                     },
                     400: {
-                        description: "Validation error or no updatable fields provided.",
+                        description:
+                            "Validation error or no updatable fields provided.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -214,7 +298,9 @@ export default {
                         description: "Unauthorized.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -222,7 +308,9 @@ export default {
                         description: "Forbidden – Admin or Super Admin only.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -230,7 +318,9 @@ export default {
                         description: "Announcement not found.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -238,7 +328,9 @@ export default {
                         description: "Internal server error.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -277,7 +369,9 @@ export default {
                         description: "Unauthorized.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -285,7 +379,9 @@ export default {
                         description: "Forbidden – Admin or Super Admin only.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -293,7 +389,9 @@ export default {
                         description: "Announcement not found.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -301,7 +399,9 @@ export default {
                         description: "Internal server error.",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                             },
                         },
                     },
@@ -367,10 +467,14 @@ export default {
                     format: "uuid",
                     example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 },
-                title: { type: "string", example: "Midterm Exam Schedule Released" },
+                title: {
+                    type: "string",
+                    example: "Midterm Exam Schedule Released",
+                },
                 content: {
                     type: "string",
-                    example: "Please check the portal for the updated midterm schedule.",
+                    example:
+                        "Please check the portal for the updated midterm schedule.",
                 },
                 audience: {
                     type: "string",
@@ -416,7 +520,8 @@ export default {
                 },
                 content: {
                     type: "string",
-                    example: "Please check the portal for the updated midterm schedule.",
+                    example:
+                        "Please check the portal for the updated midterm schedule.",
                 },
                 audience: {
                     type: "string",

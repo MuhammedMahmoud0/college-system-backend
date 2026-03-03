@@ -3,6 +3,10 @@ import logger from "../utils/logger.js";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { error } from "console";
+import {
+    sendNotification,
+    sendBulkNotification,
+} from "../utils/notificationService.js";
 
 // Store active attendance sessions
 // Structure: { sessionId: { lectureId, tutorialId, qrCode, qrExpiry, attendees: Set, enrolledStudents: [] } }
@@ -26,7 +30,14 @@ function generateQRCode(sessionId) {
  */
 export const startAttendanceSession = async (req, res) => {
     try {
-        const { lecture_id, tutorial_lab_id, session_date } = req.body;
+        const {
+            lecture_id,
+            tutorial_lab_id,
+            session_date,
+            isLive = false,
+            longitude,
+            latitude,
+        } = req.body;
         const instructorId = req.user.userId;
 
         // Validate that at least one of lecture_id or tutorial_lab_id is provided
@@ -48,9 +59,11 @@ export const startAttendanceSession = async (req, res) => {
         }
 
         // Verify instructor is teaching this lecture/tutorial
+        let sessionCourseName = null;
         if (lecture_id) {
             const lecture = await prisma.lectures.findUnique({
                 where: { lecture_id: parseInt(lecture_id) },
+                include: { course_offerings: { include: { courses: true } } },
             });
 
             if (!lecture) {
@@ -62,11 +75,13 @@ export const startAttendanceSession = async (req, res) => {
                     error: "You are not authorized to start attendance for this lecture",
                 });
             }
+            sessionCourseName = lecture.course_offerings?.courses?.name || null;
         }
 
         if (tutorial_lab_id) {
             const tutorial = await prisma.tutorials_labs.findUnique({
                 where: { tutorial_lab_id: parseInt(tutorial_lab_id) },
+                include: { course_offerings: { include: { courses: true } } },
             });
 
             if (!tutorial) {
@@ -80,6 +95,8 @@ export const startAttendanceSession = async (req, res) => {
                     error: "You are not authorized to start attendance for this tutorial",
                 });
             }
+            sessionCourseName =
+                tutorial.course_offerings?.courses?.name || null;
         }
 
         // Get enrolled students
@@ -122,12 +139,31 @@ export const startAttendanceSession = async (req, res) => {
             lectureId: lecture_id ? parseInt(lecture_id) : null,
             tutorialLabId: tutorial_lab_id ? parseInt(tutorial_lab_id) : null,
             sessionDate: session_date,
+            isLive,
+            longitude: longitude ?? null,
+            latitude: latitude ?? null,
             qrCode,
             qrExpiry,
             attendees: new Set(), // Set of user_ids who scanned
             enrolledStudents,
             createdAt: Date.now(),
         });
+
+        // Notify enrolled students that the session has started
+        const enrolledUserIds = enrolledStudents.map((s) => s.user_id);
+        if (enrolledUserIds.length > 0) {
+            const io = req.app.get("io");
+            sendBulkNotification({
+                userIds: enrolledUserIds,
+                message: `Attendance session started for ${
+                    sessionCourseName || "your course"
+                }. Scan the QR code to mark your attendance.`,
+                type: "general",
+                io,
+            }).catch((err) =>
+                logger.error("Error sending session-start notifications:", err)
+            );
+        }
 
         logger.info(`Attendance session started: ${sessionId}`);
 
@@ -136,6 +172,9 @@ export const startAttendanceSession = async (req, res) => {
             sessionId,
             qrCode,
             qrExpiry,
+            isLive,
+            longitude: longitude ?? null,
+            latitude: latitude ?? null,
             enrolledStudents,
         });
     } catch (err) {
@@ -247,8 +286,17 @@ export const scanQRCode = async (req, res) => {
             `Student ${studentId} marked present in session ${sessionId}`
         );
 
-        // This will be handled by WebSocket to notify all connected clients
-        // For REST API, just return success
+        // Notify the student that they have been marked present
+        const io = req.app.get("io");
+        sendNotification({
+            userId: studentId,
+            message: "Your attendance has been marked successfully.",
+            type: "general",
+            io,
+        }).catch((err) =>
+            logger.error("Error sending attendance notification:", err)
+        );
+
         res.status(200).json({
             message: "Attendance marked successfully",
             status: "present",
@@ -302,6 +350,9 @@ export const endAttendanceSession = async (req, res) => {
             status: session.attendees.has(student.user_id)
                 ? "present"
                 : "absent",
+            is_live: session.isLive ?? false,
+            longitude: session.longitude ?? null,
+            latitude: session.latitude ?? null,
         }));
 
         // Bulk insert attendance records
@@ -309,6 +360,33 @@ export const endAttendanceSession = async (req, res) => {
             data: attendanceRecords,
             skipDuplicates: true, // Skip if already exists
         });
+
+        // Check for students with 3 absences and send warning notifications
+        const io = req.app.get("io");
+        const absentStudents = session.enrolledStudents.filter(
+            (s) => !session.attendees.has(s.user_id)
+        );
+        for (const student of absentStudents) {
+            const absenceCount = await prisma.attendance.count({
+                where: {
+                    student_user_id: student.user_id,
+                    lecture_id: session.lectureId || undefined,
+                    tutorial_lab_id: session.tutorialLabId || undefined,
+                    status: "absent",
+                },
+            });
+            if (absenceCount === 3) {
+                sendNotification({
+                    userId: student.user_id,
+                    message:
+                        "Warning: You have accumulated 3 absences. Further absences may affect your academic standing.",
+                    type: "general",
+                    io,
+                }).catch((err) =>
+                    logger.error("Error sending absence warning:", err)
+                );
+            }
+        }
 
         // Remove session from active sessions
         activeSessions.delete(sessionId);
@@ -786,6 +864,121 @@ export const getStudentsAttendance = async (req, res) => {
         });
     } catch (err) {
         logger.error("Error fetching students attendance:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Get all attendance sessions with their date and all students for each session
+ * GET /api/v1/attendance/sessions?lecture_id=&tutorial_lab_id=
+ */
+export const getAllAttendanceSessions = async (req, res) => {
+    try {
+        const { lecture_id, tutorial_lab_id } = req.query;
+        const instructorId = req.user.userId;
+
+        if (!lecture_id && !tutorial_lab_id) {
+            return res.status(400).json({
+                error: "Either lecture_id or tutorial_lab_id is required",
+            });
+        }
+        if (lecture_id && tutorial_lab_id) {
+            return res.status(400).json({
+                error: "Provide either lecture_id or tutorial_lab_id, not both",
+            });
+        }
+
+        // Verify the instructor owns this lecture/tutorial
+        if (lecture_id) {
+            const lecture = await prisma.lectures.findUnique({
+                where: { lecture_id: parseInt(lecture_id) },
+            });
+            if (!lecture) {
+                return res.status(404).json({ error: "Lecture not found" });
+            }
+            if (lecture.instructor_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to view sessions for this lecture",
+                });
+            }
+        }
+
+        if (tutorial_lab_id) {
+            const tutorial = await prisma.tutorials_labs.findUnique({
+                where: { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            });
+            if (!tutorial) {
+                return res
+                    .status(404)
+                    .json({ error: "Tutorial/Lab not found" });
+            }
+            if (tutorial.ta_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to view sessions for this tutorial",
+                });
+            }
+        }
+
+        // Fetch all attendance records for this lecture/tutorial, including student info
+        const records = await prisma.attendance.findMany({
+            where: lecture_id
+                ? { lecture_id: parseInt(lecture_id) }
+                : { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                        avatar_url: true,
+                        student_profiles: {
+                            select: { student_id: true },
+                        },
+                    },
+                },
+            },
+            orderBy: { session_date: "asc" },
+        });
+
+        // Group records by session_date
+        const sessionsMap = new Map();
+        for (const record of records) {
+            const dateKey = new Date(record.session_date)
+                .toISOString()
+                .split("T")[0];
+
+            if (!sessionsMap.has(dateKey)) {
+                sessionsMap.set(dateKey, {
+                    session_date: dateKey,
+                    lecture_id: record.lecture_id,
+                    tutorial_lab_id: record.tutorial_lab_id,
+                    is_live: record.is_live,
+                    longitude: record.longitude,
+                    latitude: record.latitude,
+                    students: [],
+                });
+            }
+
+            sessionsMap.get(dateKey).students.push({
+                student_user_id: record.users.id,
+                student_id: record.users.student_profiles?.student_id ?? null,
+                full_name: record.users.full_name,
+                email: record.users.email,
+                avatar_url: record.users.avatar_url ?? null,
+                status: record.status,
+            });
+        }
+
+        const sessions = Array.from(sessionsMap.values());
+
+        res.status(200).json({
+            total_sessions: sessions.length,
+            lecture_id: lecture_id ? parseInt(lecture_id) : null,
+            tutorial_lab_id: tutorial_lab_id ? parseInt(tutorial_lab_id) : null,
+            sessions,
+        });
+    } catch (err) {
+        logger.error("Error fetching all attendance sessions:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 };

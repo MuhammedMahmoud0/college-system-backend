@@ -283,6 +283,24 @@ export default {
                     description: "Session date (YYYY-MM-DD)",
                     example: "2026-02-10",
                 },
+                isLive: {
+                    type: "boolean",
+                    description: "Whether the session is live",
+                    default: false,
+                    example: false,
+                },
+                longitude: {
+                    type: "number",
+                    description: "Longitude coordinate of the session location",
+                    example: 123885,
+                    nullable: true,
+                },
+                latitude: {
+                    type: "number",
+                    description: "Latitude coordinate of the session location",
+                    example: 2326,
+                    nullable: true,
+                },
             },
         },
         AttendanceSessionResponse: {
@@ -307,6 +325,20 @@ export default {
                     type: "integer",
                     description: "QR code expiry timestamp (milliseconds)",
                     example: 1707580810000,
+                },
+                isLive: {
+                    type: "boolean",
+                    example: false,
+                },
+                longitude: {
+                    type: "number",
+                    nullable: true,
+                    example: 123885,
+                },
+                latitude: {
+                    type: "number",
+                    nullable: true,
+                    example: 2326,
                 },
                 enrolledStudents: {
                     type: "array",

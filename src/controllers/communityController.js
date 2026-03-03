@@ -132,6 +132,7 @@ export const getCommunityFeed = async (req, res) => {
         // Transform posts to include computed fields
         const transformedPosts = posts.map((post) => ({
             ...post,
+            author_id: post.users.id,
             author_name: post.users.full_name,
             author_avatar: post.users.avatar_url,
             group_name: post.community_groups?.name || null,
@@ -142,6 +143,7 @@ export const getCommunityFeed = async (req, res) => {
                 id: comment.id,
                 content: comment.content,
                 created_at: comment.created_at,
+                author_id: comment.users.id,
                 author_name: comment.users.full_name,
                 author_avatar: comment.users.avatar_url,
             })),

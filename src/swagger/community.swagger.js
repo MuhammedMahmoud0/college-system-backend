@@ -116,6 +116,7 @@ export default {
                                         posts: [
                                             {
                                                 id: 1,
+                                                author_id: "b4c6d8e0-f2a3-5b7c-9d0e-1f2a3b4c5d6e",
                                                 author_name: "John Doe",
                                                 author_avatar:
                                                     "https://storage.example.com/avatars/john-d.jpg",
@@ -127,6 +128,7 @@ export default {
                                                     "https://storage.example.com/posts/project-demo.jpg",
                                                 likes_count: 15,
                                                 comments_count: 5,
+                                                is_liked_by_me: true,
                                                 created_at:
                                                     "2026-02-07T14:25:00Z",
                                                 recent_comments: [
@@ -136,6 +138,8 @@ export default {
                                                             "Congratulations! That's awesome!",
                                                         created_at:
                                                             "2026-02-07T14:30:00Z",
+                                                        author_id:
+                                                            "c5d7e9f1-a3b4-6c8d-0e1f-2a3b4c5d6e7f",
                                                         author_name:
                                                             "Sarah Johnson",
                                                         author_avatar:
@@ -147,6 +151,8 @@ export default {
                                                             "Well done! Can't wait to see the demo.",
                                                         created_at:
                                                             "2026-02-07T14:45:00Z",
+                                                        author_id:
+                                                            "d6e8f0a2-b4c5-7d9e-1f2a-3b4c5d6e7f8a",
                                                         author_name:
                                                             "Mike Chen",
                                                         author_avatar:
@@ -156,6 +162,7 @@ export default {
                                             },
                                             {
                                                 id: 2,
+                                                author_id: "e7f9a1b3-c5d6-8e0f-2a3b-4c5d6e7f8a9b",
                                                 author_name: "Emily Wilson",
                                                 author_avatar:
                                                     "https://storage.example.com/avatars/emily-w.jpg",
@@ -165,6 +172,7 @@ export default {
                                                 image_url: null,
                                                 likes_count: 8,
                                                 comments_count: 3,
+                                                is_liked_by_me: false,
                                                 created_at:
                                                     "2026-02-07T13:15:00Z",
                                                 recent_comments: [
@@ -174,6 +182,8 @@ export default {
                                                             "I'm in! Let's meet at the library.",
                                                         created_at:
                                                             "2026-02-07T13:20:00Z",
+                                                        author_id:
+                                                            "f8a0b2c4-d6e7-9f1a-3b4c-5d6e7f8a9b0c",
                                                         author_name:
                                                             "David Lee",
                                                         author_avatar: null,
@@ -1215,6 +1225,12 @@ export default {
                         type: "integer",
                         example: 1,
                     },
+                    author_id: {
+                        type: "string",
+                        format: "uuid",
+                        description: "User ID of the post author",
+                        example: "b4c6d8e0-f2a3-5b7c-9d0e-1f2a3b4c5d6e",
+                    },
                     author_name: {
                         type: "string",
                         example: "John Doe",
@@ -1276,6 +1292,12 @@ export default {
                                     type: "string",
                                     format: "date-time",
                                     example: "2026-02-07T14:30:00Z",
+                                },
+                                author_id: {
+                                    type: "string",
+                                    format: "uuid",
+                                    description: "User ID of the comment author",
+                                    example: "c5d7e9f1-a3b4-6c8d-0e1f-2a3b4c5d6e7f",
                                 },
                                 author_name: {
                                     type: "string",

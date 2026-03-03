@@ -675,7 +675,8 @@ export default {
         },
         "/community/groups/{id}/join": {
             post: {
-                summary: "Join a community group",
+                summary: "Toggle group membership (join/unjoin)",
+                description: "Join a group if not a member, or leave the group if already a member. Works like a toggle.",
                 tags: ["Community"],
                 security: [{ bearerAuth: [] }],
                 parameters: [
@@ -686,12 +687,12 @@ export default {
                         schema: {
                             type: "integer",
                         },
-                        description: "Group ID to join",
+                        description: "Group ID to join/unjoin",
                     },
                 ],
                 responses: {
                     200: {
-                        description: "Successfully joined the group",
+                        description: "Successfully toggled group membership",
                         content: {
                             "application/json": {
                                 schema: {
@@ -702,13 +703,15 @@ export default {
                                             example:
                                                 "Successfully joined the group",
                                         },
+                                        joined: {
+                                            type: "boolean",
+                                            description: "true if joined, false if left",
+                                            example: true,
+                                        },
                                     },
                                 },
                             },
                         },
-                    },
-                    400: {
-                        description: "Already a member of this group",
                     },
                     404: {
                         description: "Group not found",

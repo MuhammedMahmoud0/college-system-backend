@@ -423,22 +423,32 @@ export const joinGroup = async (req, res) => {
         });
 
         if (existingMembership) {
+            // Unjoin: delete the membership
+            await prisma.group_members.delete({
+                where: {
+                    group_id_user_id: {
+                        group_id: groupId,
+                        user_id: userId,
+                    },
+                },
+            });
             return res
-                .status(400)
-                .json({ error: "Already a member of this group" });
+                .status(200)
+                .json({ message: "Successfully left the group", joined: false });
+        } else {
+            // Join: create new membership
+            await prisma.group_members.create({
+                data: {
+                    group_id: groupId,
+                    user_id: userId,
+                },
+            });
+            return res
+                .status(200)
+                .json({ message: "Successfully joined the group", joined: true });
         }
-
-        // Join the group
-        await prisma.group_members.create({
-            data: {
-                group_id: groupId,
-                user_id: userId,
-            },
-        });
-
-        res.status(200).json({ message: "Successfully joined the group" });
     } catch (err) {
-        logger.error("Error joining group:", err);
+        logger.error("Error toggling group membership:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 };

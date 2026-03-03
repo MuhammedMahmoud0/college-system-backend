@@ -12,6 +12,7 @@ router.post('/posts', communityController.createPost);
 router.patch('/posts/:id', communityController.updatePost);
 router.delete('/posts/:id', communityController.deletePost);
 router.get('/feed', communityController.getCommunityFeed);
+router.get('/posts/user/:userId', communityController.getUserPosts);
 router.post('/posts/:id/like', communityController.togglePostLike);
 router.post('/posts/:id/comment', communityController.addPostComment);
 

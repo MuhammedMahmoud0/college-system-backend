@@ -79,6 +79,7 @@ export const getCommunityFeed = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
+        const currentUserId = req.user.id;
 
         const posts = await prisma.community_posts.findMany({
             skip,
@@ -116,6 +117,14 @@ export const getCommunityFeed = async (req, res) => {
                         },
                     },
                 },
+                post_likes: {
+                    where: {
+                        user_id: currentUserId,
+                    },
+                    select: {
+                        user_id: true,
+                    },
+                },
             },
             orderBy: { created_at: "desc" },
         });
@@ -128,6 +137,7 @@ export const getCommunityFeed = async (req, res) => {
             group_name: post.community_groups?.name || null,
             likes_count: post._count.post_likes,
             comments_count: post._count.post_comments,
+            is_liked_by_me: post.post_likes.length > 0,
             recent_comments: post.post_comments.map((comment) => ({
                 id: comment.id,
                 content: comment.content,
@@ -135,6 +145,7 @@ export const getCommunityFeed = async (req, res) => {
                 author_name: comment.users.full_name,
                 author_avatar: comment.users.avatar_url,
             })),
+            post_likes: undefined,
         }));
 
         res.status(200).json({ posts: transformedPosts });
@@ -709,6 +720,127 @@ export const getMyGroups = async (req, res) => {
         res.status(200).json({ groups });
     } catch (err) {
         logger.error("Error fetching user groups:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// GET /api/community/posts/user/:userId - Get all posts by a specific user
+export const getUserPosts = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        const currentUserId = req.user.id;
+
+        // Check if the user exists
+        const user = await prisma.users.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                full_name: true,
+                avatar_url: true,
+                role: true,
+            },
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Fetch posts by this user
+        const posts = await prisma.community_posts.findMany({
+            where: {
+                author_id: userId,
+            },
+            skip,
+            take: limit,
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        avatar_url: true,
+                    },
+                },
+                community_groups: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+                _count: {
+                    select: {
+                        post_likes: true,
+                        post_comments: true,
+                    },
+                },
+                post_comments: {
+                    take: 3,
+                    orderBy: { created_at: "desc" },
+                    include: {
+                        users: {
+                            select: {
+                                id: true,
+                                full_name: true,
+                                avatar_url: true,
+                            },
+                        },
+                    },
+                },
+                post_likes: {
+                    where: {
+                        user_id: currentUserId,
+                    },
+                    select: {
+                        user_id: true,
+                    },
+                },
+            },
+            orderBy: { created_at: "desc" },
+        });
+
+        // Get total count for pagination
+        const totalPosts = await prisma.community_posts.count({
+            where: { author_id: userId },
+        });
+
+        // Transform posts to include computed fields
+        const transformedPosts = posts.map((post) => ({
+            ...post,
+            author_name: post.users.full_name,
+            author_avatar: post.users.avatar_url,
+            group_name: post.community_groups?.name || null,
+            likes_count: post._count.post_likes,
+            comments_count: post._count.post_comments,
+            is_liked_by_me: post.post_likes.length > 0,
+            recent_comments: post.post_comments.map((comment) => ({
+                id: comment.id,
+                content: comment.content,
+                created_at: comment.created_at,
+                author_name: comment.users.full_name,
+                author_avatar: comment.users.avatar_url,
+            })),
+            post_likes: undefined,
+        }));
+
+        res.status(200).json({
+            user: {
+                id: user.id,
+                full_name: user.full_name,
+                avatar_url: user.avatar_url,
+                role: user.role,
+            },
+            posts: transformedPosts,
+            pagination: {
+                page,
+                limit,
+                total: totalPosts,
+                totalPages: Math.ceil(totalPosts / limit),
+            },
+        });
+    } catch (err) {
+        logger.error("Error fetching user posts:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 };

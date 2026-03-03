@@ -28,6 +28,25 @@ model announcements {
   users      users         @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
+model academic_calendar {
+  id                     Int       @id @default(autoincrement())
+  event_name             String
+  event_type             String    // e.g., "semester_start", "registration_deadline", "exam_week", "holiday", etc.
+  event_date             DateTime  @db.Date
+  end_date               DateTime? @db.Date
+  description            String?
+  semester               String?   // e.g., "Fall 2026", "Spring 2027"
+  academic_year          String?   // e.g., "2026-2027"
+  created_at             DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime? @updatedAt @db.Timestamptz(6)
+  created_by_user_id     String?   @db.Uuid
+  users                  users?    @relation(fields: [created_by_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([event_date])
+  @@index([event_type])
+  @@index([semester])
+}
+
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model attendance {
   id              Int             @id @default(autoincrement())
@@ -372,6 +391,7 @@ model users {
   advised_students             student_profiles[] @relation("FacultyAdvisor")
   task_submissions             task_submissions[]
   tutorials_labs               tutorials_labs[]
+  academic_calendar            academic_calendar[]
 
   @@index([email])
   @@index([role])

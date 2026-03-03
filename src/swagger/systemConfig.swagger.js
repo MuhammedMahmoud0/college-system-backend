@@ -2,36 +2,108 @@ export default {
     paths: {
         // ── Academic Calendar ────────────────────────────────────────────
         "/config/calendar": {
+            get: {
+                tags: ["System Configuration"],
+                summary: "Get all academic calendar events",
+                description:
+                    "Retrieve all academic calendar events with optional filtering by semester, academic year, or event type. Requires Admin or Super Admin role.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "semester",
+                        schema: { type: "string" },
+                        description: 'Filter by semester (e.g., "Fall 2026")',
+                        required: false,
+                    },
+                    {
+                        in: "query",
+                        name: "academic_year",
+                        schema: { type: "string" },
+                        description: 'Filter by academic year (e.g., "2026-2027")',
+                        required: false,
+                    },
+                    {
+                        in: "query",
+                        name: "event_type",
+                        schema: { type: "string" },
+                        description:
+                            'Filter by event type (e.g., "semester_start", "exam_week", "holiday")',
+                        required: false,
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Calendar events retrieved successfully.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/AcademicCalendarListResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Unauthorized.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Forbidden – Admin or Super Admin only.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
             post: {
                 tags: ["System Configuration"],
-                summary: "Set academic calendar configuration (stateless)",
+                summary: "Create a new academic calendar event",
                 description:
-                    "Accepts static academic calendar settings and returns them as confirmation. No data is stored in the database. Requires Admin or Super Admin role.",
+                    "Add a new event to the academic calendar. Requires Admin or Super Admin role.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
                     content: {
                         "application/json": {
                             schema: {
-                                $ref: "#/components/schemas/AcademicCalendarRequest",
+                                $ref: "#/components/schemas/CreateAcademicCalendarEventRequest",
                             },
                         },
                     },
                 },
                 responses: {
-                    200: {
-                        description:
-                            "Calendar configuration received successfully.",
+                    201: {
+                        description: "Calendar event created successfully.",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/AcademicCalendarResponse",
+                                    $ref: "#/components/schemas/AcademicCalendarEventResponse",
                                 },
                             },
                         },
                     },
                     400: {
-                        description: "Missing required fields.",
+                        description: "Missing required fields or invalid date format.",
                         content: {
                             "application/json": {
                                 schema: {
@@ -52,6 +124,182 @@ export default {
                     },
                     403: {
                         description: "Forbidden – Admin or Super Admin only.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/config/calendar/{id}": {
+            patch: {
+                tags: ["System Configuration"],
+                summary: "Update an academic calendar event",
+                description:
+                    "Update an existing calendar event. All fields are optional. Requires Admin or Super Admin role.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Calendar event ID",
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/UpdateAcademicCalendarEventRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Calendar event updated successfully.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/AcademicCalendarEventResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description:
+                            "No updatable fields provided or invalid date format.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Unauthorized.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Forbidden – Admin or Super Admin only.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Calendar event not found.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            delete: {
+                tags: ["System Configuration"],
+                summary: "Delete an academic calendar event",
+                description:
+                    "Remove an event from the academic calendar. Requires Admin or Super Admin role.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Calendar event ID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Calendar event deleted successfully.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: {
+                                            type: "string",
+                                            example:
+                                                "Academic calendar event deleted successfully.",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Unauthorized.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Forbidden – Admin or Super Admin only.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Calendar event not found.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error.",
                         content: {
                             "application/json": {
                                 schema: {
@@ -412,50 +660,180 @@ export default {
 
     // ── Schemas ──────────────────────────────────────────────────────────────
     schemas: {
-        AcademicCalendarRequest: {
+        ErrorResponse: {
             type: "object",
-            required: ["semester_start", "semester_end"],
             properties: {
-                semester_start: {
+                error: { type: "string", example: "Error message" },
+            },
+        },
+        AcademicCalendarEventObject: {
+            type: "object",
+            properties: {
+                id: { type: "integer", example: 1 },
+                event_name: {
                     type: "string",
-                    format: "date",
-                    example: "2026-02-01",
+                    example: "Fall Semester Start",
                 },
-                registration_deadline: {
+                event_type: {
+                    type: "string",
+                    example: "semester_start",
+                    description:
+                        'Event type (e.g., semester_start, registration_deadline, exam_week, holiday, midterm, etc.)',
+                },
+                event_date: {
                     type: "string",
                     format: "date",
-                    example: "2026-02-15",
+                    example: "2026-09-01",
+                },
+                end_date: {
+                    type: "string",
+                    format: "date",
                     nullable: true,
+                    example: "2026-09-05",
+                    description: "Optional end date for multi-day events",
                 },
-                midterm_start: {
+                description: {
                     type: "string",
-                    format: "date",
-                    example: "2026-03-15",
                     nullable: true,
+                    example: "First day of Fall 2026 semester",
                 },
-                holiday_name: {
+                semester: {
                     type: "string",
-                    example: "Spring Break",
                     nullable: true,
+                    example: "Fall 2026",
                 },
-                holiday_date: {
+                academic_year: {
                     type: "string",
-                    format: "date",
-                    example: "2026-04-01",
                     nullable: true,
+                    example: "2026-2027",
                 },
-                semester_end: {
+                created_at: {
                     type: "string",
-                    format: "date",
-                    example: "2026-06-30",
+                    format: "date-time",
+                    example: "2026-03-03T10:00:00.000Z",
+                },
+                updated_at: {
+                    type: "string",
+                    format: "date-time",
+                    example: "2026-03-03T10:00:00.000Z",
+                },
+                created_by_user_id: {
+                    type: "string",
+                    format: "uuid",
+                    nullable: true,
+                    example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                },
+                users: {
+                    type: "object",
+                    nullable: true,
+                    properties: {
+                        id: {
+                            type: "string",
+                            format: "uuid",
+                            example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                        },
+                        full_name: { type: "string", example: "Admin User" },
+                    },
                 },
             },
         },
-        AcademicCalendarResponse: {
+        AcademicCalendarListResponse: {
             type: "object",
             properties: {
-                message: { type: "string" },
-                data: { $ref: "#/components/schemas/AcademicCalendarRequest" },
+                message: {
+                    type: "string",
+                    example: "Academic calendar retrieved successfully.",
+                },
+                data: {
+                    type: "array",
+                    items: {
+                        $ref: "#/components/schemas/AcademicCalendarEventObject",
+                    },
+                },
+            },
+        },
+        AcademicCalendarEventResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Academic calendar event created successfully.",
+                },
+                data: {
+                    $ref: "#/components/schemas/AcademicCalendarEventObject",
+                },
+            },
+        },
+        CreateAcademicCalendarEventRequest: {
+            type: "object",
+            required: ["event_name", "event_type", "event_date"],
+            properties: {
+                event_name: {
+                    type: "string",
+                    example: "Fall Semester Start",
+                },
+                event_type: {
+                    type: "string",
+                    example: "semester_start",
+                    description:
+                        'Event type: semester_start, semester_end, registration_deadline, exam_week, midterm, holiday, etc.',
+                },
+                event_date: {
+                    type: "string",
+                    format: "date",
+                    example: "2026-09-01",
+                },
+                end_date: {
+                    type: "string",
+                    format: "date",
+                    nullable: true,
+                    example: "2026-09-05",
+                    description: "Optional end date for multi-day events",
+                },
+                description: {
+                    type: "string",
+                    nullable: true,
+                    example: "First day of Fall 2026 semester",
+                },
+                semester: {
+                    type: "string",
+                    nullable: true,
+                    example: "Fall 2026",
+                },
+                academic_year: {
+                    type: "string",
+                    nullable: true,
+                    example: "2026-2027",
+                },
+            },
+        },
+        UpdateAcademicCalendarEventRequest: {
+            type: "object",
+            properties: {
+                event_name: { type: "string", example: "Updated Event Name" },
+                event_type: { type: "string", example: "holiday" },
+                event_date: {
+                    type: "string",
+                    format: "date",
+                    example: "2026-09-02",
+                },
+                end_date: {
+                    type: "string",
+                    format: "date",
+                    nullable: true,
+                    example: "2026-09-06",
+                },
+                description: {
+                    type: "string",
+                    nullable: true,
+                    example: "Updated description",
+                },
+                semester: { type: "string", nullable: true, example: "Fall 2026" },
+                academic_year: {
+                    type: "string",
+                    nullable: true,
+                    example: "2026-2027",
+                },
             },
         },
         AnnouncementObject: {

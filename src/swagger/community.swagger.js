@@ -374,6 +374,120 @@ export default {
                 },
             },
         },
+        "/community/posts/user/{userId}": {
+            get: {
+                summary: "Get all posts by a specific user",
+                description:
+                    "Retrieve all posts created by a specific user (for viewing user profiles). Accessible to all authenticated users.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "userId",
+                        required: true,
+                        schema: {
+                            type: "string",
+                            format: "uuid",
+                        },
+                        description: "User ID whose posts to retrieve",
+                    },
+                    {
+                        in: "query",
+                        name: "page",
+                        schema: {
+                            type: "integer",
+                            default: 1,
+                        },
+                        description: "Page number for pagination",
+                    },
+                    {
+                        in: "query",
+                        name: "limit",
+                        schema: {
+                            type: "integer",
+                            default: 10,
+                        },
+                        description: "Number of posts per page",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Successfully retrieved user posts",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        user: {
+                                            type: "object",
+                                            properties: {
+                                                id: {
+                                                    type: "string",
+                                                    format: "uuid",
+                                                    example:
+                                                        "f6c1fcd5-4d22-4914-87ed-ef86e4bae2e2",
+                                                },
+                                                full_name: {
+                                                    type: "string",
+                                                    example: "John Doe",
+                                                },
+                                                avatar_url: {
+                                                    type: "string",
+                                                    nullable: true,
+                                                    example:
+                                                        "https://storage.example.com/avatars/john-d.jpg",
+                                                },
+                                                role: {
+                                                    type: "string",
+                                                    example: "student",
+                                                },
+                                            },
+                                        },
+                                        posts: {
+                                            type: "array",
+                                            items: {
+                                                $ref: "#/components/schemas/CommunityFeedPost",
+                                            },
+                                        },
+                                        pagination: {
+                                            type: "object",
+                                            properties: {
+                                                page: {
+                                                    type: "integer",
+                                                    example: 1,
+                                                },
+                                                limit: {
+                                                    type: "integer",
+                                                    example: 10,
+                                                },
+                                                total: {
+                                                    type: "integer",
+                                                    example: 45,
+                                                },
+                                                totalPages: {
+                                                    type: "integer",
+                                                    example: 5,
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Unauthorized",
+                    },
+                    404: {
+                        description: "User not found",
+                    },
+                    500: {
+                        description: "Internal server error",
+                    },
+                },
+            },
+        },
         "/community/groups": {
             post: {
                 summary: "Create a new community group",
@@ -1133,6 +1247,12 @@ export default {
                     comments_count: {
                         type: "integer",
                         example: 5,
+                    },
+                    is_liked_by_me: {
+                        type: "boolean",
+                        description:
+                            "Whether the current authenticated user has liked this post",
+                        example: true,
                     },
                     created_at: {
                         type: "string",

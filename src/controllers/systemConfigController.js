@@ -24,43 +24,219 @@ const formatAnnouncement = (announcement) => ({
 });
 
 // ─────────────────────────────────────────────
-// 1. Academic Calendar (Stateless)
+// 1. Academic Calendar (Database-backed)
 // ─────────────────────────────────────────────
 
 /**
- * POST /api/v1/config/calendar
- * Accept static calendar configuration and return it as confirmation.
- * No database storage.
+ * GET /api/v1/config/calendar
+ * Retrieve all academic calendar events.
  */
-export const setAcademicCalendar = (req, res) => {
-    const {
-        semester_start,
-        registration_deadline,
-        midterm_start,
-        holiday_name,
-        holiday_date,
-        semester_end,
-    } = req.body;
+export const getAcademicCalendar = async (req, res) => {
+    try {
+        const { semester, academic_year, event_type } = req.query;
 
-    if (!semester_start || !semester_end) {
-        return res
-            .status(400)
-            .json({ error: "semester_start and semester_end are required." });
+        const where = {};
+        if (semester) where.semester = semester;
+        if (academic_year) where.academic_year = academic_year;
+        if (event_type) where.event_type = event_type;
+
+        const events = await prisma.academic_calendar.findMany({
+            where,
+            orderBy: { event_date: "asc" },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                    },
+                },
+            },
+        });
+
+        return res.status(200).json({
+            message: "Academic calendar retrieved successfully.",
+            data: events,
+        });
+    } catch (err) {
+        logger.error("Error fetching academic calendar:", err);
+        return res.status(500).json({ error: "Internal server error." });
     }
+};
 
-    const calendar = {
-        semester_start,
-        registration_deadline: registration_deadline ?? null,
-        midterm_start: midterm_start ?? null,
-        holiday_name: holiday_name ?? null,
-        holiday_date: holiday_date ?? null,
-        semester_end,
-    };
+/**
+ * POST /api/v1/config/calendar
+ * Create a new academic calendar event.
+ */
+export const createAcademicCalendarEvent = async (req, res) => {
+    try {
+        const created_by_user_id = req.user.id;
+        const {
+            event_name,
+            event_type,
+            event_date,
+            end_date,
+            description,
+            semester,
+            academic_year,
+        } = req.body;
 
-    return res.status(200).json({
-        message: "Academic calendar configuration received.",
-        data: calendar,
-    });
+        if (!event_name || !event_type || !event_date) {
+            return res.status(400).json({
+                error: "event_name, event_type, and event_date are required.",
+            });
+        }
+
+        // Validate date format
+        const parsedEventDate = new Date(event_date);
+        if (isNaN(parsedEventDate.getTime())) {
+            return res.status(400).json({ error: "Invalid event_date format." });
+        }
+
+        let parsedEndDate = null;
+        if (end_date) {
+            parsedEndDate = new Date(end_date);
+            if (isNaN(parsedEndDate.getTime())) {
+                return res.status(400).json({ error: "Invalid end_date format." });
+            }
+        }
+
+        const event = await prisma.academic_calendar.create({
+            data: {
+                event_name,
+                event_type,
+                event_date: parsedEventDate,
+                end_date: parsedEndDate,
+                description: description || null,
+                semester: semester || null,
+                academic_year: academic_year || null,
+                created_by_user_id,
+            },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                    },
+                },
+            },
+        });
+
+        return res.status(201).json({
+            message: "Academic calendar event created successfully.",
+            data: event,
+        });
+    } catch (err) {
+        logger.error("Error creating academic calendar event:", err);
+        return res.status(500).json({ error: "Internal server error." });
+    }
+};
+
+/**
+ * PATCH /api/v1/config/calendar/:id
+ * Update an existing academic calendar event.
+ */
+export const updateAcademicCalendarEvent = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            event_name,
+            event_type,
+            event_date,
+            end_date,
+            description,
+            semester,
+            academic_year,
+        } = req.body;
+
+        const updateData = {};
+
+        if (event_name) updateData.event_name = event_name;
+        if (event_type) updateData.event_type = event_type;
+
+        if (event_date) {
+            const parsedEventDate = new Date(event_date);
+            if (isNaN(parsedEventDate.getTime())) {
+                return res.status(400).json({ error: "Invalid event_date format." });
+            }
+            updateData.event_date = parsedEventDate;
+        }
+
+        if (end_date !== undefined) {
+            if (end_date === null) {
+                updateData.end_date = null;
+            } else {
+                const parsedEndDate = new Date(end_date);
+                if (isNaN(parsedEndDate.getTime())) {
+                    return res.status(400).json({ error: "Invalid end_date format." });
+                }
+                updateData.end_date = parsedEndDate;
+            }
+        }
+
+        if (description !== undefined) updateData.description = description;
+        if (semester !== undefined) updateData.semester = semester;
+        if (academic_year !== undefined) updateData.academic_year = academic_year;
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ error: "No updatable fields provided." });
+        }
+
+        const existing = await prisma.academic_calendar.findUnique({
+            where: { id: parseInt(id) },
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: "Calendar event not found." });
+        }
+
+        const updated = await prisma.academic_calendar.update({
+            where: { id: parseInt(id) },
+            data: updateData,
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                    },
+                },
+            },
+        });
+
+        return res.status(200).json({
+            message: "Academic calendar event updated successfully.",
+            data: updated,
+        });
+    } catch (err) {
+        logger.error("Error updating academic calendar event:", err);
+        return res.status(500).json({ error: "Internal server error." });
+    }
+};
+
+/**
+ * DELETE /api/v1/config/calendar/:id
+ * Delete an academic calendar event.
+ */
+export const deleteAcademicCalendarEvent = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const existing = await prisma.academic_calendar.findUnique({
+            where: { id: parseInt(id) },
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: "Calendar event not found." });
+        }
+
+        await prisma.academic_calendar.delete({ where: { id: parseInt(id) } });
+
+        return res.status(200).json({
+            message: "Academic calendar event deleted successfully.",
+        });
+    } catch (err) {
+        logger.error("Error deleting academic calendar event:", err);
+        return res.status(500).json({ error: "Internal server error." });
+    }
 };
 
 // ─────────────────────────────────────────────

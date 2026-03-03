@@ -1,6 +1,9 @@
 import express from "express";
 import {
-    setAcademicCalendar,
+    getAcademicCalendar,
+    createAcademicCalendarEvent,
+    updateAcademicCalendarEvent,
+    deleteAcademicCalendarEvent,
     createAnnouncement,
     getAnnouncements,
     updateAnnouncement,
@@ -19,7 +22,10 @@ router.use(authMiddleware);
 router.use(authorizationMiddleware("admin", "super_admin"));
 
 // ── Academic Calendar ──────────────────────────────────────────────────────
-router.post("/calendar", setAcademicCalendar);
+router.get("/calendar", getAcademicCalendar);
+router.post("/calendar", createAcademicCalendarEvent);
+router.patch("/calendar/:id", updateAcademicCalendarEvent);
+router.delete("/calendar/:id", deleteAcademicCalendarEvent);
 
 // ── Registration ───────────────────────────────────────────────────────────
 router.post("/registration-open", openRegistration);

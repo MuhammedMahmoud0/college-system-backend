@@ -30,7 +30,14 @@ function generateQRCode(sessionId) {
  */
 export const startAttendanceSession = async (req, res) => {
     try {
-        const { lecture_id, tutorial_lab_id, session_date } = req.body;
+        const {
+            lecture_id,
+            tutorial_lab_id,
+            session_date,
+            isLive = false,
+            longitude,
+            latitude,
+        } = req.body;
         const instructorId = req.user.userId;
 
         // Validate that at least one of lecture_id or tutorial_lab_id is provided
@@ -132,6 +139,9 @@ export const startAttendanceSession = async (req, res) => {
             lectureId: lecture_id ? parseInt(lecture_id) : null,
             tutorialLabId: tutorial_lab_id ? parseInt(tutorial_lab_id) : null,
             sessionDate: session_date,
+            isLive,
+            longitude: longitude ?? null,
+            latitude: latitude ?? null,
             qrCode,
             qrExpiry,
             attendees: new Set(), // Set of user_ids who scanned
@@ -162,6 +172,9 @@ export const startAttendanceSession = async (req, res) => {
             sessionId,
             qrCode,
             qrExpiry,
+            isLive,
+            longitude: longitude ?? null,
+            latitude: latitude ?? null,
             enrolledStudents,
         });
     } catch (err) {
@@ -337,6 +350,9 @@ export const endAttendanceSession = async (req, res) => {
             status: session.attendees.has(student.user_id)
                 ? "present"
                 : "absent",
+            is_live: session.isLive ?? false,
+            longitude: session.longitude ?? null,
+            latitude: session.latitude ?? null,
         }));
 
         // Bulk insert attendance records
@@ -848,6 +864,121 @@ export const getStudentsAttendance = async (req, res) => {
         });
     } catch (err) {
         logger.error("Error fetching students attendance:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Get all attendance sessions with their date and all students for each session
+ * GET /api/v1/attendance/sessions?lecture_id=&tutorial_lab_id=
+ */
+export const getAllAttendanceSessions = async (req, res) => {
+    try {
+        const { lecture_id, tutorial_lab_id } = req.query;
+        const instructorId = req.user.userId;
+
+        if (!lecture_id && !tutorial_lab_id) {
+            return res.status(400).json({
+                error: "Either lecture_id or tutorial_lab_id is required",
+            });
+        }
+        if (lecture_id && tutorial_lab_id) {
+            return res.status(400).json({
+                error: "Provide either lecture_id or tutorial_lab_id, not both",
+            });
+        }
+
+        // Verify the instructor owns this lecture/tutorial
+        if (lecture_id) {
+            const lecture = await prisma.lectures.findUnique({
+                where: { lecture_id: parseInt(lecture_id) },
+            });
+            if (!lecture) {
+                return res.status(404).json({ error: "Lecture not found" });
+            }
+            if (lecture.instructor_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to view sessions for this lecture",
+                });
+            }
+        }
+
+        if (tutorial_lab_id) {
+            const tutorial = await prisma.tutorials_labs.findUnique({
+                where: { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            });
+            if (!tutorial) {
+                return res
+                    .status(404)
+                    .json({ error: "Tutorial/Lab not found" });
+            }
+            if (tutorial.ta_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to view sessions for this tutorial",
+                });
+            }
+        }
+
+        // Fetch all attendance records for this lecture/tutorial, including student info
+        const records = await prisma.attendance.findMany({
+            where: lecture_id
+                ? { lecture_id: parseInt(lecture_id) }
+                : { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                        avatar_url: true,
+                        student_profiles: {
+                            select: { student_id: true },
+                        },
+                    },
+                },
+            },
+            orderBy: { session_date: "asc" },
+        });
+
+        // Group records by session_date
+        const sessionsMap = new Map();
+        for (const record of records) {
+            const dateKey = new Date(record.session_date)
+                .toISOString()
+                .split("T")[0];
+
+            if (!sessionsMap.has(dateKey)) {
+                sessionsMap.set(dateKey, {
+                    session_date: dateKey,
+                    lecture_id: record.lecture_id,
+                    tutorial_lab_id: record.tutorial_lab_id,
+                    is_live: record.is_live,
+                    longitude: record.longitude,
+                    latitude: record.latitude,
+                    students: [],
+                });
+            }
+
+            sessionsMap.get(dateKey).students.push({
+                student_user_id: record.users.id,
+                student_id: record.users.student_profiles?.student_id ?? null,
+                full_name: record.users.full_name,
+                email: record.users.email,
+                avatar_url: record.users.avatar_url ?? null,
+                status: record.status,
+            });
+        }
+
+        const sessions = Array.from(sessionsMap.values());
+
+        res.status(200).json({
+            total_sessions: sessions.length,
+            lecture_id: lecture_id ? parseInt(lecture_id) : null,
+            tutorial_lab_id: tutorial_lab_id ? parseInt(tutorial_lab_id) : null,
+            sessions,
+        });
+    } catch (err) {
+        logger.error("Error fetching all attendance sessions:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 };

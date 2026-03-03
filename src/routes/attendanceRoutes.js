@@ -8,6 +8,7 @@ import {
     toggleStudentAttendance,
     updateAttendanceRecord,
     getStudentsAttendance,
+    getAllAttendanceSessions,
 } from "../controllers/attendanceController.js";
 import {
     authMiddleware,
@@ -30,6 +31,14 @@ router.get(
     authMiddleware,
     authorizationMiddleware("doctor", "teaching_assistant", "admin"),
     getActiveSessions
+);
+
+// Get all attendance sessions with students grouped by date - MUST come before /sessions/:sessionId
+router.get(
+    "/sessions",
+    authMiddleware,
+    authorizationMiddleware("doctor", "teaching_assistant", "admin"),
+    getAllAttendanceSessions
 );
 
 // Get session details

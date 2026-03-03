@@ -144,6 +144,158 @@ export default {
                 },
             },
         },
+        "/attendance/sessions": {
+            get: {
+                tags: ["Attendance"],
+                summary: "Get all attendance sessions with students",
+                description:
+                    "Returns all saved attendance sessions grouped by date, each with the full list of students and their status. Requires either lecture_id or tutorial_lab_id.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "lecture_id",
+                        in: "query",
+                        description:
+                            "Lecture ID (provide either this or tutorial_lab_id)",
+                        schema: { type: "integer", example: 1 },
+                    },
+                    {
+                        name: "tutorial_lab_id",
+                        in: "query",
+                        description:
+                            "Tutorial/Lab ID (provide either this or lecture_id)",
+                        schema: { type: "integer", example: 2 },
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Sessions retrieved successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        total_sessions: {
+                                            type: "integer",
+                                            example: 5,
+                                        },
+                                        lecture_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                            example: 1,
+                                        },
+                                        tutorial_lab_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                            example: null,
+                                        },
+                                        sessions: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    session_date: {
+                                                        type: "string",
+                                                        format: "date",
+                                                        example: "2026-02-10",
+                                                    },
+                                                    lecture_id: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                    },
+                                                    tutorial_lab_id: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                    },
+                                                    is_live: {
+                                                        type: "boolean",
+                                                        example: false,
+                                                    },
+                                                    longitude: {
+                                                        type: "number",
+                                                        nullable: true,
+                                                        example: 123885,
+                                                    },
+                                                    latitude: {
+                                                        type: "number",
+                                                        nullable: true,
+                                                        example: 2326,
+                                                    },
+                                                    students: {
+                                                        type: "array",
+                                                        items: {
+                                                            type: "object",
+                                                            properties: {
+                                                                student_user_id:
+                                                                    {
+                                                                        type: "string",
+                                                                        format: "uuid",
+                                                                    },
+                                                                student_id: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                },
+                                                                full_name: {
+                                                                    type: "string",
+                                                                },
+                                                                email: {
+                                                                    type: "string",
+                                                                },
+                                                                avatar_url: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                },
+                                                                status: {
+                                                                    type: "string",
+                                                                    enum: [
+                                                                        "present",
+                                                                        "absent",
+                                                                    ],
+                                                                },
+                                                            },
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description: "Validation error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Not authorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Lecture or tutorial not found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
         "/attendance/scan": {
             post: {
                 tags: ["Attendance"],

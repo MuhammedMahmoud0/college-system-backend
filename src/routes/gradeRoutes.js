@@ -3,40 +3,59 @@ import {
     authMiddleware,
     authorizationMiddleware,
 } from "../middlewares/authMiddleware.js";
-import { updateGrade, getGrade } from "../controllers/gradeController.js";
+import {
+    updateGradeByLecture,
+    updateGradeByTutorialLab,
+    getGradesByLecture,
+    getGradesByTutorialLab,
+} from "../controllers/gradeController.js";
 
 const router = Router();
 
 router.use(authMiddleware);
 
 /**
- * PUT /api/v1/grades/enrollment/:enrollmentId
- * Update grades (mid, work, final, letter grade) for a student enrollment.
+ * PUT /api/v1/grades/lecture/:lectureId/student/:studentId
+ * Update a specific student's grades within a lecture.
+ * Accessible by the lecture's instructor (doctor), admin, or super_admin.
  */
 router.put(
-    "/enrollment/:enrollmentId",
-    authorizationMiddleware(
-        "doctor",
-        "teaching_assistant",
-        "admin",
-        "super_admin"
-    ),
-    updateGrade
+    "/lecture/:lectureId/student/:studentId",
+    authorizationMiddleware("doctor", "admin", "super_admin"),
+    updateGradeByLecture
 );
 
 /**
- * GET /api/v1/grades/enrollment/:enrollmentId
- * Get grade details for a specific enrollment.
+ * PUT /api/v1/grades/tutorial-lab/:tutorialLabId/student/:studentId
+ * Update a specific student's grades within a tutorial/lab.
+ * Accessible by the tutorial/lab's TA, admin, or super_admin.
+ */
+router.put(
+    "/tutorial-lab/:tutorialLabId/student/:studentId",
+    authorizationMiddleware("teaching_assistant", "admin", "super_admin"),
+    updateGradeByTutorialLab
+);
+
+/**
+ * GET /api/v1/grades/lecture/:lectureId
+ * List all students' grades for a specific lecture.
+ * Accessible by the lecture's instructor (doctor), admin, or super_admin.
  */
 router.get(
-    "/enrollment/:enrollmentId",
-    authorizationMiddleware(
-        "doctor",
-        "teaching_assistant",
-        "admin",
-        "super_admin"
-    ),
-    getGrade
+    "/lecture/:lectureId",
+    authorizationMiddleware("doctor", "admin", "super_admin"),
+    getGradesByLecture
+);
+
+/**
+ * GET /api/v1/grades/tutorial-lab/:tutorialLabId
+ * List all students' grades for a specific tutorial/lab.
+ * Accessible by the tutorial/lab's TA, admin, or super_admin.
+ */
+router.get(
+    "/tutorial-lab/:tutorialLabId",
+    authorizationMiddleware("teaching_assistant", "admin", "super_admin"),
+    getGradesByTutorialLab
 );
 
 export default router;

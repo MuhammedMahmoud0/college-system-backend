@@ -257,34 +257,59 @@ export const getGradeBreakdown = async (req, res) => {
         if (!enrollment)
             return res.status(404).json({ error: "Enrollment not found" });
 
-        // 1. Get raw values
-        const mid = enrollment.mid_score || 0;
-        const work = enrollment.work_score || 0;
-        const final = enrollment.final_score || 0;
+        // Fetch grade distribution for this lecture (if set)
+        const distribution = await prisma.grade_distributions.findUnique({
+            where: { lecture_id: enrollment.lecture_id },
+        });
 
-        // 2. Calculate Total
-        const total = mid + work + final;
+        const mid = enrollment.mid_score ?? null;
+        const work = enrollment.work_score ?? null;
+        const final = enrollment.final_score ?? null;
 
-        // 3. VALIDATION: Check if total exceeds 100
-        if (total > 100) {
-            return res.status(400).json({
-                error: "Data Consistency Error",
-                message: `Total score (${total}) exceeds the maximum allowed (100). Please check database records.`,
-                breakdown: { mid, work, final },
-            });
-        }
+        const midMax = distribution?.mid_max ?? null;
+        const workMax = distribution?.work_max ?? null;
+        const finalMax = distribution?.final_max ?? null;
 
-        // 4. Send successful response if total <= 100
+        // Calculate total only from scores that are present
+        const presentScores = [mid, work, final].filter((v) => v !== null);
+        const total =
+            presentScores.length > 0
+                ? parseFloat(
+                      presentScores.reduce((a, b) => a + b, 0).toFixed(2)
+                  )
+                : null;
+
         res.status(200).json({
-            courseId: courseId,
-            courseName: enrollment.lectures.course_offerings.courses.name,
-            totalGrade: total,
+            lecture_id: parseInt(courseId),
+            course_code: enrollment.lectures.course_offerings.course_code,
+            course_name: enrollment.lectures.course_offerings.courses.name,
+            credits: enrollment.lectures.course_offerings.courses.credits,
+            letter_grade: enrollment.grade ?? "In Progress",
+            total_score: total,
+            distribution: distribution
+                ? {
+                      work_max: distribution.work_max,
+                      mid_max: distribution.mid_max,
+                      final_max: distribution.final_max,
+                  }
+                : null,
             breakdown: [
-                { category: "Midterm", score: mid, maxScore: 30 },
-                { category: "Work/Assignments", score: work, maxScore: 30 },
-                { category: "Final Exam", score: final, maxScore: 60 },
+                {
+                    category: "Midterm",
+                    score: mid,
+                    max_score: midMax,
+                },
+                {
+                    category: "Work/Assignments",
+                    score: work,
+                    max_score: workMax,
+                },
+                {
+                    category: "Final Exam",
+                    score: final,
+                    max_score: finalMax,
+                },
             ],
-            letterGrade: enrollment.grade || "In Progress",
         });
     } catch (err) {
         res.status(500).json({ error: err.message });

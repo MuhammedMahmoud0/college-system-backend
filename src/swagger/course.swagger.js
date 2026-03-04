@@ -93,14 +93,17 @@ export default {
             get: {
                 tags: ["Courses"],
                 summary: "Get grade breakdown for the student's enrollment",
+                description:
+                    "Returns the student's scores breakdown (midterm, work, final) for their enrollment in the given lecture. If the instructor has set a grade distribution, each component's max score is included.",
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     {
                         name: "courseId",
                         in: "path",
                         required: true,
-                        schema: { type: "string" },
-                        description: "Lecture/course identifier",
+                        schema: { type: "integer" },
+                        description:
+                            "The lecture ID the student is enrolled in",
                     },
                 ],
                 responses: {
@@ -791,21 +794,57 @@ export default {
         GradeBreakdownResponse: {
             type: "object",
             properties: {
-                courseId: { type: "string" },
-                courseName: { type: "string" },
-                totalGrade: { type: "number" },
+                lecture_id: { type: "integer", example: 5 },
+                course_code: { type: "string", example: "CS301" },
+                course_name: { type: "string", example: "Data Structures" },
+                credits: { type: "integer", example: 3 },
+                letter_grade: {
+                    type: "string",
+                    example: "B+",
+                    description:
+                        "Computed letter grade, or 'In Progress' if not all scores are entered yet.",
+                },
+                total_score: {
+                    type: "number",
+                    nullable: true,
+                    example: 78.5,
+                    description:
+                        "Sum of all present scores. Null if no scores entered yet.",
+                },
+                distribution: {
+                    type: "object",
+                    nullable: true,
+                    description:
+                        "Grade distribution set by the instructor. Null if not configured.",
+                    properties: {
+                        work_max: { type: "number", example: 20 },
+                        mid_max: { type: "number", example: 30 },
+                        final_max: { type: "number", example: 50 },
+                    },
+                },
                 breakdown: {
                     type: "array",
                     items: {
                         type: "object",
                         properties: {
-                            category: { type: "string" },
-                            score: { type: "number" },
-                            maxScore: { type: "number" },
+                            category: { type: "string", example: "Midterm" },
+                            score: {
+                                type: "number",
+                                nullable: true,
+                                example: 25.0,
+                                description:
+                                    "Student's score for this component. Null if not entered yet.",
+                            },
+                            max_score: {
+                                type: "number",
+                                nullable: true,
+                                example: 30,
+                                description:
+                                    "Maximum allowed score from the grade distribution. Null if no distribution is set.",
+                            },
                         },
                     },
                 },
-                letterGrade: { type: "string" },
             },
         },
     },

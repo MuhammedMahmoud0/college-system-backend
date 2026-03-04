@@ -737,7 +737,9 @@ export const getMySemesterGpa = async (req, res) => {
 
         if (!VALID_SEMESTERS.includes(semester)) {
             return res.status(400).json({
-                error: `semester must be one of: ${VALID_SEMESTERS.join(", ")}.`,
+                error: `semester must be one of: ${VALID_SEMESTERS.join(
+                    ", "
+                )}.`,
             });
         }
 

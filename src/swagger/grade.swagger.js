@@ -42,7 +42,10 @@ export default {
                                 schema: {
                                     type: "object",
                                     properties: {
-                                        year: { type: "integer", example: 2025 },
+                                        year: {
+                                            type: "integer",
+                                            example: 2025,
+                                        },
                                         semester: {
                                             type: "string",
                                             example: "Fall",

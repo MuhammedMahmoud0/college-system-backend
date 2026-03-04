@@ -5,7 +5,7 @@ export default {
                 tags: ["Grades"],
                 summary: "Get semester GPA",
                 description:
-                    "Returns the weighted GPA for the logged-in student for a specific academic year and semester, based on all completed course grades. Admin and Super Admin can query any student by passing `studentId`.",
+                    "Returns the weighted GPA for the logged-in student for a specific academic year and semester, based on all completed course grades. Accessible to students and leaders only.",
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     {
@@ -24,14 +24,6 @@ export default {
                             enum: ["Spring", "Summer", "Fall", "Winter"],
                         },
                         description: "The semester",
-                    },
-                    {
-                        name: "studentId",
-                        in: "query",
-                        required: false,
-                        schema: { type: "string", format: "uuid" },
-                        description:
-                            "Admin / Super Admin only — UUID of the student to query.",
                     },
                 ],
                 responses: {
@@ -114,18 +106,9 @@ export default {
                 tags: ["Grades"],
                 summary: "Get CGPA trend over semesters",
                 description:
-                    "Returns the semester-by-semester GPA and the running cumulative CGPA (CGPA after each semester) for the logged-in student, sorted chronologically. Admin and Super Admin can query any student by passing `studentId`.",
+                    "Returns the semester-by-semester GPA and the running cumulative CGPA (CGPA after each semester) for the logged-in student, sorted chronologically. Accessible to students and leaders only.",
                 security: [{ bearerAuth: [] }],
-                parameters: [
-                    {
-                        name: "studentId",
-                        in: "query",
-                        required: false,
-                        schema: { type: "string", format: "uuid" },
-                        description:
-                            "Admin / Super Admin only — UUID of the student to query.",
-                    },
-                ],
+                parameters: [],
                 responses: {
                     200: {
                         description: "CGPA trend returned successfully.",
@@ -184,6 +167,52 @@ export default {
                                             },
                                         },
                                     },
+                                },
+                                example: {
+                                    current_cgpa: 3.48,
+                                    total_semesters: 5,
+                                    trend: [
+                                        {
+                                            year: 2023,
+                                            semester: "Fall",
+                                            semester_gpa: 3.7,
+                                            cumulative_cgpa: 3.7,
+                                            credits_earned: 18,
+                                            courses_count: 5,
+                                        },
+                                        {
+                                            year: 2024,
+                                            semester: "Spring",
+                                            semester_gpa: 3.5,
+                                            cumulative_cgpa: 3.6,
+                                            credits_earned: 15,
+                                            courses_count: 4,
+                                        },
+                                        {
+                                            year: 2024,
+                                            semester: "Summer",
+                                            semester_gpa: 3.0,
+                                            cumulative_cgpa: 3.45,
+                                            credits_earned: 6,
+                                            courses_count: 2,
+                                        },
+                                        {
+                                            year: 2024,
+                                            semester: "Fall",
+                                            semester_gpa: 3.33,
+                                            cumulative_cgpa: 3.43,
+                                            credits_earned: 18,
+                                            courses_count: 5,
+                                        },
+                                        {
+                                            year: 2025,
+                                            semester: "Spring",
+                                            semester_gpa: 3.67,
+                                            cumulative_cgpa: 3.48,
+                                            credits_earned: 15,
+                                            courses_count: 4,
+                                        },
+                                    ],
                                 },
                             },
                         },

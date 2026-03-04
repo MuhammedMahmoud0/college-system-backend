@@ -712,15 +712,7 @@ const VALID_SEMESTERS = ["Spring", "Summer", "Fall", "Winter"];
  */
 export const getMySemesterGpa = async (req, res) => {
     try {
-        const callerRole = req.user.role;
-        let studentId = req.user.id;
-
-        if (
-            ["admin", "super_admin"].includes(callerRole) &&
-            req.query.studentId
-        ) {
-            studentId = req.query.studentId;
-        }
+        const studentId = req.user.id;
 
         const { year, semester } = req.query;
 
@@ -821,15 +813,7 @@ export const getMySemesterGpa = async (req, res) => {
  */
 export const getMyCgpaTrend = async (req, res) => {
     try {
-        const callerRole = req.user.role;
-        let studentId = req.user.id;
-
-        if (
-            ["admin", "super_admin"].includes(callerRole) &&
-            req.query.studentId
-        ) {
-            studentId = req.query.studentId;
-        }
+        const studentId = req.user.id;
 
         const enrollments = await prisma.enrollments.findMany({
             where: {

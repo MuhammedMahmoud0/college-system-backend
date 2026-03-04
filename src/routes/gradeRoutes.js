@@ -91,18 +91,17 @@ router.get(
  */
 router.get(
     "/my/semester-gpa",
-    authorizationMiddleware("student", "leader", "admin", "super_admin"),
+    authorizationMiddleware("student", "leader"),
     getMySemesterGpa
 );
 
 /**
  * GET /api/v1/grades/my/cgpa-trend
  * Returns the CGPA trend across all semesters for the logged-in student.
- * Admin / super_admin can pass ?studentId= to query any student.
  */
 router.get(
     "/my/cgpa-trend",
-    authorizationMiddleware("student", "leader", "admin", "super_admin"),
+    authorizationMiddleware("student", "leader"),
     getMyCgpaTrend
 );
 

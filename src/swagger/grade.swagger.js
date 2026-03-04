@@ -1,5 +1,374 @@
 export default {
     paths: {
+        "/grades/my/semester-gpa": {
+            get: {
+                tags: ["Grades"],
+                summary: "Get semester GPA",
+                description:
+                    "Returns the weighted GPA for the logged-in student for a specific academic year and semester, based on all completed course grades. Accessible to students and leaders only.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "year",
+                        in: "query",
+                        required: true,
+                        schema: { type: "integer", example: 2025 },
+                        description: "Academic year (e.g. 2025)",
+                    },
+                    {
+                        name: "semester",
+                        in: "query",
+                        required: true,
+                        schema: {
+                            type: "string",
+                            enum: ["Spring", "Summer", "Fall", "Winter"],
+                        },
+                        description: "The semester",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Semester GPA returned successfully.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        year: {
+                                            type: "integer",
+                                            example: 2025,
+                                        },
+                                        semester: {
+                                            type: "string",
+                                            example: "Fall",
+                                        },
+                                        semester_gpa: {
+                                            type: "number",
+                                            nullable: true,
+                                            example: 3.45,
+                                            description:
+                                                "Weighted GPA for the semester. Null if no graded courses.",
+                                        },
+                                        total_credits: {
+                                            type: "integer",
+                                            example: 15,
+                                        },
+                                        courses_with_grade: {
+                                            type: "integer",
+                                            example: 4,
+                                        },
+                                        courses: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    course_code: {
+                                                        type: "string",
+                                                        example: "CS301",
+                                                    },
+                                                    course_name: {
+                                                        type: "string",
+                                                        example:
+                                                            "Data Structures",
+                                                    },
+                                                    credits: {
+                                                        type: "integer",
+                                                        example: 3,
+                                                    },
+                                                    grade: {
+                                                        type: "string",
+                                                        example: "A-",
+                                                    },
+                                                    grade_points: {
+                                                        type: "number",
+                                                        example: 3.67,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description:
+                            "Missing or invalid year / semester parameters.",
+                    },
+                    401: { description: "Unauthorized." },
+                    500: { description: "Internal server error." },
+                },
+            },
+        },
+
+        "/grades/my/cgpa-trend": {
+            get: {
+                tags: ["Grades"],
+                summary: "Get CGPA trend over semesters",
+                description:
+                    "Returns the semester-by-semester GPA and the running cumulative CGPA (CGPA after each semester) for the logged-in student, sorted chronologically. Accessible to students and leaders only.",
+                security: [{ bearerAuth: [] }],
+                parameters: [],
+                responses: {
+                    200: {
+                        description: "CGPA trend returned successfully.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        current_cgpa: {
+                                            type: "number",
+                                            nullable: true,
+                                            example: 3.51,
+                                            description:
+                                                "The most recent cumulative CGPA (same as the profile CGPA).",
+                                        },
+                                        total_semesters: {
+                                            type: "integer",
+                                            example: 4,
+                                        },
+                                        trend: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    year: {
+                                                        type: "integer",
+                                                        example: 2024,
+                                                    },
+                                                    semester: {
+                                                        type: "string",
+                                                        example: "Fall",
+                                                    },
+                                                    semester_gpa: {
+                                                        type: "number",
+                                                        nullable: true,
+                                                        example: 3.67,
+                                                        description:
+                                                            "Weighted GPA for this semester only.",
+                                                    },
+                                                    cumulative_cgpa: {
+                                                        type: "number",
+                                                        nullable: true,
+                                                        example: 3.51,
+                                                        description:
+                                                            "Running CGPA including all semesters up to and including this one.",
+                                                    },
+                                                    credits_earned: {
+                                                        type: "integer",
+                                                        example: 15,
+                                                    },
+                                                    courses_count: {
+                                                        type: "integer",
+                                                        example: 4,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                                example: {
+                                    current_cgpa: 3.48,
+                                    total_semesters: 5,
+                                    trend: [
+                                        {
+                                            year: 2023,
+                                            semester: "Fall",
+                                            semester_gpa: 3.7,
+                                            cumulative_cgpa: 3.7,
+                                            credits_earned: 18,
+                                            courses_count: 5,
+                                        },
+                                        {
+                                            year: 2024,
+                                            semester: "Spring",
+                                            semester_gpa: 3.5,
+                                            cumulative_cgpa: 3.6,
+                                            credits_earned: 15,
+                                            courses_count: 4,
+                                        },
+                                        {
+                                            year: 2024,
+                                            semester: "Summer",
+                                            semester_gpa: 3.0,
+                                            cumulative_cgpa: 3.45,
+                                            credits_earned: 6,
+                                            courses_count: 2,
+                                        },
+                                        {
+                                            year: 2024,
+                                            semester: "Fall",
+                                            semester_gpa: 3.33,
+                                            cumulative_cgpa: 3.43,
+                                            credits_earned: 18,
+                                            courses_count: 5,
+                                        },
+                                        {
+                                            year: 2025,
+                                            semester: "Spring",
+                                            semester_gpa: 3.67,
+                                            cumulative_cgpa: 3.48,
+                                            credits_earned: 15,
+                                            courses_count: 4,
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized." },
+                    500: { description: "Internal server error." },
+                },
+            },
+        },
+
+        "/grades/lecture/{lectureId}/distribution": {
+            put: {
+                tags: ["Grades"],
+                summary: "Set grade distribution for a lecture",
+                description:
+                    "Creates or updates the grade distribution (work, midterm, final maxes) for a lecture. The three values must sum to exactly 100. Once set, any grade entry for students in this lecture is validated against these maxes.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "lectureId",
+                        in: "path",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "The lecture ID",
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/GradeDistributionRequest",
+                            },
+                            example: {
+                                work_max: 20,
+                                mid_max: 30,
+                                final_max: 50,
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Distribution saved successfully.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: {
+                                            type: "string",
+                                            example:
+                                                "Grade distribution saved successfully.",
+                                        },
+                                        distribution: {
+                                            $ref: "#/components/schemas/GradeDistribution",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description:
+                            "Validation error (values missing, negative, or don't sum to 100).",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description:
+                            "Forbidden — caller is not the instructor for this lecture.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Lecture not found.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized." },
+                    500: { description: "Internal server error." },
+                },
+            },
+            get: {
+                tags: ["Grades"],
+                summary: "Get grade distribution for a lecture",
+                description:
+                    "Returns the current grade distribution (work, midterm, final maxes) for the given lecture.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "lectureId",
+                        in: "path",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "The lecture ID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Distribution retrieved successfully.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        distribution: {
+                                            $ref: "#/components/schemas/GradeDistribution",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Forbidden.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description:
+                            "Lecture not found or no distribution set yet.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized." },
+                    500: { description: "Internal server error." },
+                },
+            },
+        },
+
         "/grades/lecture/{lectureId}": {
             get: {
                 tags: ["Grades"],
@@ -113,7 +482,7 @@ export default {
                 tags: ["Grades"],
                 summary: "Update a student's grades in a lecture",
                 description:
-                    "Provide mid_score, work_score, and/or final_score. When all three scores are present the letter grade and course GPA points are computed automatically from the total (out of 100) — no manual grade input required. Triggers a student notification and recalculates their CGPA. Accessible to the lecture's instructor (Doctor), Admin, and Super Admin.",
+                    "Provide mid_score, work_score, and/or final_score. When all three scores are present the letter grade and course GPA points are computed automatically from the total (out of 100) — no manual grade input required. Triggers a student notification and recalculates their CGPA. Accessible to the lecture's instructor (Doctor), Admin, and Super Admin. **If a grade distribution has been set for this lecture**, each score is individually validated against its maximum (work_score ≤ work_max, mid_score ≤ mid_max, final_score ≤ final_max).",
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     {
@@ -154,7 +523,7 @@ export default {
                     },
                     400: {
                         description:
-                            "Validation error — no fields provided, a score is negative, or the total exceeds 100.",
+                            "Validation error — no fields provided, a score is negative, the total exceeds 100, or (when a distribution is set) a score exceeds its component maximum.",
                     },
                     403: {
                         description:
@@ -172,7 +541,7 @@ export default {
                 tags: ["Grades"],
                 summary: "Update a student's grades in a tutorial/lab",
                 description:
-                    "Provide mid_score, work_score, and/or final_score. When all three scores are present the letter grade and course GPA points are computed automatically from the total (out of 100) — no manual grade input required. Triggers a student notification and recalculates their CGPA. Accessible to the tutorial/lab's TA, Admin, and Super Admin.",
+                    "Provide mid_score, work_score, and/or final_score. When all three scores are present the letter grade and course GPA points are computed automatically from the total (out of 100) — no manual grade input required. Triggers a student notification and recalculates their CGPA. Accessible to the tutorial/lab's TA, Admin, and Super Admin. **If a grade distribution has been set for the lecture linked to this enrollment**, each score is individually validated against its maximum (work_score ≤ work_max, mid_score ≤ mid_max, final_score ≤ final_max).",
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     {
@@ -213,7 +582,7 @@ export default {
                     },
                     400: {
                         description:
-                            "Validation error — no fields provided, a score is negative, or the total exceeds 100.",
+                            "Validation error — no fields provided, a score is negative, the total exceeds 100, or (when a distribution is set) a score exceeds its component maximum.",
                     },
                     403: {
                         description:
@@ -280,6 +649,17 @@ export default {
                     nullable: true,
                     description:
                         "GPA points for this course, derived from the letter grade (4.0 scale). Present only when all three scores are available.",
+                },
+                grade_distribution: {
+                    type: "object",
+                    nullable: true,
+                    description:
+                        "Included when a distribution is set for the lecture. Shows the maximum for each score component.",
+                    properties: {
+                        work_max: { type: "number", example: 20 },
+                        mid_max: { type: "number", example: 30 },
+                        final_max: { type: "number", example: 50 },
+                    },
                 },
             },
         },

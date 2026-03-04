@@ -82,6 +82,8 @@ export const getAvailableOfferings = async (req, res) => {
                     location: lecture.location || "TBD",
                     instructor: lecture.users.full_name,
                     capacity: lecture.capacity,
+                    enrolled_count: lecture.enrolled_count,
+                    available_seats: lecture.capacity - lecture.enrolled_count,
                     type: "LECTURE",
                 })),
                 labs: offering.tutorials_labs.map((lab) => ({
@@ -93,6 +95,8 @@ export const getAvailableOfferings = async (req, res) => {
                     location: lab.location || "TBD",
                     instructor: lab.users.full_name,
                     capacity: lab.capacity,
+                    enrolled_count: lab.enrolled_count,
+                    available_seats: lab.capacity - lab.enrolled_count,
                     type: lab.type,
                 })),
             }));
@@ -167,6 +171,8 @@ export const getAvailableOfferings = async (req, res) => {
                 location: lecture.location || "TBD",
                 instructor: lecture.users.full_name,
                 capacity: lecture.capacity,
+                enrolled_count: lecture.enrolled_count,
+                available_seats: lecture.capacity - lecture.enrolled_count,
                 type: "LECTURE",
                 enrolled: enrolledLectureIds.has(lecture.lecture_id),
             }));
@@ -180,6 +186,8 @@ export const getAvailableOfferings = async (req, res) => {
                 location: lab.location || "TBD",
                 instructor: lab.users.full_name,
                 capacity: lab.capacity,
+                enrolled_count: lab.enrolled_count,
+                available_seats: lab.capacity - lab.enrolled_count,
                 type: lab.type,
                 enrolled: enrolledTutorialLabIds.has(lab.tutorial_lab_id),
             }));
@@ -393,12 +401,13 @@ export const registerCourses = async (req, res) => {
 
                 // Create enrollments for each course
                 for (const lecture of lectures) {
-                    // Check lecture capacity
-                    const lectureEnrollmentCount = await tx.enrollments.count({
+                    // Re-fetch lecture inside TX for up-to-date enrolled_count
+                    const freshLecture = await tx.lectures.findUnique({
                         where: { lecture_id: lecture.lecture_id },
+                        select: { enrolled_count: true, capacity: true },
                     });
 
-                    if (lectureEnrollmentCount >= lecture.capacity) {
+                    if (freshLecture.enrolled_count >= freshLecture.capacity) {
                         throw new Error(
                             `Lecture ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) is full`
                         );
@@ -416,12 +425,13 @@ export const registerCourses = async (req, res) => {
                     }
 
                     for (const lab of courseLabs) {
-                        // Check lab capacity
-                        const labEnrollmentCount = await tx.enrollments.count({
+                        // Re-fetch lab inside TX for up-to-date enrolled_count
+                        const freshLab = await tx.tutorials_labs.findUnique({
                             where: { tutorial_lab_id: lab.tutorial_lab_id },
+                            select: { enrolled_count: true, capacity: true },
                         });
 
-                        if (labEnrollmentCount >= lab.capacity) {
+                        if (freshLab.enrolled_count >= freshLab.capacity) {
                             throw new Error(
                                 `Lab ${lab.group} for ${lecture.course_offerings.courses.name} is full`
                             );
@@ -452,6 +462,16 @@ export const registerCourses = async (req, res) => {
                                 tutorial_lab_id: lab.tutorial_lab_id,
                                 status: "enrolled",
                             },
+                        });
+
+                        // Increment enrolled_count for lecture and lab
+                        await tx.lectures.update({
+                            where: { lecture_id: lecture.lecture_id },
+                            data: { enrolled_count: { increment: 1 } },
+                        });
+                        await tx.tutorials_labs.update({
+                            where: { tutorial_lab_id: lab.tutorial_lab_id },
+                            data: { enrolled_count: { increment: 1 } },
                         });
 
                         enrollmentsCreated.push(enrollment);
@@ -555,11 +575,7 @@ export const registerLab = async (req, res) => {
         }
 
         // Check lab capacity
-        const labCount = await prisma.enrollments.count({
-            where: { tutorial_lab_id: parseInt(labId) },
-        });
-
-        if (labCount >= lab.capacity) {
+        if (lab.enrolled_count >= lab.capacity) {
             return res.status(400).json({
                 error: `Lab ${lab.group} for ${lab.course_offerings.courses.name} is full`,
             });
@@ -651,6 +667,12 @@ export const registerLab = async (req, res) => {
             data: { tutorial_lab_id: parseInt(labId) },
         });
 
+        // Increment lab enrolled_count
+        await prisma.tutorials_labs.update({
+            where: { tutorial_lab_id: parseInt(labId) },
+            data: { enrolled_count: { increment: 1 } },
+        });
+
         const io = req.app.get("io");
         await sendNotification({
             userId: studentId,
@@ -706,12 +728,33 @@ export const unregisterSession = async (req, res) => {
                 });
             }
 
+            // Collect distinct lab ids before deleting
+            const labIds = [
+                ...new Set(
+                    enrollments
+                        .map((e) => e.tutorial_lab_id)
+                        .filter((id) => id !== null)
+                ),
+            ];
+
             const deleteResult = await prisma.enrollments.deleteMany({
                 where: {
                     student_user_id: studentId,
                     lecture_id: parseInt(lectureId),
                 },
             });
+
+            // Decrement enrolled_count for the lecture and any associated labs
+            await prisma.lectures.update({
+                where: { lecture_id: parseInt(lectureId) },
+                data: { enrolled_count: { decrement: deleteResult.count } },
+            });
+            for (const labId of labIds) {
+                await prisma.tutorials_labs.update({
+                    where: { tutorial_lab_id: labId },
+                    data: { enrolled_count: { decrement: 1 } },
+                });
+            }
 
             const io = req.app.get("io");
             await sendNotification({
@@ -757,6 +800,12 @@ export const unregisterSession = async (req, res) => {
             await prisma.enrollments.update({
                 where: { id: enrollment.id },
                 data: { tutorial_lab_id: null },
+            });
+
+            // Decrement lab enrolled_count
+            await prisma.tutorials_labs.update({
+                where: { tutorial_lab_id: parseInt(tutorialLabId) },
+                data: { enrolled_count: { decrement: 1 } },
             });
 
             const unregIo = req.app.get("io");

@@ -260,6 +260,39 @@ export default {
                 },
             },
         },
+        // Grade Distribution
+        GradeDistributionRequest: {
+            type: "object",
+            required: ["work_max", "mid_max", "final_max"],
+            properties: {
+                work_max: {
+                    type: "number",
+                    description: "Maximum score for coursework. Must be >= 0.",
+                    example: 20,
+                },
+                mid_max: {
+                    type: "number",
+                    description: "Maximum score for midterm. Must be >= 0.",
+                    example: 30,
+                },
+                final_max: {
+                    type: "number",
+                    description: "Maximum score for final exam. Must be >= 0.",
+                    example: 50,
+                },
+            },
+        },
+        GradeDistribution: {
+            type: "object",
+            properties: {
+                id: { type: "integer", example: 1 },
+                lecture_id: { type: "integer", example: 5 },
+                work_max: { type: "number", example: 20 },
+                mid_max: { type: "number", example: 30 },
+                final_max: { type: "number", example: 50 },
+            },
+        },
+
         // Attendance
         StartAttendanceSessionRequest: {
             type: "object",

@@ -41,7 +41,10 @@ function computeGrade(total) {
  */
 async function recalculateCgpa(studentUserId) {
     const allEnrollments = await prisma.enrollments.findMany({
-        where: { student_user_id: studentUserId, status: "enrolled" },
+        where: {
+            student_user_id: studentUserId,
+            status: { in: ["enrolled", "completed"] },
+        },
         include: {
             lectures: {
                 include: {

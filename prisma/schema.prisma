@@ -231,11 +231,21 @@ model financials {
   departments   departments @relation(fields: [department_id], references: [department_id], onDelete: NoAction, onUpdate: NoAction)
 }
 
+model grade_distributions {
+  id         Int      @id @default(autoincrement())
+  lecture_id Int      @unique
+  work_max   Float
+  mid_max    Float
+  final_max  Float
+  lectures   lectures @relation(fields: [lecture_id], references: [lecture_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
 model lectures {
   lecture_id       Int                @id @default(autoincrement())
   offering_id      Int
   instructor_id    String             @db.Uuid
   capacity         Int
+  enrolled_count   Int                @default(0)
   day_of_week      String
   start_time       DateTime           @db.Time(6)
   end_time         DateTime           @db.Time(6)
@@ -244,6 +254,7 @@ model lectures {
   attendance       attendance[]
   course_materials course_materials[]
   enrollments      enrollments[]
+  grade_distribution grade_distributions?
   users            users              @relation(fields: [instructor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   course_offerings course_offerings   @relation(fields: [offering_id], references: [offering_id], onDelete: Cascade, onUpdate: NoAction)
   tasks            tasks[]
@@ -351,6 +362,7 @@ model tutorials_labs {
   ta_id            String             @db.Uuid
   type             String
   capacity         Int
+  enrolled_count   Int                @default(0)
   day_of_week      String
   start_time       DateTime           @db.Time(6)
   end_time         DateTime           @db.Time(6)

@@ -9,6 +9,7 @@ import {
     updateAttendanceRecord,
     getStudentsAttendance,
     getAllAttendanceSessions,
+    getMyAttendanceHistory,
 } from "../controllers/attendanceController.js";
 import {
     authMiddleware,
@@ -82,6 +83,14 @@ router.get(
     authMiddleware,
     authorizationMiddleware("doctor", "teaching_assistant", "admin"),
     getStudentsAttendance
+);
+
+// Get attendance history for the logged-in student
+router.get(
+    "/my-history",
+    authMiddleware,
+    authorizationMiddleware("student", "leader"),
+    getMyAttendanceHistory
 );
 
 export default router;

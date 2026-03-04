@@ -633,6 +633,168 @@ export default {
                 },
             },
         },
+        "/attendance/my-history": {
+            get: {
+                tags: ["Attendance"],
+                summary: "Get my attendance history (Student)",
+                description:
+                    "Returns the logged-in student's full attendance history grouped by date. Each date lists all sessions (lectures and/or labs) with status, course info, and location.",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description:
+                            "Attendance history retrieved successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        total_sessions: {
+                                            type: "integer",
+                                            example: 20,
+                                        },
+                                        present_count: {
+                                            type: "integer",
+                                            example: 17,
+                                        },
+                                        absent_count: {
+                                            type: "integer",
+                                            example: 3,
+                                        },
+                                        attendance_percentage: {
+                                            type: "integer",
+                                            nullable: true,
+                                            example: 85,
+                                        },
+                                        history: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    date: {
+                                                        type: "string",
+                                                        format: "date",
+                                                        example: "2026-02-10",
+                                                    },
+                                                    sessions: {
+                                                        type: "array",
+                                                        items: {
+                                                            type: "object",
+                                                            properties: {
+                                                                attendance_id: {
+                                                                    type: "integer",
+                                                                },
+                                                                session_type: {
+                                                                    type: "string",
+                                                                    enum: [
+                                                                        "lecture",
+                                                                        "tutorial_lab",
+                                                                    ],
+                                                                },
+                                                                lecture_id: {
+                                                                    type: "integer",
+                                                                    nullable: true,
+                                                                },
+                                                                tutorial_lab_id:
+                                                                    {
+                                                                        type: "integer",
+                                                                        nullable: true,
+                                                                    },
+                                                                course_name: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                    example:
+                                                                        "Data Structures",
+                                                                },
+                                                                course_code: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                    example:
+                                                                        "CS201",
+                                                                },
+                                                                group: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                    example:
+                                                                        "G1",
+                                                                },
+                                                                tutorial_type: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                    example:
+                                                                        "lab",
+                                                                },
+                                                                location: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                },
+                                                                day_of_week: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                    example:
+                                                                        "Monday",
+                                                                },
+                                                                start_time: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                },
+                                                                end_time: {
+                                                                    type: "string",
+                                                                    nullable: true,
+                                                                },
+                                                                status: {
+                                                                    type: "string",
+                                                                    enum: [
+                                                                        "present",
+                                                                        "absent",
+                                                                    ],
+                                                                },
+                                                                is_live: {
+                                                                    type: "boolean",
+                                                                    example: false,
+                                                                },
+                                                                longitude: {
+                                                                    type: "number",
+                                                                    nullable: true,
+                                                                },
+                                                                latitude: {
+                                                                    type: "number",
+                                                                    nullable: true,
+                                                                },
+                                                            },
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
         "/attendance/students": {
             get: {
                 tags: ["Attendance"],

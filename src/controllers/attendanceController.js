@@ -983,5 +983,118 @@ export const getAllAttendanceSessions = async (req, res) => {
     }
 };
 
+/**
+ * Get attendance history for the logged-in student
+ * GET /api/v1/attendance/my-history
+ *
+ * Returns all sessions grouped by date. Each date contains one entry per
+ * session (lecture or lab/tutorial) the student has an attendance record for.
+ */
+export const getMyAttendanceHistory = async (req, res) => {
+    try {
+        const studentId = req.user.userId;
+
+        const records = await prisma.attendance.findMany({
+            where: { student_user_id: studentId },
+            include: {
+                lectures: {
+                    select: {
+                        lecture_id: true,
+                        day_of_week: true,
+                        start_time: true,
+                        end_time: true,
+                        location: true,
+                        group: true,
+                        course_offerings: {
+                            select: {
+                                courses: {
+                                    select: { name: true, code: true },
+                                },
+                            },
+                        },
+                    },
+                },
+                tutorials_labs: {
+                    select: {
+                        tutorial_lab_id: true,
+                        type: true,
+                        day_of_week: true,
+                        start_time: true,
+                        end_time: true,
+                        location: true,
+                        group: true,
+                        course_offerings: {
+                            select: {
+                                courses: {
+                                    select: { name: true, code: true },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: { session_date: "asc" },
+        });
+
+        // Group by date
+        const datesMap = new Map();
+        for (const record of records) {
+            const dateKey = new Date(record.session_date)
+                .toISOString()
+                .split("T")[0];
+
+            if (!datesMap.has(dateKey)) {
+                datesMap.set(dateKey, { date: dateKey, sessions: [] });
+            }
+
+            const sessionType = record.lecture_id ? "lecture" : "tutorial_lab";
+            const source = record.lectures || record.tutorials_labs;
+            const course = source?.course_offerings?.courses ?? null;
+
+            datesMap.get(dateKey).sessions.push({
+                attendance_id: record.id,
+                session_type: sessionType,
+                ...(record.lecture_id
+                    ? { lecture_id: record.lecture_id }
+                    : { tutorial_lab_id: record.tutorial_lab_id }),
+                course_name: course?.name ?? null,
+                course_code: course?.code ?? null,
+                group: source?.group ?? null,
+                ...(sessionType === "tutorial_lab" && {
+                    tutorial_type: record.tutorials_labs?.type ?? null,
+                }),
+                location: source?.location ?? null,
+                day_of_week: source?.day_of_week ?? null,
+                start_time: source?.start_time ?? null,
+                end_time: source?.end_time ?? null,
+                status: record.status,
+                is_live: record.is_live,
+                longitude: record.longitude,
+                latitude: record.latitude,
+            });
+        }
+
+        const history = Array.from(datesMap.values());
+
+        const presentCount = records.filter(
+            (r) => r.status === "present"
+        ).length;
+        const absentCount = records.filter((r) => r.status === "absent").length;
+        const total = records.length;
+
+        res.status(200).json({
+            total_sessions: total,
+            present_count: presentCount,
+            absent_count: absentCount,
+            attendance_percentage:
+                total > 0 ? Math.round((presentCount / total) * 100) : null,
+            history,
+        });
+    } catch (err) {
+        logger.error("Error fetching student attendance history:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 // Export for WebSocket handler
 export { activeSessions, generateQRCode, QR_REFRESH_INTERVAL };

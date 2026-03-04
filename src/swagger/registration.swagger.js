@@ -35,7 +35,8 @@ export default {
                 ],
                 responses: {
                     200: {
-                        description: "Available course offerings retrieved successfully",
+                        description:
+                            "Available course offerings retrieved successfully",
                         content: {
                             "application/json": {
                                 schema: {
@@ -57,8 +58,11 @@ export default {
                                                     start_time: "09:00",
                                                     end_time: "10:30",
                                                     location: "Hall A",
-                                                    instructor: "Dr. Ahmed Hassan",
+                                                    instructor:
+                                                        "Dr. Ahmed Hassan",
                                                     capacity: 50,
+                                                    enrolled_count: 32,
+                                                    available_seats: 18,
                                                     type: "LECTURE",
                                                     enrolled: false,
                                                 },
@@ -71,8 +75,11 @@ export default {
                                                     start_time: "11:00",
                                                     end_time: "12:30",
                                                     location: "Lab 3",
-                                                    instructor: "Eng. Sara Khaled",
+                                                    instructor:
+                                                        "Eng. Sara Khaled",
                                                     capacity: 25,
+                                                    enrolled_count: 10,
+                                                    available_seats: 15,
                                                     type: "lab",
                                                     enrolled: false,
                                                 },
@@ -83,8 +90,11 @@ export default {
                                                     start_time: "14:00",
                                                     end_time: "15:30",
                                                     location: "Lab 3",
-                                                    instructor: "Eng. Sara Khaled",
+                                                    instructor:
+                                                        "Eng. Sara Khaled",
                                                     capacity: 25,
+                                                    enrolled_count: 25,
+                                                    available_seats: 0,
                                                     type: "lab",
                                                     enrolled: true,
                                                 },
@@ -96,10 +106,13 @@ export default {
                         },
                     },
                     401: {
-                        description: "Not authenticated — missing or invalid token",
+                        description:
+                            "Not authenticated — missing or invalid token",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Not authenticated" },
                             },
                         },
@@ -108,7 +121,9 @@ export default {
                         description: "Internal server error",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Internal server error" },
                             },
                         },
@@ -153,7 +168,8 @@ export default {
                 },
                 responses: {
                     201: {
-                        description: "Registration successful — all enrollments created",
+                        description:
+                            "Registration successful — all enrollments created",
                         content: {
                             "application/json": {
                                 schema: {
@@ -165,14 +181,16 @@ export default {
                                     details: [
                                         {
                                             id: 44,
-                                            student_user_id: "9c60d94a-99e3-44e7-86df-074833cab9e8",
+                                            student_user_id:
+                                                "9c60d94a-99e3-44e7-86df-074833cab9e8",
                                             lecture_id: 5,
                                             tutorial_lab_id: 12,
                                             status: "enrolled",
                                         },
                                         {
                                             id: 45,
-                                            student_user_id: "9c60d94a-99e3-44e7-86df-074833cab9e8",
+                                            student_user_id:
+                                                "9c60d94a-99e3-44e7-86df-074833cab9e8",
                                             lecture_id: 8,
                                             tutorial_lab_id: 19,
                                             status: "enrolled",
@@ -187,16 +205,20 @@ export default {
                             "Validation error — time conflict, capacity full, missing lab, or already enrolled",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 examples: {
                                     scheduleConflict: {
-                                        summary: "Conflict between newly selected sessions",
+                                        summary:
+                                            "Conflict between newly selected sessions",
                                         value: {
                                             error: "Schedule conflict on Monday: Data Structures (CS201) [09:00-10:30] overlaps with Algorithms (CS301) [10:00-11:30]",
                                         },
                                     },
                                     conflictWithExisting: {
-                                        summary: "Conflict with an already-enrolled session",
+                                        summary:
+                                            "Conflict with an already-enrolled session",
                                         value: {
                                             error: "Schedule conflict on Wednesday: Operating Systems (CS401) [11:00-12:30] overlaps with Networks (CS402) [11:30-13:00]",
                                         },
@@ -208,19 +230,22 @@ export default {
                                         },
                                     },
                                     noLabSelected: {
-                                        summary: "No lab selected for a lecture",
+                                        summary:
+                                            "No lab selected for a lecture",
                                         value: {
                                             error: "No lab selected for course Data Structures (CS201)",
                                         },
                                     },
                                     alreadyEnrolled: {
-                                        summary: "Already enrolled in this lecture",
+                                        summary:
+                                            "Already enrolled in this lecture",
                                         value: {
                                             error: "Already enrolled in Data Structures (CS201)",
                                         },
                                     },
                                     invalidInput: {
-                                        summary: "Invalid request body structure",
+                                        summary:
+                                            "Invalid request body structure",
                                         value: {
                                             error: "Invalid input. Required: selectedLectureIds (array), selectedLabIds (array)",
                                         },
@@ -233,16 +258,21 @@ export default {
                         description: "Not authenticated",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Not authenticated" },
                             },
                         },
                     },
                     403: {
-                        description: "Forbidden — only students and leaders can register",
+                        description:
+                            "Forbidden — only students and leaders can register",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Forbidden" },
                             },
                         },
@@ -251,7 +281,9 @@ export default {
                         description: "Internal server error",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Internal server error" },
                             },
                         },
@@ -297,13 +329,17 @@ export default {
                         description: "Lab registered successfully",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/RegisterLabResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/RegisterLabResponse",
+                                },
                                 example: {
-                                    message: "Successfully registered for lab G2 in Data Structures.",
+                                    message:
+                                        "Successfully registered for lab G2 in Data Structures.",
                                     courseCode: "CS201",
                                     enrollment: {
                                         id: 44,
-                                        student_user_id: "9c60d94a-99e3-44e7-86df-074833cab9e8",
+                                        student_user_id:
+                                            "9c60d94a-99e3-44e7-86df-074833cab9e8",
                                         lecture_id: 5,
                                         tutorial_lab_id: 13,
                                         status: "enrolled",
@@ -317,7 +353,9 @@ export default {
                             "Validation error — not enrolled, lab already assigned, wrong offering, capacity full, or schedule conflict",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 examples: {
                                     notEnrolled: {
                                         summary: "Not enrolled in this lecture",
@@ -326,13 +364,15 @@ export default {
                                         },
                                     },
                                     labAlreadyAssigned: {
-                                        summary: "Lab already assigned to this enrollment",
+                                        summary:
+                                            "Lab already assigned to this enrollment",
                                         value: {
                                             error: "You already have a lab assigned for this lecture. Unregister from the current lab first.",
                                         },
                                     },
                                     wrongOffering: {
-                                        summary: "Lab does not belong to the same offering",
+                                        summary:
+                                            "Lab does not belong to the same offering",
                                         value: {
                                             error: "The selected lab does not belong to the same course offering as the lecture.",
                                         },
@@ -344,7 +384,8 @@ export default {
                                         },
                                     },
                                     scheduleConflict: {
-                                        summary: "Lab time conflicts with another enrolled session",
+                                        summary:
+                                            "Lab time conflicts with another enrolled session",
                                         value: {
                                             error: "Schedule conflict on Wednesday: Data Structures (CS201) [11:00-12:30] overlaps with Networks (CS402) [11:30-13:00]",
                                         },
@@ -357,7 +398,9 @@ export default {
                         description: "Lecture or lab not found",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 examples: {
                                     lectureNotFound: {
                                         summary: "Lecture ID does not exist",
@@ -375,16 +418,21 @@ export default {
                         description: "Not authenticated",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Not authenticated" },
                             },
                         },
                     },
                     403: {
-                        description: "Forbidden — only students and leaders can register",
+                        description:
+                            "Forbidden — only students and leaders can register",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Forbidden" },
                             },
                         },
@@ -393,7 +441,9 @@ export default {
                         description: "Internal server error",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Internal server error" },
                             },
                         },
@@ -431,7 +481,8 @@ export default {
                             },
                             examples: {
                                 dropFullCourse: {
-                                    summary: "Drop entire course (lecture + lab)",
+                                    summary:
+                                        "Drop entire course (lecture + lab)",
                                     value: { lectureId: 5 },
                                 },
                                 dropLabOnly: {
@@ -447,12 +498,15 @@ export default {
                         description: "Successfully unregistered",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/UnregisterResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/UnregisterResponse",
+                                },
                                 examples: {
                                     courseDrop: {
                                         summary: "Full course dropped",
                                         value: {
-                                            message: "Successfully unregistered from Data Structures. Lecture and associated lab removed.",
+                                            message:
+                                                "Successfully unregistered from Data Structures. Lecture and associated lab removed.",
                                             courseCode: "CS201",
                                             enrollmentsDeleted: 1,
                                         },
@@ -460,7 +514,8 @@ export default {
                                     labDrop: {
                                         summary: "Lab dropped, lecture kept",
                                         value: {
-                                            message: "Successfully unregistered from lab for Data Structures. You can now register the same lecture with a different lab.",
+                                            message:
+                                                "Successfully unregistered from lab for Data Structures. You can now register the same lecture with a different lab.",
                                             courseCode: "CS201",
                                         },
                                     },
@@ -469,10 +524,13 @@ export default {
                         },
                     },
                     400: {
-                        description: "Neither lectureId nor tutorialLabId was provided",
+                        description:
+                            "Neither lectureId nor tutorialLabId was provided",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: {
                                     error: "Must provide either lectureId or tutorialLabId",
                                 },
@@ -483,19 +541,27 @@ export default {
                         description: "Lecture, lab, or enrollment not found",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 examples: {
                                     lectureNotFound: {
                                         summary: "Lecture ID does not exist",
                                         value: { error: "Lecture not found" },
                                     },
                                     enrollmentNotFound: {
-                                        summary: "Student is not enrolled in this lecture",
-                                        value: { error: "No enrollment found for this lecture" },
+                                        summary:
+                                            "Student is not enrolled in this lecture",
+                                        value: {
+                                            error: "No enrollment found for this lecture",
+                                        },
                                     },
                                     labEnrollmentNotFound: {
-                                        summary: "Student is not enrolled in this lab",
-                                        value: { error: "No enrollment found for this lab" },
+                                        summary:
+                                            "Student is not enrolled in this lab",
+                                        value: {
+                                            error: "No enrollment found for this lab",
+                                        },
                                     },
                                 },
                             },
@@ -505,16 +571,21 @@ export default {
                         description: "Not authenticated",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Not authenticated" },
                             },
                         },
                     },
                     403: {
-                        description: "Forbidden — only students and leaders can unregister",
+                        description:
+                            "Forbidden — only students and leaders can unregister",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Forbidden" },
                             },
                         },
@@ -523,7 +594,9 @@ export default {
                         description: "Internal server error",
                         content: {
                             "application/json": {
-                                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
                                 example: { error: "Internal server error" },
                             },
                         },
@@ -537,11 +610,13 @@ export default {
         schemas: {
             Session: {
                 type: "object",
-                description: "A single lecture or lab section within a course offering",
+                description:
+                    "A single lecture or lab section within a course offering",
                 properties: {
                     id: {
                         type: "integer",
-                        description: "Unique ID of the session (use as lectureId or labId in registration requests)",
+                        description:
+                            "Unique ID of the session (use as lectureId or labId in registration requests)",
                         example: 5,
                     },
                     group_number: {
@@ -556,12 +631,14 @@ export default {
                     },
                     start_time: {
                         type: "string",
-                        description: "Start time in HH:MM format (24-hour, Africa/Cairo timezone)",
+                        description:
+                            "Start time in HH:MM format (24-hour, Africa/Cairo timezone)",
                         example: "09:00",
                     },
                     end_time: {
                         type: "string",
-                        description: "End time in HH:MM format (24-hour, Africa/Cairo timezone)",
+                        description:
+                            "End time in HH:MM format (24-hour, Africa/Cairo timezone)",
                         example: "10:30",
                     },
                     location: {
@@ -571,17 +648,31 @@ export default {
                     },
                     instructor: {
                         type: "string",
-                        description: "Name of the instructor or teaching assistant",
+                        description:
+                            "Name of the instructor or teaching assistant",
                         example: "Dr. Ahmed Hassan",
                     },
                     capacity: {
                         type: "integer",
-                        description: "Maximum number of students allowed in this section",
+                        description:
+                            "Maximum number of students allowed in this section",
                         example: 50,
+                    },
+                    enrolled_count: {
+                        type: "integer",
+                        description: "Current number of enrolled students",
+                        example: 32,
+                    },
+                    available_seats: {
+                        type: "integer",
+                        description:
+                            "Remaining seats (capacity - enrolled_count)",
+                        example: 18,
                     },
                     type: {
                         type: "string",
-                        description: "Session type — `LECTURE` for lectures, `lab` or `tutorial` for labs",
+                        description:
+                            "Session type — `LECTURE` for lectures, `lab` or `tutorial` for labs",
                         example: "LECTURE",
                     },
                     enrolled: {
@@ -620,12 +711,14 @@ export default {
                     },
                     lectures: {
                         type: "array",
-                        description: "Available lecture sections for this offering",
+                        description:
+                            "Available lecture sections for this offering",
                         items: { $ref: "#/components/schemas/Session" },
                     },
                     labs: {
                         type: "array",
-                        description: "Available lab/tutorial sections for this offering",
+                        description:
+                            "Available lab/tutorial sections for this offering",
                         items: { $ref: "#/components/schemas/Session" },
                     },
                 },
@@ -655,7 +748,8 @@ export default {
                 properties: {
                     selectedLectureIds: {
                         type: "array",
-                        description: "IDs of the lectures to register for (one per course)",
+                        description:
+                            "IDs of the lectures to register for (one per course)",
                         items: { type: "integer" },
                         example: [5, 8],
                     },
@@ -684,7 +778,9 @@ export default {
                     details: {
                         type: "array",
                         description: "The newly created enrollment records",
-                        items: { $ref: "#/components/schemas/EnrollmentRecord" },
+                        items: {
+                            $ref: "#/components/schemas/EnrollmentRecord",
+                        },
                     },
                 },
             },
@@ -715,7 +811,8 @@ export default {
                 properties: {
                     message: {
                         type: "string",
-                        example: "Successfully registered for lab G2 in Data Structures.",
+                        example:
+                            "Successfully registered for lab G2 in Data Structures.",
                     },
                     courseCode: {
                         type: "string",
@@ -752,7 +849,8 @@ export default {
                 properties: {
                     message: {
                         type: "string",
-                        example: "Successfully unregistered from Data Structures. Lecture and associated lab removed.",
+                        example:
+                            "Successfully unregistered from Data Structures. Lecture and associated lab removed.",
                     },
                     courseCode: {
                         type: "string",

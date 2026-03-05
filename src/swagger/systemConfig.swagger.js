@@ -376,13 +376,13 @@ export default {
         "/config/announcements": {
             get: {
                 tags: ["System Configuration"],
-                summary: "Get all active announcements",
+                summary: "Get active announcements for current user",
                 description:
-                    "Returns announcements whose expire_at is greater than the current time. Requires Admin or Super Admin role.",
+                    "Returns active announcements filtered by the authenticated user's role. Faculty audience (admin, super_admin, doctor, teaching_assistant) see 'Faculty' + 'All' announcements. Students audience (student, leader) see 'Students' + 'All' announcements. Accessible by any authenticated user.",
                 security: [{ bearerAuth: [] }],
                 responses: {
                     200: {
-                        description: "List of active announcements.",
+                        description: "List of active announcements visible to the user.",
                         content: {
                             "application/json": {
                                 schema: {

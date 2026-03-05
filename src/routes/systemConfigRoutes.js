@@ -17,8 +17,13 @@ import {
 
 const router = express.Router();
 
-// All system config endpoints require authentication + Admin / Super Admin role
+// All routes require authentication
 router.use(authMiddleware);
+
+// ── Announcements (read) — accessible by any authenticated user ────────────
+router.get("/announcements", getAnnouncements);
+
+// ── Below: Admin / Super Admin only ────────────────────────────────────────
 router.use(authorizationMiddleware("admin", "super_admin"));
 
 // ── Academic Calendar ──────────────────────────────────────────────────────
@@ -30,9 +35,8 @@ router.delete("/calendar/:id", deleteAcademicCalendarEvent);
 // ── Registration ───────────────────────────────────────────────────────────
 router.post("/registration-open", openRegistration);
 
-// ── Announcements ──────────────────────────────────────────────────────────
+// ── Announcements (write) ──────────────────────────────────────────────────
 router.post("/announcements", createAnnouncement);
-router.get("/announcements", getAnnouncements);
 router.patch("/announcements/:id", updateAnnouncement);
 router.delete("/announcements/:id", deleteAnnouncement);
 

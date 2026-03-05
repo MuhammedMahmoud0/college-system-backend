@@ -19,6 +19,7 @@ import studentSettingsRoutes from "./routes/studentSettingsRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import systemConfigRoutes from "./routes/systemConfigRoutes.js";
 import gradeRoutes from "./routes/gradeRoutes.js";
+import adminDashboardRoutes from "./routes/adminDashboardRoutes.js";
 import taskRoutes from "./routes/taskRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
@@ -111,6 +112,9 @@ app.use("/api/v1/grades", gradeRoutes);
 
 // mount task routes
 app.use("/api/v1/tasks", taskRoutes);
+
+// mount admin dashboard routes
+app.use("/api/v1/admin", adminDashboardRoutes);
 
 // Swagger API documentation route
 app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));

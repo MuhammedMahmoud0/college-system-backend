@@ -296,14 +296,20 @@ export const createAnnouncement = async (req, res) => {
         // Notify users based on announcement audience (fire-and-forget)
         const io = req.app.get("io");
         const effectiveAudience = announcement.audience ?? "All";
-        const roleFilter =
+
+        // Faculty  = admin, super_admin, doctor, teaching_assistant
+        // Students = student, leader
+        // All      = every role
+        const audienceRoles =
             effectiveAudience === "Students"
-                ? "student"
+                ? ["student", "leader"]
                 : effectiveAudience === "Faculty"
-                ? "doctor"
+                ? ["admin", "super_admin", "doctor", "teaching_assistant"]
                 : null; // null = All
 
-        const whereClause = roleFilter ? { role: roleFilter } : {};
+        const whereClause = audienceRoles
+            ? { role: { in: audienceRoles } }
+            : {};
         const recipients = await prisma.users.findMany({
             where: whereClause,
             select: { id: true },
@@ -370,19 +376,32 @@ export const openRegistration = async (req, res) => {
     }
 };
 
+// Maps each user role to the announcement audiences they are allowed to see
+const ROLE_AUDIENCE_MAP = {
+    admin:                ["All", "Faculty"],
+    super_admin:          ["All", "Faculty"],
+    doctor:               ["All", "Faculty"],
+    teaching_assistant:   ["All", "Faculty"],
+    student:              ["All", "Students"],
+    leader:               ["All", "Students"],
+};
+
 /**
  * GET /api/v1/config/announcements
- * Retrieve all active announcements (expire_at > now).
+ * Retrieve active announcements visible to the authenticated user's role.
  */
 export const getAnnouncements = async (req, res) => {
     try {
         const now = new Date();
+        const userRole = req.user.role;
+
+        // Determine which audiences this role may see
+        const allowedAudiences = ROLE_AUDIENCE_MAP[userRole] ?? ["All"];
 
         const announcements = await prisma.announcements.findMany({
             where: {
-                expire_at: {
-                    gt: now,
-                },
+                expire_at: { gt: now },
+                audience: { in: allowedAudiences },
             },
             orderBy: { publish_at: "desc" },
         });

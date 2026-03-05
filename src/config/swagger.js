@@ -20,6 +20,7 @@ import attendance from "../swagger/attendance.swagger.js";
 import systemConfig from "../swagger/systemConfig.swagger.js";
 import grade from "../swagger/grade.swagger.js";
 import task from "../swagger/task.swagger.js";
+import adminDashboard from "../swagger/adminDashboard.swagger.js";
 
 export const swaggerSpec = {
     ...base,
@@ -35,6 +36,7 @@ export const swaggerSpec = {
             ...systemConfig.schemas,
             ...grade.schemas,
             ...task.schemas,
+            ...adminDashboard.schemas,
         },
     },
     paths: {
@@ -56,6 +58,7 @@ export const swaggerSpec = {
         ...systemConfig.paths,
         ...grade.paths,
         ...task.paths,
+        ...adminDashboard.paths,
     },
 };
 

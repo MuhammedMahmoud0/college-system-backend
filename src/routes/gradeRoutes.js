@@ -1,17 +1,18 @@
 import { Router } from "express";
 import {
-    authMiddleware,
-    authorizationMiddleware,
+  authMiddleware,
+  authorizationMiddleware,
 } from "../middlewares/authMiddleware.js";
 import {
-    updateGradeByLecture,
-    updateGradeByTutorialLab,
-    getGradesByLecture,
-    getGradesByTutorialLab,
-    setGradeDistribution,
-    getGradeDistribution,
-    getMySemesterGpa,
-    getMyCgpaTrend,
+  updateGradeByLecture,
+  updateGradeByTutorialLab,
+  getGradesByLecture,
+  getGradesByTutorialLab,
+  setGradeDistribution,
+  getGradeDistribution,
+  getMySemesterGpa,
+  getMyCgpaTrend,
+  getMyGradeDistribution,
 } from "../controllers/gradeController.js";
 
 const router = Router();
@@ -24,9 +25,9 @@ router.use(authMiddleware);
  * Accessible by the lecture's instructor (doctor), admin, or super_admin.
  */
 router.put(
-    "/lecture/:lectureId/distribution",
-    authorizationMiddleware("doctor", "admin", "super_admin"),
-    setGradeDistribution
+  "/lecture/:lectureId/distribution",
+  authorizationMiddleware("doctor", "admin", "super_admin"),
+  setGradeDistribution,
 );
 
 /**
@@ -35,9 +36,9 @@ router.put(
  * Accessible by the lecture's instructor (doctor), admin, or super_admin.
  */
 router.get(
-    "/lecture/:lectureId/distribution",
-    authorizationMiddleware("doctor", "admin", "super_admin"),
-    getGradeDistribution
+  "/lecture/:lectureId/distribution",
+  authorizationMiddleware("doctor", "admin", "super_admin"),
+  getGradeDistribution,
 );
 
 /**
@@ -46,9 +47,9 @@ router.get(
  * Accessible by the lecture's instructor (doctor), admin, or super_admin.
  */
 router.put(
-    "/lecture/:lectureId/student/:studentId",
-    authorizationMiddleware("doctor", "admin", "super_admin"),
-    updateGradeByLecture
+  "/lecture/:lectureId/student/:studentId",
+  authorizationMiddleware("doctor", "admin", "super_admin"),
+  updateGradeByLecture,
 );
 
 /**
@@ -57,9 +58,9 @@ router.put(
  * Accessible by the tutorial/lab's TA, admin, or super_admin.
  */
 router.put(
-    "/tutorial-lab/:tutorialLabId/student/:studentId",
-    authorizationMiddleware("teaching_assistant", "admin", "super_admin"),
-    updateGradeByTutorialLab
+  "/tutorial-lab/:tutorialLabId/student/:studentId",
+  authorizationMiddleware("teaching_assistant", "admin", "super_admin"),
+  updateGradeByTutorialLab,
 );
 
 /**
@@ -68,9 +69,9 @@ router.put(
  * Accessible by the lecture's instructor (doctor), admin, or super_admin.
  */
 router.get(
-    "/lecture/:lectureId",
-    authorizationMiddleware("doctor", "admin", "super_admin"),
-    getGradesByLecture
+  "/lecture/:lectureId",
+  authorizationMiddleware("doctor", "admin", "super_admin"),
+  getGradesByLecture,
 );
 
 /**
@@ -79,9 +80,9 @@ router.get(
  * Accessible by the tutorial/lab's TA, admin, or super_admin.
  */
 router.get(
-    "/tutorial-lab/:tutorialLabId",
-    authorizationMiddleware("teaching_assistant", "admin", "super_admin"),
-    getGradesByTutorialLab
+  "/tutorial-lab/:tutorialLabId",
+  authorizationMiddleware("teaching_assistant", "admin", "super_admin"),
+  getGradesByTutorialLab,
 );
 
 /**
@@ -90,9 +91,9 @@ router.get(
  * Admin / super_admin can pass ?studentId= to query any student.
  */
 router.get(
-    "/my/semester-gpa",
-    authorizationMiddleware("student", "leader"),
-    getMySemesterGpa
+  "/my/semester-gpa",
+  authorizationMiddleware("student", "leader"),
+  getMySemesterGpa,
 );
 
 /**
@@ -100,9 +101,19 @@ router.get(
  * Returns the CGPA trend across all semesters for the logged-in student.
  */
 router.get(
-    "/my/cgpa-trend",
-    authorizationMiddleware("student", "leader"),
-    getMyCgpaTrend
+  "/my/cgpa-trend",
+  authorizationMiddleware("student", "leader"),
+  getMyCgpaTrend,
+);
+
+/**
+ * GET /api/v1/grades/my/distribution
+ * Returns grade distribution for the authenticated student.
+ */
+router.get(
+  "/my/distribution",
+  authorizationMiddleware("student", "leader"),
+  getMyGradeDistribution,
 );
 
 export default router;

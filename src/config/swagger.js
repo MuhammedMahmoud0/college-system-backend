@@ -21,6 +21,7 @@ import systemConfig from "../swagger/systemConfig.swagger.js";
 import grade from "../swagger/grade.swagger.js";
 import task from "../swagger/task.swagger.js";
 import adminDashboard from "../swagger/adminDashboard.swagger.js";
+import department from "../swagger/department.swagger.js";
 
 export const swaggerSpec = {
     ...base,
@@ -37,6 +38,7 @@ export const swaggerSpec = {
             ...grade.schemas,
             ...task.schemas,
             ...adminDashboard.schemas,
+            ...department.schemas,
         },
     },
     paths: {
@@ -44,6 +46,7 @@ export const swaggerSpec = {
         ...users.paths,
         ...studentProfile.paths,
         ...studentSettings.paths,
+        ...department.paths,
         ...leaderboard.paths,
         ...schedule.paths,
         ...teacher.paths,

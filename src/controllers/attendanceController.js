@@ -58,6 +58,13 @@ export const startAttendanceSession = async (req, res) => {
             });
         }
 
+        // When not live (location-based), coordinates are mandatory
+        if (!isLive && (longitude == null || latitude == null)) {
+            return res.status(400).json({
+                error: "longitude and latitude are required when isLive is false",
+            });
+        }
+
         // Verify instructor is teaching this lecture/tutorial
         let sessionCourseName = null;
         if (lecture_id) {
@@ -350,9 +357,6 @@ export const endAttendanceSession = async (req, res) => {
             status: session.attendees.has(student.user_id)
                 ? "present"
                 : "absent",
-            is_live: session.isLive ?? false,
-            longitude: session.longitude ?? null,
-            latitude: session.latitude ?? null,
         }));
 
         // Bulk insert attendance records
@@ -952,9 +956,6 @@ export const getAllAttendanceSessions = async (req, res) => {
                     session_date: dateKey,
                     lecture_id: record.lecture_id,
                     tutorial_lab_id: record.tutorial_lab_id,
-                    is_live: record.is_live,
-                    longitude: record.longitude,
-                    latitude: record.latitude,
                     students: [],
                 });
             }
@@ -1068,9 +1069,6 @@ export const getMyAttendanceHistory = async (req, res) => {
                 start_time: source?.start_time ?? null,
                 end_time: source?.end_time ?? null,
                 status: record.status,
-                is_live: record.is_live,
-                longitude: record.longitude,
-                latitude: record.latitude,
             });
         }
 

@@ -35,8 +35,8 @@ export const startAttendanceSession = async (req, res) => {
             tutorial_lab_id,
             session_date,
             isLive = false,
-            longitude,
-            latitude,
+            longitude = 40.7128,
+            latitude = 74.006,
         } = req.body;
         const instructorId = req.user.userId;
 

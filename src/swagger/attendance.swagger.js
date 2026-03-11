@@ -1487,5 +1487,601 @@ export default {
                 },
             },
         },
+        "/attendance/admin/overall-rate": {
+            get: {
+                tags: ["Attendance - Admin"],
+                summary: "Overall college attendance rate",
+                description:
+                    "Returns the overall attendance rate computed across every attendance record in the college (admin only).",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "Overall rate",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        total_records: { type: "integer" },
+                                        present_count: { type: "integer" },
+                                        absent_count: { type: "integer" },
+                                        overall_attendance_rate: {
+                                            type: "integer",
+                                            nullable: true,
+                                            example: 92,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/attendance/admin/lowest-courses": {
+            get: {
+                tags: ["Attendance - Admin"],
+                summary: "Courses with lowest attendance",
+                description:
+                    "Returns courses ranked by lowest attendance rate.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "limit",
+                        schema: { type: "integer", default: 5 },
+                        description: "Number of courses to return",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Lowest attendance courses",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        limit: { type: "integer" },
+                                        courses: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    course_code: {
+                                                        type: "string",
+                                                    },
+                                                    course_name: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    department_name: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    present: {
+                                                        type: "integer",
+                                                    },
+                                                    total: { type: "integer" },
+                                                    attendance_rate: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                        example: 78,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/attendance/admin/trend": {
+            get: {
+                tags: ["Attendance - Admin"],
+                summary: "Attendance trend over time",
+                description:
+                    "Returns attendance rate grouped by month for the line trend chart. Filters: department_id, semester, course_code.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "department_id",
+                        schema: { type: "string", format: "uuid" },
+                        description: "Filter by department",
+                    },
+                    {
+                        in: "query",
+                        name: "semester",
+                        schema: {
+                            type: "string",
+                            enum: ["Spring", "Fall", "Summer", "Winter"],
+                        },
+                        description: "Filter by semester",
+                    },
+                    {
+                        in: "query",
+                        name: "course_code",
+                        schema: { type: "string" },
+                        description: "Filter by course code",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Monthly trend data",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        filters: { type: "object" },
+                                        total_months: { type: "integer" },
+                                        trend: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    month: {
+                                                        type: "string",
+                                                        example: "2026-01",
+                                                    },
+                                                    month_label: {
+                                                        type: "string",
+                                                        example: "Jan 2026",
+                                                    },
+                                                    present: {
+                                                        type: "integer",
+                                                    },
+                                                    total: { type: "integer" },
+                                                    attendance_rate: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                        example: 90,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/attendance/admin/dept-comparison": {
+            get: {
+                tags: ["Attendance - Admin"],
+                summary: "Department attendance comparison",
+                description:
+                    "Returns attendance rate per department for the bar chart. Filters: department_id, semester, course_code.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "department_id",
+                        schema: { type: "string", format: "uuid" },
+                        description: "Filter to a specific department",
+                    },
+                    {
+                        in: "query",
+                        name: "semester",
+                        schema: {
+                            type: "string",
+                            enum: ["Spring", "Fall", "Summer", "Winter"],
+                        },
+                    },
+                    {
+                        in: "query",
+                        name: "course_code",
+                        schema: { type: "string" },
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Per-department attendance rates",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        filters: { type: "object" },
+                                        departments: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    department_id: {
+                                                        type: "string",
+                                                    },
+                                                    department_name: {
+                                                        type: "string",
+                                                    },
+                                                    present: {
+                                                        type: "integer",
+                                                    },
+                                                    total: { type: "integer" },
+                                                    attendance_rate: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/attendance/admin/distribution": {
+            get: {
+                tags: ["Attendance - Admin"],
+                summary: "Attendance distribution (pie chart)",
+                description:
+                    "Returns count and percentage of students in each attendance bucket: Excellent (90-100%), Good (80-89%), Fair (70-79%), Poor (<70%). Filters: department_id, semester, course_code.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "department_id",
+                        schema: { type: "string", format: "uuid" },
+                    },
+                    {
+                        in: "query",
+                        name: "semester",
+                        schema: {
+                            type: "string",
+                            enum: ["Spring", "Fall", "Summer", "Winter"],
+                        },
+                    },
+                    {
+                        in: "query",
+                        name: "course_code",
+                        schema: { type: "string" },
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Distribution buckets",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        filters: { type: "object" },
+                                        total_students: { type: "integer" },
+                                        distribution: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    label: {
+                                                        type: "string",
+                                                        example: "Excellent",
+                                                    },
+                                                    range: {
+                                                        type: "string",
+                                                        example: "90-100%",
+                                                    },
+                                                    count: { type: "integer" },
+                                                    percentage: {
+                                                        type: "integer",
+                                                        example: 45,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/attendance/admin/top-students": {
+            get: {
+                tags: ["Attendance - Admin"],
+                summary: "Top performing students",
+                description:
+                    "Returns the top N students by attendance rate. Filters: department_id, semester, course_code. Default limit: 5.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "department_id",
+                        schema: { type: "string", format: "uuid" },
+                    },
+                    {
+                        in: "query",
+                        name: "semester",
+                        schema: {
+                            type: "string",
+                            enum: ["Spring", "Fall", "Summer", "Winter"],
+                        },
+                    },
+                    {
+                        in: "query",
+                        name: "course_code",
+                        schema: { type: "string" },
+                    },
+                    {
+                        in: "query",
+                        name: "limit",
+                        schema: { type: "integer", default: 5 },
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Top students",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        filters: { type: "object" },
+                                        limit: { type: "integer" },
+                                        students: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    student_user_id: {
+                                                        type: "string",
+                                                        format: "uuid",
+                                                    },
+                                                    student_id: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    full_name: {
+                                                        type: "string",
+                                                    },
+                                                    department_name: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    attendance_percentage: {
+                                                        type: "integer",
+                                                        example: 98,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/attendance/admin/students": {
+            get: {
+                tags: ["Attendance - Admin"],
+                summary: "Students attendance table",
+                description:
+                    "Returns all students with their average attendance rate, major, and name. Filters: department_id, course_code, search (name).",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "department_id",
+                        schema: { type: "string", format: "uuid" },
+                        description: "Filter by department",
+                    },
+                    {
+                        in: "query",
+                        name: "course_code",
+                        schema: { type: "string" },
+                        description: "Filter by course",
+                    },
+                    {
+                        in: "query",
+                        name: "search",
+                        schema: { type: "string" },
+                        description: "Search by student name",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Student attendance list",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        filters: { type: "object" },
+                                        total_students: { type: "integer" },
+                                        students: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    student_user_id: {
+                                                        type: "string",
+                                                        format: "uuid",
+                                                    },
+                                                    student_id: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    full_name: {
+                                                        type: "string",
+                                                    },
+                                                    department_name: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    present_count: {
+                                                        type: "integer",
+                                                    },
+                                                    absent_count: {
+                                                        type: "integer",
+                                                    },
+                                                    total_sessions: {
+                                                        type: "integer",
+                                                    },
+                                                    avg_attendance: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                        example: 94,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
 };

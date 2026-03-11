@@ -55,9 +55,6 @@ model attendance {
   tutorial_lab_id Int?
   session_date    DateTime        @db.Date
   status          String
-  is_live         Boolean         @default(false)
-  longitude       Float?
-  latitude        Float?
   lectures        lectures?       @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
   users           users           @relation(fields: [student_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tutorials_labs  tutorials_labs? @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)

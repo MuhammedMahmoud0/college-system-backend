@@ -72,6 +72,82 @@ export default {
                 },
             },
         },
+        "/attendance/sessions/{sessionId}/live-info": {
+            get: {
+                tags: ["Attendance"],
+                summary: "Get session live info",
+                description:
+                    "Returns is_live, latitude, and longitude for an active attendance session. Accessible by all authenticated users.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "sessionId",
+                        required: true,
+                        schema: { type: "string", format: "uuid" },
+                        description: "Session ID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Live info retrieved successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        sessionId: {
+                                            type: "string",
+                                            format: "uuid",
+                                            example:
+                                                "550e8400-e29b-41d4-a716-446655440000",
+                                        },
+                                        is_live: {
+                                            type: "boolean",
+                                            description:
+                                                "Whether the session uses live (selfie) attendance",
+                                            example: true,
+                                        },
+                                        latitude: {
+                                            type: "number",
+                                            format: "double",
+                                            nullable: true,
+                                            example: 31.2001,
+                                        },
+                                        longitude: {
+                                            type: "number",
+                                            format: "double",
+                                            nullable: true,
+                                            example: 29.9187,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Session not found or expired",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
         "/attendance/sessions/{sessionId}": {
             get: {
                 tags: ["Attendance"],

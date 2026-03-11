@@ -954,5 +954,538 @@ export default {
                 },
             },
         },
+        "/attendance/grid": {
+            get: {
+                tags: ["Attendance"],
+                summary: "Get attendance grid",
+                description:
+                    "Returns all enrolled students (rows) × all session dates (columns). Each cell contains the attendance_id and status (present/absent) or null if no record exists for that student on that date. Use PUT /attendance/records/update to toggle a cell's status.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "lecture_id",
+                        schema: { type: "integer" },
+                        description:
+                            "ID of the lecture (provide either this or tutorial_lab_id)",
+                    },
+                    {
+                        in: "query",
+                        name: "tutorial_lab_id",
+                        schema: { type: "integer" },
+                        description:
+                            "ID of the tutorial/lab (provide either this or lecture_id)",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Attendance grid returned successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        lecture_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                        },
+                                        tutorial_lab_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                        },
+                                        total_students: {
+                                            type: "integer",
+                                            example: 25,
+                                        },
+                                        total_sessions: {
+                                            type: "integer",
+                                            example: 4,
+                                        },
+                                        dates: {
+                                            type: "array",
+                                            items: {
+                                                type: "string",
+                                                format: "date",
+                                                example: "2025-10-13",
+                                            },
+                                            description:
+                                                "Sorted list of all session dates (grid column headers)",
+                                        },
+                                        students: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    student_user_id: {
+                                                        type: "string",
+                                                        format: "uuid",
+                                                    },
+                                                    student_id: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    full_name: {
+                                                        type: "string",
+                                                    },
+                                                    email: { type: "string" },
+                                                    avatar_url: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    present_count: {
+                                                        type: "integer",
+                                                    },
+                                                    absent_count: {
+                                                        type: "integer",
+                                                    },
+                                                    attendance_percentage: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                        example: 75,
+                                                    },
+                                                    attendance: {
+                                                        type: "object",
+                                                        description:
+                                                            "Keys are session dates (YYYY-MM-DD). Value is null when no record exists, otherwise { attendance_id, status }.",
+                                                        additionalProperties: {
+                                                            nullable: true,
+                                                            type: "object",
+                                                            properties: {
+                                                                attendance_id: {
+                                                                    type: "integer",
+                                                                },
+                                                                status: {
+                                                                    type: "string",
+                                                                    enum: [
+                                                                        "present",
+                                                                        "absent",
+                                                                    ],
+                                                                },
+                                                            },
+                                                        },
+                                                        example: {
+                                                            "2025-10-13": {
+                                                                attendance_id: 5,
+                                                                status: "absent",
+                                                            },
+                                                            "2025-10-15": {
+                                                                attendance_id: 6,
+                                                                status: "present",
+                                                            },
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description:
+                            "Validation error (missing or conflicting query params)",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description:
+                            "Not authorized to view attendance for this lecture/tutorial",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Lecture or tutorial not found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/attendance/stats/avg": {
+            get: {
+                tags: ["Attendance"],
+                summary: "Get average attendance rate",
+                description:
+                    "Returns the average attendance rate across all enrolled students for a lecture or tutorial. Rate is the mean of each student's individual attendance percentage.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "lecture_id",
+                        schema: { type: "integer" },
+                        description: "ID of the lecture",
+                    },
+                    {
+                        in: "query",
+                        name: "tutorial_lab_id",
+                        schema: { type: "integer" },
+                        description: "ID of the tutorial/lab",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Average attendance rate",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        lecture_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                        },
+                                        tutorial_lab_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                        },
+                                        total_students: {
+                                            type: "integer",
+                                            example: 25,
+                                        },
+                                        total_sessions: {
+                                            type: "integer",
+                                            example: 4,
+                                        },
+                                        avg_attendance_rate: {
+                                            type: "integer",
+                                            nullable: true,
+                                            example: 92,
+                                            description:
+                                                "Percentage (0-100), null if no sessions yet",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description: "Missing/conflicting query params",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Lecture or tutorial not found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/attendance/stats/lowest": {
+            get: {
+                tags: ["Attendance"],
+                summary: "Get lowest attendance students",
+                description:
+                    "Returns the students with the lowest attendance rates for a lecture or tutorial. Only students who have at least one recorded session are included.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "lecture_id",
+                        schema: { type: "integer" },
+                        description: "ID of the lecture",
+                    },
+                    {
+                        in: "query",
+                        name: "tutorial_lab_id",
+                        schema: { type: "integer" },
+                        description: "ID of the tutorial/lab",
+                    },
+                    {
+                        in: "query",
+                        name: "limit",
+                        schema: { type: "integer", default: 3 },
+                        description: "Number of students to return (default 3)",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Lowest attendance students",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        lecture_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                        },
+                                        tutorial_lab_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                        },
+                                        limit: { type: "integer", example: 3 },
+                                        students: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    student_user_id: {
+                                                        type: "string",
+                                                        format: "uuid",
+                                                    },
+                                                    student_id: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    full_name: {
+                                                        type: "string",
+                                                    },
+                                                    email: { type: "string" },
+                                                    avatar_url: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    present_count: {
+                                                        type: "integer",
+                                                    },
+                                                    absent_count: {
+                                                        type: "integer",
+                                                    },
+                                                    total_sessions: {
+                                                        type: "integer",
+                                                    },
+                                                    attendance_percentage: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                        example: 75,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description: "Missing/conflicting query params",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Lecture or tutorial not found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/attendance/stats/trend": {
+            get: {
+                tags: ["Attendance"],
+                summary: "Get attendance trend by week",
+                description:
+                    "Returns attendance data grouped by relative week (Week 1, Week 2, …) anchored to the first session date. Useful for charting attendance trends over time.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "query",
+                        name: "lecture_id",
+                        schema: { type: "integer" },
+                        description: "ID of the lecture",
+                    },
+                    {
+                        in: "query",
+                        name: "tutorial_lab_id",
+                        schema: { type: "integer" },
+                        description: "ID of the tutorial/lab",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Weekly attendance trend",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        lecture_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                        },
+                                        tutorial_lab_id: {
+                                            type: "integer",
+                                            nullable: true,
+                                        },
+                                        total_weeks: {
+                                            type: "integer",
+                                            example: 4,
+                                        },
+                                        weeks: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    week: {
+                                                        type: "integer",
+                                                        example: 1,
+                                                        description:
+                                                            "Relative week number starting from 1",
+                                                    },
+                                                    session_dates: {
+                                                        type: "array",
+                                                        items: {
+                                                            type: "string",
+                                                            format: "date",
+                                                        },
+                                                        example: [
+                                                            "2025-10-13",
+                                                            "2025-10-15",
+                                                        ],
+                                                    },
+                                                    present_count: {
+                                                        type: "integer",
+                                                    },
+                                                    absent_count: {
+                                                        type: "integer",
+                                                    },
+                                                    total_count: {
+                                                        type: "integer",
+                                                    },
+                                                    attendance_rate: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                        example: 88,
+                                                        description:
+                                                            "Percentage (0-100)",
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description: "Missing/conflicting query params",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description: "Unauthorized",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Lecture or tutorial not found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
 };

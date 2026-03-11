@@ -502,7 +502,7 @@ export const toggleStudentAttendance = async (req, res) => {
             const lecture = await prisma.lectures.findUnique({
                 where: { lecture_id: session.lectureId },
             });
-            if (lecture.instructor_user_id !== instructorId) {
+            if (lecture.instructor_id !== instructorId) {
                 return res.status(403).json({ error: "Unauthorized" });
             }
         }
@@ -511,7 +511,7 @@ export const toggleStudentAttendance = async (req, res) => {
             const tutorial = await prisma.tutorials_labs.findUnique({
                 where: { tutorial_lab_id: session.tutorialLabId },
             });
-            if (tutorial.assistant_user_id !== instructorId) {
+            if (tutorial.ta_id !== instructorId) {
                 return res.status(403).json({ error: "Unauthorized" });
             }
         }
@@ -603,7 +603,7 @@ export const updateAttendanceRecord = async (req, res) => {
                 return res.status(404).json({ error: "Lecture not found" });
             }
 
-            if (lecture.instructor_user_id !== instructorId) {
+            if (lecture.instructor_id !== instructorId) {
                 return res.status(403).json({
                     error: "You are not authorized to update attendance for this lecture",
                 });
@@ -621,7 +621,7 @@ export const updateAttendanceRecord = async (req, res) => {
                 });
             }
 
-            if (tutorial.assistant_user_id !== instructorId) {
+            if (tutorial.ta_id !== instructorId) {
                 return res.status(403).json({
                     error: "You are not authorized to update attendance for this tutorial",
                 });
@@ -1092,6 +1092,439 @@ export const getMyAttendanceHistory = async (req, res) => {
         });
     } catch (err) {
         logger.error("Error fetching student attendance history:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Get the attendance grid for a lecture or tutorial
+ * Returns all enrolled students (rows) × all session dates (columns)
+ * Each cell contains { attendance_id, status } or null if not recorded
+ * GET /api/v1/attendance/grid?lecture_id=&tutorial_lab_id=
+ */
+export const getAttendanceGrid = async (req, res) => {
+    try {
+        const { lecture_id, tutorial_lab_id } = req.query;
+        const instructorId = req.user.userId;
+
+        if (!lecture_id && !tutorial_lab_id) {
+            return res.status(400).json({
+                error: "Either lecture_id or tutorial_lab_id is required",
+            });
+        }
+        if (lecture_id && tutorial_lab_id) {
+            return res.status(400).json({
+                error: "Provide either lecture_id or tutorial_lab_id, not both",
+            });
+        }
+
+        // Verify the instructor owns this lecture/tutorial
+        if (lecture_id) {
+            const lecture = await prisma.lectures.findUnique({
+                where: { lecture_id: parseInt(lecture_id) },
+            });
+            if (!lecture) {
+                return res.status(404).json({ error: "Lecture not found" });
+            }
+            if (lecture.instructor_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to view this lecture's attendance",
+                });
+            }
+        }
+
+        if (tutorial_lab_id) {
+            const tutorial = await prisma.tutorials_labs.findUnique({
+                where: { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            });
+            if (!tutorial) {
+                return res
+                    .status(404)
+                    .json({ error: "Tutorial/Lab not found" });
+            }
+            if (tutorial.ta_id !== instructorId) {
+                return res.status(403).json({
+                    error: "You are not authorized to view this tutorial's attendance",
+                });
+            }
+        }
+
+        // Fetch all enrolled students
+        const enrollments = await prisma.enrollments.findMany({
+            where: lecture_id
+                ? { lecture_id: parseInt(lecture_id) }
+                : { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                        avatar_url: true,
+                        student_profiles: {
+                            select: { student_id: true },
+                        },
+                    },
+                },
+            },
+        });
+
+        // Fetch all attendance records for this lecture/tutorial
+        const records = await prisma.attendance.findMany({
+            where: lecture_id
+                ? { lecture_id: parseInt(lecture_id) }
+                : { tutorial_lab_id: parseInt(tutorial_lab_id) },
+            orderBy: { session_date: "asc" },
+        });
+
+        // Collect all unique session dates in order
+        const datesSet = new Set();
+        for (const record of records) {
+            datesSet.add(
+                new Date(record.session_date).toISOString().split("T")[0]
+            );
+        }
+        const dates = Array.from(datesSet).sort();
+
+        // Build lookup: "studentId:date" -> { attendance_id, status }
+        const cellMap = {};
+        for (const record of records) {
+            const dateKey = new Date(record.session_date)
+                .toISOString()
+                .split("T")[0];
+            cellMap[`${record.student_user_id}:${dateKey}`] = {
+                attendance_id: record.id,
+                status: record.status,
+            };
+        }
+
+        // Build student rows
+        const students = enrollments.map((enrollment) => {
+            const user = enrollment.users;
+            const attendance = {};
+
+            for (const date of dates) {
+                const key = `${user.id}:${date}`;
+                attendance[date] = cellMap[key] ?? null;
+            }
+
+            const presentCount = records.filter(
+                (r) => r.student_user_id === user.id && r.status === "present"
+            ).length;
+            const absentCount = records.filter(
+                (r) => r.student_user_id === user.id && r.status === "absent"
+            ).length;
+            const totalSessions = presentCount + absentCount;
+
+            return {
+                student_user_id: user.id,
+                student_id: user.student_profiles?.student_id ?? null,
+                full_name: user.full_name,
+                email: user.email,
+                avatar_url: user.avatar_url ?? null,
+                present_count: presentCount,
+                absent_count: absentCount,
+                attendance_percentage:
+                    totalSessions > 0
+                        ? Math.round((presentCount / totalSessions) * 100)
+                        : null,
+                attendance,
+            };
+        });
+
+        res.status(200).json({
+            lecture_id: lecture_id ? parseInt(lecture_id) : null,
+            tutorial_lab_id: tutorial_lab_id ? parseInt(tutorial_lab_id) : null,
+            total_students: students.length,
+            total_sessions: dates.length,
+            dates,
+            students,
+        });
+    } catch (err) {
+        logger.error("Error fetching attendance grid:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Shared helper: verify instructor access and return all attendance records
+ * for a given lecture or tutorial. Returns null and sends response on failure.
+ */
+async function resolveAttendanceRecords(req, res) {
+    const { lecture_id, tutorial_lab_id } = req.query;
+    const instructorId = req.user.userId;
+
+    if (!lecture_id && !tutorial_lab_id) {
+        res.status(400).json({
+            error: "Either lecture_id or tutorial_lab_id is required",
+        });
+        return null;
+    }
+    if (lecture_id && tutorial_lab_id) {
+        res.status(400).json({
+            error: "Provide either lecture_id or tutorial_lab_id, not both",
+        });
+        return null;
+    }
+
+    if (lecture_id) {
+        const lecture = await prisma.lectures.findUnique({
+            where: { lecture_id: parseInt(lecture_id) },
+        });
+        if (!lecture) {
+            res.status(404).json({ error: "Lecture not found" });
+            return null;
+        }
+        if (lecture.instructor_id !== instructorId) {
+            res.status(403).json({
+                error: "You are not authorized to view this lecture's attendance",
+            });
+            return null;
+        }
+    }
+
+    if (tutorial_lab_id) {
+        const tutorial = await prisma.tutorials_labs.findUnique({
+            where: { tutorial_lab_id: parseInt(tutorial_lab_id) },
+        });
+        if (!tutorial) {
+            res.status(404).json({ error: "Tutorial/Lab not found" });
+            return null;
+        }
+        if (tutorial.ta_id !== instructorId) {
+            res.status(403).json({
+                error: "You are not authorized to view this tutorial's attendance",
+            });
+            return null;
+        }
+    }
+
+    const whereClause = lecture_id
+        ? { lecture_id: parseInt(lecture_id) }
+        : { tutorial_lab_id: parseInt(tutorial_lab_id) };
+
+    const [enrollments, records] = await Promise.all([
+        prisma.enrollments.findMany({
+            where: whereClause,
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                        avatar_url: true,
+                        student_profiles: { select: { student_id: true } },
+                    },
+                },
+            },
+        }),
+        prisma.attendance.findMany({
+            where: whereClause,
+            orderBy: { session_date: "asc" },
+        }),
+    ]);
+
+    return {
+        lecture_id: lecture_id ? parseInt(lecture_id) : null,
+        tutorial_lab_id: tutorial_lab_id ? parseInt(tutorial_lab_id) : null,
+        enrollments,
+        records,
+    };
+}
+
+/**
+ * Get avg attendance rate for a lecture / tutorial
+ * GET /api/v1/attendance/stats/avg?lecture_id=&tutorial_lab_id=
+ */
+export const getAvgAttendanceRate = async (req, res) => {
+    try {
+        const data = await resolveAttendanceRecords(req, res);
+        if (!data) return;
+
+        const { lecture_id, tutorial_lab_id, enrollments, records } = data;
+
+        // Collect unique session dates
+        const dates = [
+            ...new Set(
+                records.map(
+                    (r) => new Date(r.session_date).toISOString().split("T")[0]
+                )
+            ),
+        ];
+        const totalSessions = dates.length;
+
+        if (totalSessions === 0) {
+            return res.status(200).json({
+                lecture_id,
+                tutorial_lab_id,
+                total_students: enrollments.length,
+                total_sessions: 0,
+                avg_attendance_rate: null,
+            });
+        }
+
+        // Per-student rate, then average
+        const studentRates = enrollments.map((e) => {
+            const studentRecords = records.filter(
+                (r) => r.student_user_id === e.users.id
+            );
+            const present = studentRecords.filter(
+                (r) => r.status === "present"
+            ).length;
+            const total = studentRecords.length;
+            return total > 0 ? (present / total) * 100 : 0;
+        });
+
+        const avg =
+            studentRates.length > 0
+                ? Math.round(
+                      studentRates.reduce((a, b) => a + b, 0) /
+                          studentRates.length
+                  )
+                : null;
+
+        res.status(200).json({
+            lecture_id,
+            tutorial_lab_id,
+            total_students: enrollments.length,
+            total_sessions: totalSessions,
+            avg_attendance_rate: avg,
+        });
+    } catch (err) {
+        logger.error("Error fetching avg attendance rate:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Get lowest N students by attendance rate for a lecture / tutorial
+ * GET /api/v1/attendance/stats/lowest?lecture_id=&tutorial_lab_id=&limit=3
+ */
+export const getLowestAttendance = async (req, res) => {
+    try {
+        const limit = Math.max(1, parseInt(req.query.limit) || 3);
+
+        const data = await resolveAttendanceRecords(req, res);
+        if (!data) return;
+
+        const { lecture_id, tutorial_lab_id, enrollments, records } = data;
+
+        const students = enrollments
+            .map((e) => {
+                const user = e.users;
+                const studentRecords = records.filter(
+                    (r) => r.student_user_id === user.id
+                );
+                const present = studentRecords.filter(
+                    (r) => r.status === "present"
+                ).length;
+                const total = studentRecords.length;
+                return {
+                    student_user_id: user.id,
+                    student_id: user.student_profiles?.student_id ?? null,
+                    full_name: user.full_name,
+                    email: user.email,
+                    avatar_url: user.avatar_url ?? null,
+                    present_count: present,
+                    absent_count: total - present,
+                    total_sessions: total,
+                    attendance_percentage:
+                        total > 0 ? Math.round((present / total) * 100) : null,
+                };
+            })
+            .filter((s) => s.total_sessions > 0) // exclude students with no records
+            .sort(
+                (a, b) =>
+                    (a.attendance_percentage ?? 0) -
+                    (b.attendance_percentage ?? 0)
+            )
+            .slice(0, limit);
+
+        res.status(200).json({
+            lecture_id,
+            tutorial_lab_id,
+            limit,
+            students,
+        });
+    } catch (err) {
+        logger.error("Error fetching lowest attendance:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Get attendance trend grouped by relative week (Week 1, Week 2, …)
+ * The first week is anchored to the earliest session date.
+ * GET /api/v1/attendance/stats/trend?lecture_id=&tutorial_lab_id=
+ */
+export const getAttendanceTrend = async (req, res) => {
+    try {
+        const data = await resolveAttendanceRecords(req, res);
+        if (!data) return;
+
+        const { lecture_id, tutorial_lab_id, records } = data;
+
+        if (records.length === 0) {
+            return res.status(200).json({
+                lecture_id,
+                tutorial_lab_id,
+                total_weeks: 0,
+                weeks: [],
+            });
+        }
+
+        // Anchor: earliest session date (ms)
+        const firstDate = new Date(records[0].session_date).getTime();
+        const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+        // Group records by week number
+        const weeksMap = new Map();
+        for (const record of records) {
+            const recordDate = new Date(record.session_date).getTime();
+            const weekNum =
+                Math.floor((recordDate - firstDate) / MS_PER_WEEK) + 1;
+
+            if (!weeksMap.has(weekNum)) {
+                weeksMap.set(weekNum, {
+                    week: weekNum,
+                    present_count: 0,
+                    absent_count: 0,
+                    total_count: 0,
+                    session_dates: new Set(),
+                });
+            }
+
+            const w = weeksMap.get(weekNum);
+            w.total_count++;
+            w.session_dates.add(
+                new Date(record.session_date).toISOString().split("T")[0]
+            );
+            if (record.status === "present") w.present_count++;
+            else w.absent_count++;
+        }
+
+        const weeks = Array.from(weeksMap.values())
+            .sort((a, b) => a.week - b.week)
+            .map((w) => ({
+                week: w.week,
+                session_dates: Array.from(w.session_dates).sort(),
+                present_count: w.present_count,
+                absent_count: w.absent_count,
+                total_count: w.total_count,
+                attendance_rate:
+                    w.total_count > 0
+                        ? Math.round((w.present_count / w.total_count) * 100)
+                        : null,
+            }));
+
+        res.status(200).json({
+            lecture_id,
+            tutorial_lab_id,
+            total_weeks: weeks.length,
+            weeks,
+        });
+    } catch (err) {
+        logger.error("Error fetching attendance trend:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 };

@@ -10,6 +10,10 @@ import {
     getStudentsAttendance,
     getAllAttendanceSessions,
     getMyAttendanceHistory,
+    getAttendanceGrid,
+    getAvgAttendanceRate,
+    getLowestAttendance,
+    getAttendanceTrend,
 } from "../controllers/attendanceController.js";
 import {
     authMiddleware,
@@ -83,6 +87,38 @@ router.get(
     authMiddleware,
     authorizationMiddleware("doctor", "teaching_assistant", "admin"),
     getStudentsAttendance
+);
+
+// Get attendance grid: all students × all session dates
+router.get(
+    "/grid",
+    authMiddleware,
+    authorizationMiddleware("doctor", "teaching_assistant", "admin"),
+    getAttendanceGrid
+);
+
+// Average attendance rate for a lecture/tutorial
+router.get(
+    "/stats/avg",
+    authMiddleware,
+    authorizationMiddleware("doctor", "teaching_assistant", "admin"),
+    getAvgAttendanceRate
+);
+
+// Lowest N students by attendance rate
+router.get(
+    "/stats/lowest",
+    authMiddleware,
+    authorizationMiddleware("doctor", "teaching_assistant", "admin"),
+    getLowestAttendance
+);
+
+// Attendance trend grouped by week
+router.get(
+    "/stats/trend",
+    authMiddleware,
+    authorizationMiddleware("doctor", "teaching_assistant", "admin"),
+    getAttendanceTrend
 );
 
 // Get attendance history for the logged-in student

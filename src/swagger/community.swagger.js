@@ -384,6 +384,145 @@ export default {
                 },
             },
         },
+        "/community/posts/{id}/comments": {
+            get: {
+                summary: "Get all comments for a post",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Post ID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Successfully retrieved comments",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        post_id: {
+                                            type: "integer",
+                                            example: 6,
+                                        },
+                                        comments: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    id: {
+                                                        type: "integer",
+                                                        example: 1,
+                                                    },
+                                                    content: {
+                                                        type: "string",
+                                                        example: "Great post!",
+                                                    },
+                                                    created_at: {
+                                                        type: "string",
+                                                        format: "date-time",
+                                                        example: "2026-02-08T09:05:15.178Z",
+                                                    },
+                                                    author_id: {
+                                                        type: "string",
+                                                        format: "uuid",
+                                                        example: "f6c1fcd5-4d22-4914-87ed-ef86e4bae2e2",
+                                                    },
+                                                    author_name: {
+                                                        type: "string",
+                                                        example: "John Doe",
+                                                    },
+                                                    author_avatar: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                        example: null,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                        total: {
+                                            type: "integer",
+                                            example: 3,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    404: { description: "Post not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/community/posts/{id}/likes": {
+            get: {
+                summary: "Get all likes for a post",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: { type: "integer" },
+                        description: "Post ID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Successfully retrieved likes",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        post_id: {
+                                            type: "integer",
+                                            example: 6,
+                                        },
+                                        likes: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    user_id: {
+                                                        type: "string",
+                                                        format: "uuid",
+                                                        example: "f6c1fcd5-4d22-4914-87ed-ef86e4bae2e2",
+                                                    },
+                                                    full_name: {
+                                                        type: "string",
+                                                        example: "John Doe",
+                                                    },
+                                                    avatar_url: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                        example: "https://storage.example.com/avatars/john-d.jpg",
+                                                    },
+                                                },
+                                            },
+                                        },
+                                        total: {
+                                            type: "integer",
+                                            example: 15,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    404: { description: "Post not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
         "/community/posts/user/{userId}": {
             get: {
                 summary: "Get all posts by a specific user",

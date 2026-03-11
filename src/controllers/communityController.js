@@ -302,6 +302,88 @@ export const addPostComment = async (req, res) => {
     }
 };
 
+// GET /api/community/posts/:id/comments - Get all comments for a post
+export const getPostComments = async (req, res) => {
+    try {
+        const postId = parseInt(req.params.id);
+
+        const post = await prisma.community_posts.findUnique({
+            where: { id: postId },
+        });
+
+        if (!post) {
+            return res.status(404).json({ error: "Post not found" });
+        }
+
+        const comments = await prisma.post_comments.findMany({
+            where: { post_id: postId },
+            orderBy: { created_at: "asc" },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        avatar_url: true,
+                    },
+                },
+            },
+        });
+
+        const result = comments.map((comment) => ({
+            id: comment.id,
+            content: comment.content,
+            created_at: comment.created_at,
+            author_id: comment.users.id,
+            author_name: comment.users.full_name,
+            author_avatar: comment.users.avatar_url,
+        }));
+
+        res.status(200).json({ post_id: postId, comments: result, total: result.length });
+    } catch (err) {
+        logger.error("Error fetching post comments:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// GET /api/community/posts/:id/likes - Get all likes for a post
+export const getPostLikes = async (req, res) => {
+    try {
+        const postId = parseInt(req.params.id);
+
+        const post = await prisma.community_posts.findUnique({
+            where: { id: postId },
+        });
+
+        if (!post) {
+            return res.status(404).json({ error: "Post not found" });
+        }
+
+        const likes = await prisma.post_likes.findMany({
+            where: { post_id: postId },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        avatar_url: true,
+                    },
+                },
+            },
+        });
+
+        const result = likes.map((like) => ({
+            user_id: like.users.id,
+            full_name: like.users.full_name,
+            avatar_url: like.users.avatar_url,
+        }));
+
+        res.status(200).json({ post_id: postId, likes: result, total: result.length });
+    } catch (err) {
+        logger.error("Error fetching post likes:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 // POST /api/community/groups - Create a new group
 export const createGroup = async (req, res) => {
     try {

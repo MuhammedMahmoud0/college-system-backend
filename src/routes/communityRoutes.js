@@ -14,7 +14,9 @@ router.delete('/posts/:id', communityController.deletePost);
 router.get('/feed', communityController.getCommunityFeed);
 router.get('/posts/user/:userId', communityController.getUserPosts);
 router.post('/posts/:id/like', communityController.togglePostLike);
+router.get('/posts/:id/likes', communityController.getPostLikes);
 router.post('/posts/:id/comment', communityController.addPostComment);
+router.get('/posts/:id/comments', communityController.getPostComments);
 
 // Groups - Only non-students can create groups
 router.post('/groups', authorizationMiddleware('doctor', 'admin', 'super_admin', 'teaching_assistant', 'leader'), communityController.createGroup);

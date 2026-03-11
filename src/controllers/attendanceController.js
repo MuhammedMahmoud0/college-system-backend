@@ -1532,109 +1532,212 @@ export const getAttendanceTrend = async (req, res) => {
 // ─── Admin Attendance Analytics ──────────────────────────────────────────────
 
 /**
- * Build a Prisma `where` clause for attendance records filtered by
- * department, semester, and/or course (all optional).
+ * Build offering-level prisma `where` for lectures / tutorials_labs
+ * so we can find matching IDs when filters are present.
  */
-function buildAdminWhere({ department_id, semester, course_code } = {}) {
-    const offeringFilter = {};
-    if (semester) offeringFilter.semester = semester;
-    if (course_code) offeringFilter.course_code = course_code;
-    if (department_id) offeringFilter.courses = { department_id };
-
-    if (!Object.keys(offeringFilter).length) return {};
-
-    return {
-        OR: [
-            { lectures: { course_offerings: offeringFilter } },
-            { tutorials_labs: { course_offerings: offeringFilter } },
-        ],
-    };
+function buildOfferingWhere({ semester, course_code, department_id } = {}) {
+    const w = {};
+    if (semester) w.semester = semester;
+    if (course_code) w.course_code = course_code;
+    if (department_id) w.courses = { department_id };
+    return w;
 }
 
 /**
- * Fetch attendance records with all necessary relations for admin analytics.
+ * Fetch attendance records (flat) + lookup maps, applying optional filters.
+ * Avoids the Prisma deep-nested include limitation by using separate queries
+ * and joining in memory.
+ *
+ * Returns: { records, lectureMap, tutorialMap, studentMap }
+ *   - records       : flat attendance rows { id, student_user_id, lecture_id, tutorial_lab_id, session_date, status }
+ *   - lectureMap    : Map<lecture_id, course_offerings>
+ *   - tutorialMap   : Map<tutorial_lab_id, course_offerings>
+ *   - studentMap    : Map<user_id, { id, full_name, student_profiles }>
  */
-async function fetchAdminAttendanceRecords(filters) {
-    return prisma.attendance.findMany({
-        where: buildAdminWhere(filters),
-        include: {
-            users: {
-                select: {
-                    id: true,
-                    full_name: true,
-                    student_profiles: {
-                        select: {
-                            student_id: true,
-                            departments: {
-                                select: { department_id: true, name: true },
-                            },
-                        },
-                    },
-                },
-            },
-            lectures: {
-                select: {
-                    course_offerings: {
-                        select: {
-                            course_code: true,
-                            semester: true,
-                            year: true,
-                            courses: {
-                                select: {
-                                    code: true,
-                                    name: true,
-                                    departments: {
-                                        select: {
-                                            department_id: true,
-                                            name: true,
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            tutorials_labs: {
-                select: {
-                    course_offerings: {
-                        select: {
-                            course_code: true,
-                            semester: true,
-                            year: true,
-                            courses: {
-                                select: {
-                                    code: true,
-                                    name: true,
-                                    departments: {
-                                        select: {
-                                            department_id: true,
-                                            name: true,
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
+async function fetchAdminRecordsFlat(filters = {}) {
+    const { department_id, semester, course_code } = filters;
+
+    // ── Step 1: Resolve matching lecture / tutorial IDs when filters present ──
+    let attendanceWhere = {};
+    if (department_id || semester || course_code) {
+        const offeringWhere = buildOfferingWhere({
+            department_id,
+            semester,
+            course_code,
+        });
+
+        const [matchingLectures, matchingTutorials] = await Promise.all([
+            prisma.lectures.findMany({
+                where: { course_offerings: offeringWhere },
+                select: { lecture_id: true },
+            }),
+            prisma.tutorials_labs.findMany({
+                where: { course_offerings: offeringWhere },
+                select: { tutorial_lab_id: true },
+            }),
+        ]);
+
+        const lectureIds = matchingLectures.map((l) => l.lecture_id);
+        const tutorialIds = matchingTutorials.map((t) => t.tutorial_lab_id);
+
+        if (lectureIds.length === 0 && tutorialIds.length === 0) {
+            return {
+                records: [],
+                lectureMap: new Map(),
+                tutorialMap: new Map(),
+                studentMap: new Map(),
+            };
+        }
+
+        attendanceWhere = {
+            OR: [
+                ...(lectureIds.length
+                    ? [{ lecture_id: { in: lectureIds } }]
+                    : []),
+                ...(tutorialIds.length
+                    ? [{ tutorial_lab_id: { in: tutorialIds } }]
+                    : []),
+            ],
+        };
+    }
+
+    // ── Step 2: Fetch flat attendance records ─────────────────────────────────
+    const records = await prisma.attendance.findMany({
+        where: attendanceWhere,
+        select: {
+            id: true,
+            student_user_id: true,
+            lecture_id: true,
+            tutorial_lab_id: true,
+            session_date: true,
+            status: true,
         },
         orderBy: { session_date: "asc" },
     });
+
+    if (records.length === 0) {
+        return {
+            records: [],
+            lectureMap: new Map(),
+            tutorialMap: new Map(),
+            studentMap: new Map(),
+        };
+    }
+
+    // ── Step 3: Collect unique IDs ────────────────────────────────────────────
+    const uniqueLectureIds = [
+        ...new Set(
+            records.filter((r) => r.lecture_id).map((r) => r.lecture_id)
+        ),
+    ];
+    const uniqueTutorialIds = [
+        ...new Set(
+            records
+                .filter((r) => r.tutorial_lab_id)
+                .map((r) => r.tutorial_lab_id)
+        ),
+    ];
+    const uniqueStudentIds = [
+        ...new Set(records.map((r) => r.student_user_id)),
+    ];
+
+    // ── Step 4: Parallel lookup queries ──────────────────────────────────────
+    const [lectures, tutorials, students] = await Promise.all([
+        uniqueLectureIds.length
+            ? prisma.lectures.findMany({
+                  where: { lecture_id: { in: uniqueLectureIds } },
+                  select: {
+                      lecture_id: true,
+                      course_offerings: {
+                          select: {
+                              course_code: true,
+                              semester: true,
+                              year: true,
+                              courses: {
+                                  select: {
+                                      code: true,
+                                      name: true,
+                                      departments: {
+                                          select: {
+                                              department_id: true,
+                                              name: true,
+                                          },
+                                      },
+                                  },
+                              },
+                          },
+                      },
+                  },
+              })
+            : [],
+        uniqueTutorialIds.length
+            ? prisma.tutorials_labs.findMany({
+                  where: { tutorial_lab_id: { in: uniqueTutorialIds } },
+                  select: {
+                      tutorial_lab_id: true,
+                      course_offerings: {
+                          select: {
+                              course_code: true,
+                              semester: true,
+                              year: true,
+                              courses: {
+                                  select: {
+                                      code: true,
+                                      name: true,
+                                      departments: {
+                                          select: {
+                                              department_id: true,
+                                              name: true,
+                                          },
+                                      },
+                                  },
+                              },
+                          },
+                      },
+                  },
+              })
+            : [],
+        uniqueStudentIds.length
+            ? prisma.users.findMany({
+                  where: { id: { in: uniqueStudentIds } },
+                  select: {
+                      id: true,
+                      full_name: true,
+                      student_profiles: {
+                          select: {
+                              student_id: true,
+                              departments: {
+                                  select: { department_id: true, name: true },
+                              },
+                          },
+                      },
+                  },
+              })
+            : [],
+    ]);
+
+    const lectureMap = new Map(
+        lectures.map((l) => [l.lecture_id, l.course_offerings])
+    );
+    const tutorialMap = new Map(
+        tutorials.map((t) => [t.tutorial_lab_id, t.course_offerings])
+    );
+    const studentMap = new Map(students.map((s) => [s.id, s]));
+
+    return { records, lectureMap, tutorialMap, studentMap };
 }
 
-/** Extract course_offerings info from any attendance record */
-function getCourseOffering(record) {
-    return (
-        record.lectures?.course_offerings ??
-        record.tutorials_labs?.course_offerings ??
-        null
-    );
+/** Get course_offerings for a flat attendance record using the lookup maps */
+function getOfferingFlat(record, lectureMap, tutorialMap) {
+    if (record.lecture_id) return lectureMap.get(record.lecture_id) ?? null;
+    if (record.tutorial_lab_id)
+        return tutorialMap.get(record.tutorial_lab_id) ?? null;
+    return null;
 }
 
 /**
  * GET /api/v1/attendance/admin/overall-rate
- * Overall attendance rate across all students/records in the college.
+ * Overall attendance rate across all records in the college.
  */
 export const getAdminOverallRate = async (req, res) => {
     try {
@@ -1663,13 +1766,12 @@ export const getAdminOverallRate = async (req, res) => {
 export const getAdminLowestCourses = async (req, res) => {
     try {
         const limit = Math.max(1, parseInt(req.query.limit) || 5);
+        const { records, lectureMap, tutorialMap } =
+            await fetchAdminRecordsFlat({});
 
-        const records = await fetchAdminAttendanceRecords({});
-
-        // Group by course_code
         const courseMap = new Map();
         for (const record of records) {
-            const co = getCourseOffering(record);
+            const co = getOfferingFlat(record, lectureMap, tutorialMap);
             if (!co) continue;
             const key = co.course_code;
             if (!courseMap.has(key)) {
@@ -1707,18 +1809,17 @@ export const getAdminLowestCourses = async (req, res) => {
 
 /**
  * GET /api/v1/attendance/admin/trend?department_id=&semester=&course_code=
- * Attendance rate grouped by month (for trend line chart).
+ * Attendance rate grouped by month (line chart).
  */
 export const getAdminAttendanceTrend = async (req, res) => {
     try {
         const { department_id, semester, course_code } = req.query;
-        const records = await fetchAdminAttendanceRecords({
+        const { records } = await fetchAdminRecordsFlat({
             department_id,
             semester,
             course_code,
         });
 
-        // Group by YYYY-MM
         const monthMap = new Map();
         for (const record of records) {
             const d = new Date(record.session_date);
@@ -1769,20 +1870,21 @@ export const getAdminAttendanceTrend = async (req, res) => {
 
 /**
  * GET /api/v1/attendance/admin/dept-comparison?department_id=&semester=&course_code=
- * Attendance rate per department (for bar chart).
+ * Attendance rate per department (bar chart).
  */
 export const getAdminDeptComparison = async (req, res) => {
     try {
         const { department_id, semester, course_code } = req.query;
-        const records = await fetchAdminAttendanceRecords({
-            department_id,
-            semester,
-            course_code,
-        });
+        const { records, lectureMap, tutorialMap } =
+            await fetchAdminRecordsFlat({
+                department_id,
+                semester,
+                course_code,
+            });
 
         const deptMap = new Map();
         for (const record of records) {
-            const co = getCourseOffering(record);
+            const co = getOfferingFlat(record, lectureMap, tutorialMap);
             const dept = co?.courses?.departments;
             if (!dept) continue;
             const key = dept.department_id;
@@ -1825,25 +1927,23 @@ export const getAdminDeptComparison = async (req, res) => {
 
 /**
  * GET /api/v1/attendance/admin/distribution?department_id=&semester=&course_code=
- * Per-student attendance distribution bucketed for a pie chart.
+ * Per-student attendance distribution bucketed for pie chart.
  * Buckets: Excellent (>=90%), Good (80-89%), Fair (70-79%), Poor (<70%)
  */
 export const getAdminAttendanceDistribution = async (req, res) => {
     try {
         const { department_id, semester, course_code } = req.query;
-        const records = await fetchAdminAttendanceRecords({
+        const { records } = await fetchAdminRecordsFlat({
             department_id,
             semester,
             course_code,
         });
 
-        // Compute per-student rate
         const studentMap = new Map();
         for (const record of records) {
             const uid = record.student_user_id;
-            if (!studentMap.has(uid)) {
+            if (!studentMap.has(uid))
                 studentMap.set(uid, { present: 0, total: 0 });
-            }
             const s = studentMap.get(uid);
             s.total++;
             if (record.status === "present") s.present++;
@@ -1860,44 +1960,8 @@ export const getAdminAttendanceDistribution = async (req, res) => {
         }
 
         const totalStudents = studentMap.size;
-        const distribution = [
-            {
-                label: "Excellent",
-                range: "90-100%",
-                count: buckets.excellent,
-                percentage:
-                    totalStudents > 0
-                        ? Math.round((buckets.excellent / totalStudents) * 100)
-                        : 0,
-            },
-            {
-                label: "Good",
-                range: "80-89%",
-                count: buckets.good,
-                percentage:
-                    totalStudents > 0
-                        ? Math.round((buckets.good / totalStudents) * 100)
-                        : 0,
-            },
-            {
-                label: "Fair",
-                range: "70-79%",
-                count: buckets.fair,
-                percentage:
-                    totalStudents > 0
-                        ? Math.round((buckets.fair / totalStudents) * 100)
-                        : 0,
-            },
-            {
-                label: "Poor",
-                range: "Below 70%",
-                count: buckets.poor,
-                percentage:
-                    totalStudents > 0
-                        ? Math.round((buckets.poor / totalStudents) * 100)
-                        : 0,
-            },
-        ];
+        const pct = (n) =>
+            totalStudents > 0 ? Math.round((n / totalStudents) * 100) : 0;
 
         res.status(200).json({
             filters: {
@@ -1906,7 +1970,32 @@ export const getAdminAttendanceDistribution = async (req, res) => {
                 course_code: course_code ?? null,
             },
             total_students: totalStudents,
-            distribution,
+            distribution: [
+                {
+                    label: "Excellent",
+                    range: "90-100%",
+                    count: buckets.excellent,
+                    percentage: pct(buckets.excellent),
+                },
+                {
+                    label: "Good",
+                    range: "80-89%",
+                    count: buckets.good,
+                    percentage: pct(buckets.good),
+                },
+                {
+                    label: "Fair",
+                    range: "70-79%",
+                    count: buckets.fair,
+                    percentage: pct(buckets.fair),
+                },
+                {
+                    label: "Poor",
+                    range: "Below 70%",
+                    count: buckets.poor,
+                    percentage: pct(buckets.poor),
+                },
+            ],
         });
     } catch (err) {
         logger.error("Error fetching admin attendance distribution:", err);
@@ -1922,44 +2011,40 @@ export const getAdminTopStudents = async (req, res) => {
     try {
         const { department_id, semester, course_code } = req.query;
         const limit = Math.max(1, parseInt(req.query.limit) || 5);
-
-        const records = await fetchAdminAttendanceRecords({
+        const { records, studentMap } = await fetchAdminRecordsFlat({
             department_id,
             semester,
             course_code,
         });
 
-        // Per-student aggregation
-        const studentMap = new Map();
+        const aggMap = new Map();
         for (const record of records) {
             const uid = record.student_user_id;
-            if (!studentMap.has(uid)) {
-                studentMap.set(uid, {
+            if (!aggMap.has(uid)) {
+                const u = studentMap.get(uid);
+                aggMap.set(uid, {
                     student_user_id: uid,
-                    full_name: record.users?.full_name ?? null,
-                    student_id:
-                        record.users?.student_profiles?.student_id ?? null,
+                    full_name: u?.full_name ?? null,
+                    student_id: u?.student_profiles?.student_id ?? null,
                     department_name:
-                        record.users?.student_profiles?.departments?.name ??
-                        null,
+                        u?.student_profiles?.departments?.name ?? null,
                     present: 0,
                     total: 0,
                 });
             }
-            const s = studentMap.get(uid);
+            const s = aggMap.get(uid);
             s.total++;
             if (record.status === "present") s.present++;
         }
 
-        const students = Array.from(studentMap.values())
+        const students = Array.from(aggMap.values())
             .filter((s) => s.total > 0)
-            .map((s) => ({
-                ...s,
-                attendance_percentage: Math.round((s.present / s.total) * 100),
+            .map(({ present, total, ...rest }) => ({
+                ...rest,
+                attendance_percentage: Math.round((present / total) * 100),
             }))
             .sort((a, b) => b.attendance_percentage - a.attendance_percentage)
-            .slice(0, limit)
-            .map(({ present, total, ...rest }) => rest); // strip raw counts
+            .slice(0, limit);
 
         res.status(200).json({
             filters: {
@@ -1978,41 +2063,37 @@ export const getAdminTopStudents = async (req, res) => {
 
 /**
  * GET /api/v1/attendance/admin/students?department_id=&course_code=&search=
- * All students with their average attendance rate (for the table).
- * Filters: department_id, course_code, search (by name).
+ * All students with avg attendance rate for the admin table.
  */
 export const getAdminStudentsTable = async (req, res) => {
     try {
         const { department_id, course_code, search } = req.query;
-
-        const records = await fetchAdminAttendanceRecords({
+        const { records, studentMap } = await fetchAdminRecordsFlat({
             department_id,
             course_code,
         });
 
-        // Per-student aggregation
-        const studentMap = new Map();
+        const aggMap = new Map();
         for (const record of records) {
             const uid = record.student_user_id;
-            if (!studentMap.has(uid)) {
-                studentMap.set(uid, {
+            if (!aggMap.has(uid)) {
+                const u = studentMap.get(uid);
+                aggMap.set(uid, {
                     student_user_id: uid,
-                    full_name: record.users?.full_name ?? null,
-                    student_id:
-                        record.users?.student_profiles?.student_id ?? null,
+                    full_name: u?.full_name ?? null,
+                    student_id: u?.student_profiles?.student_id ?? null,
                     department_name:
-                        record.users?.student_profiles?.departments?.name ??
-                        null,
+                        u?.student_profiles?.departments?.name ?? null,
                     present: 0,
                     total: 0,
                 });
             }
-            const s = studentMap.get(uid);
+            const s = aggMap.get(uid);
             s.total++;
             if (record.status === "present") s.present++;
         }
 
-        let students = Array.from(studentMap.values())
+        let students = Array.from(aggMap.values())
             .map((s) => ({
                 student_user_id: s.student_user_id,
                 student_id: s.student_id,
@@ -2030,7 +2111,6 @@ export const getAdminStudentsTable = async (req, res) => {
                 (a.full_name ?? "").localeCompare(b.full_name ?? "")
             );
 
-        // Apply search filter in JS (case-insensitive name search)
         if (search) {
             const q = search.toLowerCase();
             students = students.filter((s) =>

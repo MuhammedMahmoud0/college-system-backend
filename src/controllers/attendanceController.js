@@ -1529,5 +1529,529 @@ export const getAttendanceTrend = async (req, res) => {
     }
 };
 
+// ─── Admin Attendance Analytics ──────────────────────────────────────────────
+
+/**
+ * Build a Prisma `where` clause for attendance records filtered by
+ * department, semester, and/or course (all optional).
+ */
+function buildAdminWhere({ department_id, semester, course_code } = {}) {
+    const offeringFilter = {};
+    if (semester) offeringFilter.semester = semester;
+    if (course_code) offeringFilter.course_code = course_code;
+    if (department_id) offeringFilter.courses = { department_id };
+
+    if (!Object.keys(offeringFilter).length) return {};
+
+    return {
+        OR: [
+            { lectures: { course_offerings: offeringFilter } },
+            { tutorials_labs: { course_offerings: offeringFilter } },
+        ],
+    };
+}
+
+/**
+ * Fetch attendance records with all necessary relations for admin analytics.
+ */
+async function fetchAdminAttendanceRecords(filters) {
+    return prisma.attendance.findMany({
+        where: buildAdminWhere(filters),
+        include: {
+            users: {
+                select: {
+                    id: true,
+                    full_name: true,
+                    student_profiles: {
+                        select: {
+                            student_id: true,
+                            departments: {
+                                select: { department_id: true, name: true },
+                            },
+                        },
+                    },
+                },
+            },
+            lectures: {
+                select: {
+                    course_offerings: {
+                        select: {
+                            course_code: true,
+                            semester: true,
+                            year: true,
+                            courses: {
+                                select: {
+                                    code: true,
+                                    name: true,
+                                    departments: {
+                                        select: {
+                                            department_id: true,
+                                            name: true,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            tutorials_labs: {
+                select: {
+                    course_offerings: {
+                        select: {
+                            course_code: true,
+                            semester: true,
+                            year: true,
+                            courses: {
+                                select: {
+                                    code: true,
+                                    name: true,
+                                    departments: {
+                                        select: {
+                                            department_id: true,
+                                            name: true,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        orderBy: { session_date: "asc" },
+    });
+}
+
+/** Extract course_offerings info from any attendance record */
+function getCourseOffering(record) {
+    return (
+        record.lectures?.course_offerings ??
+        record.tutorials_labs?.course_offerings ??
+        null
+    );
+}
+
+/**
+ * GET /api/v1/attendance/admin/overall-rate
+ * Overall attendance rate across all students/records in the college.
+ */
+export const getAdminOverallRate = async (req, res) => {
+    try {
+        const [total, present] = await Promise.all([
+            prisma.attendance.count(),
+            prisma.attendance.count({ where: { status: "present" } }),
+        ]);
+
+        res.status(200).json({
+            total_records: total,
+            present_count: present,
+            absent_count: total - present,
+            overall_attendance_rate:
+                total > 0 ? Math.round((present / total) * 100) : null,
+        });
+    } catch (err) {
+        logger.error("Error fetching admin overall attendance rate:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * GET /api/v1/attendance/admin/lowest-courses?limit=5
+ * Courses ranked by lowest attendance rate.
+ */
+export const getAdminLowestCourses = async (req, res) => {
+    try {
+        const limit = Math.max(1, parseInt(req.query.limit) || 5);
+
+        const records = await fetchAdminAttendanceRecords({});
+
+        // Group by course_code
+        const courseMap = new Map();
+        for (const record of records) {
+            const co = getCourseOffering(record);
+            if (!co) continue;
+            const key = co.course_code;
+            if (!courseMap.has(key)) {
+                courseMap.set(key, {
+                    course_code: co.course_code,
+                    course_name: co.courses?.name ?? null,
+                    department_name: co.courses?.departments?.name ?? null,
+                    present: 0,
+                    total: 0,
+                });
+            }
+            const c = courseMap.get(key);
+            c.total++;
+            if (record.status === "present") c.present++;
+        }
+
+        const courses = Array.from(courseMap.values())
+            .map((c) => ({
+                ...c,
+                attendance_rate:
+                    c.total > 0
+                        ? Math.round((c.present / c.total) * 100)
+                        : null,
+            }))
+            .filter((c) => c.total > 0)
+            .sort((a, b) => (a.attendance_rate ?? 0) - (b.attendance_rate ?? 0))
+            .slice(0, limit);
+
+        res.status(200).json({ limit, courses });
+    } catch (err) {
+        logger.error("Error fetching admin lowest courses:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * GET /api/v1/attendance/admin/trend?department_id=&semester=&course_code=
+ * Attendance rate grouped by month (for trend line chart).
+ */
+export const getAdminAttendanceTrend = async (req, res) => {
+    try {
+        const { department_id, semester, course_code } = req.query;
+        const records = await fetchAdminAttendanceRecords({
+            department_id,
+            semester,
+            course_code,
+        });
+
+        // Group by YYYY-MM
+        const monthMap = new Map();
+        for (const record of records) {
+            const d = new Date(record.session_date);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+                2,
+                "0"
+            )}`;
+            if (!monthMap.has(key)) {
+                monthMap.set(key, {
+                    month: key,
+                    month_label: d.toLocaleString("en-US", {
+                        month: "short",
+                        year: "numeric",
+                    }),
+                    present: 0,
+                    total: 0,
+                });
+            }
+            const m = monthMap.get(key);
+            m.total++;
+            if (record.status === "present") m.present++;
+        }
+
+        const trend = Array.from(monthMap.values())
+            .sort((a, b) => a.month.localeCompare(b.month))
+            .map((m) => ({
+                ...m,
+                attendance_rate:
+                    m.total > 0
+                        ? Math.round((m.present / m.total) * 100)
+                        : null,
+            }));
+
+        res.status(200).json({
+            filters: {
+                department_id: department_id ?? null,
+                semester: semester ?? null,
+                course_code: course_code ?? null,
+            },
+            total_months: trend.length,
+            trend,
+        });
+    } catch (err) {
+        logger.error("Error fetching admin attendance trend:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * GET /api/v1/attendance/admin/dept-comparison?department_id=&semester=&course_code=
+ * Attendance rate per department (for bar chart).
+ */
+export const getAdminDeptComparison = async (req, res) => {
+    try {
+        const { department_id, semester, course_code } = req.query;
+        const records = await fetchAdminAttendanceRecords({
+            department_id,
+            semester,
+            course_code,
+        });
+
+        const deptMap = new Map();
+        for (const record of records) {
+            const co = getCourseOffering(record);
+            const dept = co?.courses?.departments;
+            if (!dept) continue;
+            const key = dept.department_id;
+            if (!deptMap.has(key)) {
+                deptMap.set(key, {
+                    department_id: dept.department_id,
+                    department_name: dept.name,
+                    present: 0,
+                    total: 0,
+                });
+            }
+            const d = deptMap.get(key);
+            d.total++;
+            if (record.status === "present") d.present++;
+        }
+
+        const departments = Array.from(deptMap.values())
+            .map((d) => ({
+                ...d,
+                attendance_rate:
+                    d.total > 0
+                        ? Math.round((d.present / d.total) * 100)
+                        : null,
+            }))
+            .sort((a, b) => a.department_name.localeCompare(b.department_name));
+
+        res.status(200).json({
+            filters: {
+                department_id: department_id ?? null,
+                semester: semester ?? null,
+                course_code: course_code ?? null,
+            },
+            departments,
+        });
+    } catch (err) {
+        logger.error("Error fetching admin dept comparison:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * GET /api/v1/attendance/admin/distribution?department_id=&semester=&course_code=
+ * Per-student attendance distribution bucketed for a pie chart.
+ * Buckets: Excellent (>=90%), Good (80-89%), Fair (70-79%), Poor (<70%)
+ */
+export const getAdminAttendanceDistribution = async (req, res) => {
+    try {
+        const { department_id, semester, course_code } = req.query;
+        const records = await fetchAdminAttendanceRecords({
+            department_id,
+            semester,
+            course_code,
+        });
+
+        // Compute per-student rate
+        const studentMap = new Map();
+        for (const record of records) {
+            const uid = record.student_user_id;
+            if (!studentMap.has(uid)) {
+                studentMap.set(uid, { present: 0, total: 0 });
+            }
+            const s = studentMap.get(uid);
+            s.total++;
+            if (record.status === "present") s.present++;
+        }
+
+        const buckets = { excellent: 0, good: 0, fair: 0, poor: 0 };
+        for (const s of studentMap.values()) {
+            if (s.total === 0) continue;
+            const rate = (s.present / s.total) * 100;
+            if (rate >= 90) buckets.excellent++;
+            else if (rate >= 80) buckets.good++;
+            else if (rate >= 70) buckets.fair++;
+            else buckets.poor++;
+        }
+
+        const totalStudents = studentMap.size;
+        const distribution = [
+            {
+                label: "Excellent",
+                range: "90-100%",
+                count: buckets.excellent,
+                percentage:
+                    totalStudents > 0
+                        ? Math.round((buckets.excellent / totalStudents) * 100)
+                        : 0,
+            },
+            {
+                label: "Good",
+                range: "80-89%",
+                count: buckets.good,
+                percentage:
+                    totalStudents > 0
+                        ? Math.round((buckets.good / totalStudents) * 100)
+                        : 0,
+            },
+            {
+                label: "Fair",
+                range: "70-79%",
+                count: buckets.fair,
+                percentage:
+                    totalStudents > 0
+                        ? Math.round((buckets.fair / totalStudents) * 100)
+                        : 0,
+            },
+            {
+                label: "Poor",
+                range: "Below 70%",
+                count: buckets.poor,
+                percentage:
+                    totalStudents > 0
+                        ? Math.round((buckets.poor / totalStudents) * 100)
+                        : 0,
+            },
+        ];
+
+        res.status(200).json({
+            filters: {
+                department_id: department_id ?? null,
+                semester: semester ?? null,
+                course_code: course_code ?? null,
+            },
+            total_students: totalStudents,
+            distribution,
+        });
+    } catch (err) {
+        logger.error("Error fetching admin attendance distribution:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * GET /api/v1/attendance/admin/top-students?department_id=&semester=&course_code=&limit=5
+ * Top performing students by attendance rate.
+ */
+export const getAdminTopStudents = async (req, res) => {
+    try {
+        const { department_id, semester, course_code } = req.query;
+        const limit = Math.max(1, parseInt(req.query.limit) || 5);
+
+        const records = await fetchAdminAttendanceRecords({
+            department_id,
+            semester,
+            course_code,
+        });
+
+        // Per-student aggregation
+        const studentMap = new Map();
+        for (const record of records) {
+            const uid = record.student_user_id;
+            if (!studentMap.has(uid)) {
+                studentMap.set(uid, {
+                    student_user_id: uid,
+                    full_name: record.users?.full_name ?? null,
+                    student_id:
+                        record.users?.student_profiles?.student_id ?? null,
+                    department_name:
+                        record.users?.student_profiles?.departments?.name ??
+                        null,
+                    present: 0,
+                    total: 0,
+                });
+            }
+            const s = studentMap.get(uid);
+            s.total++;
+            if (record.status === "present") s.present++;
+        }
+
+        const students = Array.from(studentMap.values())
+            .filter((s) => s.total > 0)
+            .map((s) => ({
+                ...s,
+                attendance_percentage: Math.round((s.present / s.total) * 100),
+            }))
+            .sort((a, b) => b.attendance_percentage - a.attendance_percentage)
+            .slice(0, limit)
+            .map(({ present, total, ...rest }) => rest); // strip raw counts
+
+        res.status(200).json({
+            filters: {
+                department_id: department_id ?? null,
+                semester: semester ?? null,
+                course_code: course_code ?? null,
+            },
+            limit,
+            students,
+        });
+    } catch (err) {
+        logger.error("Error fetching admin top students:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * GET /api/v1/attendance/admin/students?department_id=&course_code=&search=
+ * All students with their average attendance rate (for the table).
+ * Filters: department_id, course_code, search (by name).
+ */
+export const getAdminStudentsTable = async (req, res) => {
+    try {
+        const { department_id, course_code, search } = req.query;
+
+        const records = await fetchAdminAttendanceRecords({
+            department_id,
+            course_code,
+        });
+
+        // Per-student aggregation
+        const studentMap = new Map();
+        for (const record of records) {
+            const uid = record.student_user_id;
+            if (!studentMap.has(uid)) {
+                studentMap.set(uid, {
+                    student_user_id: uid,
+                    full_name: record.users?.full_name ?? null,
+                    student_id:
+                        record.users?.student_profiles?.student_id ?? null,
+                    department_name:
+                        record.users?.student_profiles?.departments?.name ??
+                        null,
+                    present: 0,
+                    total: 0,
+                });
+            }
+            const s = studentMap.get(uid);
+            s.total++;
+            if (record.status === "present") s.present++;
+        }
+
+        let students = Array.from(studentMap.values())
+            .map((s) => ({
+                student_user_id: s.student_user_id,
+                student_id: s.student_id,
+                full_name: s.full_name,
+                department_name: s.department_name,
+                present_count: s.present,
+                absent_count: s.total - s.present,
+                total_sessions: s.total,
+                avg_attendance:
+                    s.total > 0
+                        ? Math.round((s.present / s.total) * 100)
+                        : null,
+            }))
+            .sort((a, b) =>
+                (a.full_name ?? "").localeCompare(b.full_name ?? "")
+            );
+
+        // Apply search filter in JS (case-insensitive name search)
+        if (search) {
+            const q = search.toLowerCase();
+            students = students.filter((s) =>
+                s.full_name?.toLowerCase().includes(q)
+            );
+        }
+
+        res.status(200).json({
+            filters: {
+                department_id: department_id ?? null,
+                course_code: course_code ?? null,
+                search: search ?? null,
+            },
+            total_students: students.length,
+            students,
+        });
+    } catch (err) {
+        logger.error("Error fetching admin students table:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 // Export for WebSocket handler
 export { activeSessions, generateQRCode, QR_REFRESH_INTERVAL };

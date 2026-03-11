@@ -14,6 +14,13 @@ import {
     getAvgAttendanceRate,
     getLowestAttendance,
     getAttendanceTrend,
+    getAdminOverallRate,
+    getAdminLowestCourses,
+    getAdminAttendanceTrend,
+    getAdminDeptComparison,
+    getAdminAttendanceDistribution,
+    getAdminTopStudents,
+    getAdminStudentsTable,
 } from "../controllers/attendanceController.js";
 import {
     authMiddleware,
@@ -119,6 +126,50 @@ router.get(
     authMiddleware,
     authorizationMiddleware("doctor", "teaching_assistant", "admin"),
     getAttendanceTrend
+);
+
+// ─── Admin Attendance Analytics (admin only) ──────────────────────────────
+router.get(
+    "/admin/overall-rate",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    getAdminOverallRate
+);
+router.get(
+    "/admin/lowest-courses",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    getAdminLowestCourses
+);
+router.get(
+    "/admin/trend",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    getAdminAttendanceTrend
+);
+router.get(
+    "/admin/dept-comparison",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    getAdminDeptComparison
+);
+router.get(
+    "/admin/distribution",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    getAdminAttendanceDistribution
+);
+router.get(
+    "/admin/top-students",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    getAdminTopStudents
+);
+router.get(
+    "/admin/students",
+    authMiddleware,
+    authorizationMiddleware("admin", "super_admin"),
+    getAdminStudentsTable
 );
 
 // Get attendance history for the logged-in student

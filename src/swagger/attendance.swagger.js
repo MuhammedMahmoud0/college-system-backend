@@ -220,6 +220,145 @@ export default {
                 },
             },
         },
+        "/attendance/sessions/my-active": {
+            get: {
+                tags: ["Attendance"],
+                summary:
+                    "Get active attendance session for the logged-in student",
+                description:
+                    "Returns the active attendance session(s) the student is enrolled in. Includes the current QR code, location data, and whether the student has already been marked present.",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "Active session found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        sessions: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    sessionId: {
+                                                        type: "string",
+                                                        example:
+                                                            "uuid-session-id",
+                                                    },
+                                                    session_type: {
+                                                        type: "string",
+                                                        enum: [
+                                                            "lecture",
+                                                            "tutorial_lab",
+                                                        ],
+                                                        example: "lecture",
+                                                    },
+                                                    lecture_id: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                        example: 1,
+                                                    },
+                                                    tutorial_lab_id: {
+                                                        type: "integer",
+                                                        nullable: true,
+                                                        example: null,
+                                                    },
+                                                    session_date: {
+                                                        type: "string",
+                                                        example: "2026-03-11",
+                                                    },
+                                                    is_live: {
+                                                        type: "boolean",
+                                                        example: true,
+                                                    },
+                                                    latitude: {
+                                                        type: "number",
+                                                        nullable: true,
+                                                        example: 31.2001,
+                                                    },
+                                                    longitude: {
+                                                        type: "number",
+                                                        nullable: true,
+                                                        example: 29.9187,
+                                                    },
+                                                    qr_code: {
+                                                        type: "string",
+                                                        example:
+                                                            "sessionId:timestamp:random",
+                                                    },
+                                                    qr_expiry: {
+                                                        type: "integer",
+                                                        example: 1741705200000,
+                                                    },
+                                                    already_marked: {
+                                                        type: "boolean",
+                                                        example: false,
+                                                    },
+                                                    course_name: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                        example:
+                                                            "Data Structures",
+                                                    },
+                                                    course_code: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                        example: "CS301",
+                                                    },
+                                                    group: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                        example: "A",
+                                                    },
+                                                    location: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                        example: "Hall 3",
+                                                    },
+                                                    day_of_week: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                        example: "Monday",
+                                                    },
+                                                    start_time: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                        example: "09:00",
+                                                    },
+                                                    end_time: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                        example: "11:00",
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "No active attendance session found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        error: {
+                                            type: "string",
+                                            example:
+                                                "No active attendance session found",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
         "/attendance/sessions": {
             get: {
                 tags: ["Attendance"],

@@ -506,6 +506,104 @@ export const getActiveSessions = async (req, res) => {
 };
 
 /**
+ * Get the active attendance session(s) for the logged-in student
+ * GET /api/v1/attendance/sessions/my-active
+ */
+export const getMyActiveSession = async (req, res) => {
+    try {
+        const studentId = req.user.userId;
+
+        const result = [];
+
+        for (const [sessionId, session] of activeSessions.entries()) {
+            const isEnrolled = session.enrolledStudents.some(
+                (s) => s.user_id === studentId
+            );
+
+            if (!isEnrolled) continue;
+
+            const alreadyMarked = session.attendees.has(studentId);
+
+            let sessionDetails = null;
+            if (session.lectureId) {
+                sessionDetails = await prisma.lectures.findUnique({
+                    where: { lecture_id: session.lectureId },
+                    select: {
+                        lecture_id: true,
+                        day_of_week: true,
+                        start_time: true,
+                        end_time: true,
+                        location: true,
+                        group: true,
+                        course_offerings: {
+                            select: {
+                                courses: {
+                                    select: { name: true, code: true },
+                                },
+                            },
+                        },
+                    },
+                });
+            } else if (session.tutorialLabId) {
+                sessionDetails = await prisma.tutorials_labs.findUnique({
+                    where: { tutorial_lab_id: session.tutorialLabId },
+                    select: {
+                        tutorial_lab_id: true,
+                        type: true,
+                        day_of_week: true,
+                        start_time: true,
+                        end_time: true,
+                        location: true,
+                        group: true,
+                        course_offerings: {
+                            select: {
+                                courses: {
+                                    select: { name: true, code: true },
+                                },
+                            },
+                        },
+                    },
+                });
+            }
+
+            const course = sessionDetails?.course_offerings?.courses ?? null;
+
+            result.push({
+                sessionId,
+                session_type: session.lectureId ? "lecture" : "tutorial_lab",
+                lecture_id: session.lectureId,
+                tutorial_lab_id: session.tutorialLabId,
+                session_date: session.sessionDate,
+                is_live: session.isLive,
+                latitude: session.latitude,
+                longitude: session.longitude,
+                qr_code: session.qrCode,
+                qr_expiry: session.qrExpiry,
+                already_marked: alreadyMarked,
+                course_name: course?.name ?? null,
+                course_code: course?.code ?? null,
+                group: sessionDetails?.group ?? null,
+                location: sessionDetails?.location ?? null,
+                day_of_week: sessionDetails?.day_of_week ?? null,
+                start_time: sessionDetails?.start_time ?? null,
+                end_time: sessionDetails?.end_time ?? null,
+            });
+        }
+
+        if (result.length === 0) {
+            return res
+                .status(404)
+                .json({ error: "No active attendance session found" });
+        }
+
+        res.status(200).json({ sessions: result });
+    } catch (err) {
+        logger.error("Error getting student active session:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
  * Manually toggle student attendance during active session
  * PUT /api/v1/attendance/sessions/:sessionId/toggle
  */

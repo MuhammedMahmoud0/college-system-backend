@@ -11,6 +11,7 @@ import {
     getStudentsAttendance,
     getAllAttendanceSessions,
     getMyAttendanceHistory,
+    getMyActiveSession,
     getAttendanceGrid,
     getAvgAttendanceRate,
     getLowestAttendance,
@@ -59,6 +60,14 @@ router.get(
     "/sessions/:sessionId/live-info",
     authMiddleware,
     getSessionLiveInfo
+);
+
+// Get active session for the logged-in student - MUST come before /sessions/:sessionId
+router.get(
+    "/sessions/my-active",
+    authMiddleware,
+    authorizationMiddleware("student", "leader"),
+    getMyActiveSession
 );
 
 // Get session details

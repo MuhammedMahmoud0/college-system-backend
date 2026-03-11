@@ -1,309 +1,503 @@
 export default {
-  paths: {
-    "/users": {
-      get: {
-        tags: ["Users"],
-        summary: "Get list of users",
-        security: [{ bearerAuth: [] }],
-        responses: {
-          200: {
-            description: "List of users",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/UsersListResponse",
-                },
-              },
-            },
-          },
-        },
-      },
-      post: {
-        tags: ["Users"],
-        summary: "Create a new user",
-        description:
-          "Create a new user. For students, student_id is required and a student profile will be created automatically.",
-        security: [{ bearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                $ref: "#/components/schemas/CreateUserRequest",
-              },
-            },
-          },
-        },
-        responses: {
-          201: {
-            description: "User created successfully",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/CreateUserResponse",
-                },
-              },
-            },
-          },
-          400: {
-            description:
-              "Validation error - missing required fields or invalid role",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/ErrorResponse",
-                },
-                examples: {
-                  missingFields: {
-                    value: {
-                      error:
-                        "All fields (name, email, password, role) are required",
-                    },
-                  },
-                  missingStudentId: {
-                    value: {
-                      error: "Student ID is required for student role",
-                    },
-                  },
-                },
-              },
-            },
-          },
-          409: {
-            description: "Conflict - email or student ID already exists",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/ErrorResponse",
-                },
-                examples: {
-                  emailExists: {
-                    value: {
-                      error: "Email already exist",
-                    },
-                  },
-                },
-              },
-            },
-          },
-          500: {
-            description: "Internal server error",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/ErrorResponse",
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/users/management/students": {
-      get: {
-        tags: ["Users"],
-        summary: "List students for admin user management",
-        description:
-          "Returns a paginated list of all students with their profile details. Accessible by admin and super_admin only.",
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: "page",
-            in: "query",
-            schema: { type: "integer", default: 1, minimum: 1 },
-            description: "Page number",
-          },
-          {
-            name: "limit",
-            in: "query",
-            schema: { type: "integer", default: 10, minimum: 1, maximum: 100 },
-            description: "Number of records per page",
-          },
-        ],
-        responses: {
-          200: {
-            description: "Paginated student list",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/ManagementStudentsResponse",
-                },
-              },
-            },
-          },
-          401: { description: "Unauthorized" },
-          403: { description: "Forbidden – admin or super_admin only" },
-          500: {
-            description: "Internal server error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/users/management/staff": {
-      get: {
-        tags: ["Users"],
-        summary: "List doctors & teaching assistants for admin user management",
-        description:
-          "Returns a paginated list of doctors and/or teaching assistants with their department and course count. Accessible by admin and super_admin only.",
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: "page",
-            in: "query",
-            schema: { type: "integer", default: 1, minimum: 1 },
-            description: "Page number",
-          },
-          {
-            name: "limit",
-            in: "query",
-            schema: { type: "integer", default: 10, minimum: 1, maximum: 100 },
-            description: "Number of records per page",
-          },
-          {
-            name: "role",
-            in: "query",
-            schema: {
-              type: "string",
-              enum: ["doctor", "teaching_assistant"],
-            },
-            description:
-              "Filter by role. Omit to return both doctors and teaching assistants.",
-          },
-        ],
-        responses: {
-          200: {
-            description: "Paginated staff list",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/ManagementStaffResponse",
-                },
-              },
-            },
-          },
-          401: { description: "Unauthorized" },
-          403: { description: "Forbidden – admin or super_admin only" },
-          500: {
-            description: "Internal server error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/users/upload-excel": {
-      post: {
-        tags: ["Users"],
-        summary: "Upload an Excel file to create users in bulk",
-        description:
-          "Upload an Excel file (.xlsx) with columns: Name, Email, Password, Role, StudentId. The first row should be headers. For students, StudentId is required. Duplicate emails will be skipped automatically.",
-        security: [{ bearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            "multipart/form-data": {
-              schema: {
-                type: "object",
-                required: ["file"],
-                properties: {
-                  file: {
-                    type: "string",
-                    format: "binary",
-                    description:
-                      "Excel file with columns: Name, Email, Password, Role, StudentId (required for students)",
-                  },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: {
-            description: "Users processed successfully",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/UploadExcelResponse",
-                },
-                example: {
-                  message: "Users processed successfully",
-                  insertedCount: 5,
-                  skippedDueToValidation: 0,
-                  errors: [],
-                },
-              },
-            },
-          },
-          400: {
-            description: "Bad request - validation errors or no valid data",
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    error: { type: "string" },
-                    errors: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        properties: {
-                          row: { type: "integer" },
-                          error: { type: "string" },
+    paths: {
+        "/users": {
+            get: {
+                tags: ["Users"],
+                summary: "Get list of users",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "List of users",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UsersListResponse",
+                                },
+                            },
                         },
-                      },
                     },
-                  },
                 },
-                examples: {
-                  noFile: {
-                    value: {
-                      error: "No file uploaded",
-                    },
-                  },
-                  noWorksheet: {
-                    value: {
-                      error: "No worksheet found in the Excel file",
-                    },
-                  },
-                  noValidData: {
-                    value: {
-                      error: "No valid user data found",
-                      errors: [
-                        {
-                          row: 2,
-                          error: "Missing required fields",
-                        },
-                        {
-                          row: 5,
-                          error: "Student ID required for student role",
-                        },
-                      ],
-                    },
-                  },
-                },
-              },
             },
-          },
-          500: {
-            description: "Internal server error",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/ErrorResponse",
+            post: {
+                tags: ["Users"],
+                summary: "Create a non-student user",
+                description:
+                    "Creates a user with a non-student role (doctor, teaching_assistant, admin, super_admin, leader). Use POST /users/students for students.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/CreateUserRequest",
+                            },
+                        },
+                    },
                 },
-              },
+                responses: {
+                    201: {
+                        description: "User created successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/CreateUserResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description: "Validation error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                                examples: {
+                                    missingFields: {
+                                        value: {
+                                            error: "All fields (name, email, password, role) are required",
+                                        },
+                                    },
+                                    studentRole: {
+                                        value: {
+                                            error: "Use POST /users/students to create student accounts",
+                                        },
+                                    },
+                                    invalidRole: {
+                                        value: { error: "Invalid role" },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    409: {
+                        description: "Email already exists",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    500: { description: "Internal server error" },
+                },
             },
-          },
         },
-      },
+        "/users/students": {
+            post: {
+                tags: ["Users"],
+                summary: "Create a student user",
+                description:
+                    "Creates a student user and their profile. Password is automatically set to the national ID. Requires admin or super_admin.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/CreateStudentRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    201: {
+                        description: "Student created successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/CreateUserResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Missing required fields" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "Department not found" },
+                    409: { description: "Email or student ID already exists" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/users/management/students": {
+            get: {
+                tags: ["Users"],
+                summary: "List students & leaders for admin user management",
+                description:
+                    "Returns a paginated list of all students and leaders (batch representatives) with their profile details and role. Accessible by admin and super_admin only.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "page",
+                        in: "query",
+                        schema: { type: "integer", default: 1, minimum: 1 },
+                        description: "Page number",
+                    },
+                    {
+                        name: "limit",
+                        in: "query",
+                        schema: {
+                            type: "integer",
+                            default: 10,
+                            minimum: 1,
+                            maximum: 100,
+                        },
+                        description: "Number of records per page",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Paginated student/leader list",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ManagementStudentsResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: {
+                        description: "Forbidden – admin or super_admin only",
+                    },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/users/management/leaders": {
+            get: {
+                tags: ["Users"],
+                summary: "List all batch representatives (leaders)",
+                description:
+                    "Returns all users with the leader role, ordered by year level then name. Accessible by admin and super_admin only.",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "List of leaders",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        leaders: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    id: {
+                                                        type: "string",
+                                                        format: "uuid",
+                                                    },
+                                                    full_name: {
+                                                        type: "string",
+                                                    },
+                                                    email: {
+                                                        type: "string",
+                                                        format: "email",
+                                                    },
+                                                    avatar_url: {
+                                                        type: "string",
+                                                        nullable: true,
+                                                    },
+                                                    created_at: {
+                                                        type: "string",
+                                                        format: "date-time",
+                                                    },
+                                                    student_profiles: {
+                                                        type: "object",
+                                                        nullable: true,
+                                                        properties: {
+                                                            student_id: {
+                                                                type: "string",
+                                                            },
+                                                            year_level: {
+                                                                type: "integer",
+                                                                nullable: true,
+                                                            },
+                                                            departments: {
+                                                                type: "object",
+                                                                nullable: true,
+                                                                properties: {
+                                                                    department_id:
+                                                                        {
+                                                                            type: "string",
+                                                                            format: "uuid",
+                                                                        },
+                                                                    name: {
+                                                                        type: "string",
+                                                                    },
+                                                                },
+                                                            },
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: {
+                        description: "Forbidden – admin or super_admin only",
+                    },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/users/students/{id}/role": {
+            patch: {
+                tags: ["Users"],
+                summary: "Promote or demote a student / leader",
+                description:
+                    'Sets the role of a student to "leader" (promote) or back to "student" (demote). Only works on users who are already student or leader.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "id",
+                        in: "path",
+                        required: true,
+                        schema: { type: "string", format: "uuid" },
+                        description: "User UUID",
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                required: ["role"],
+                                properties: {
+                                    role: {
+                                        type: "string",
+                                        enum: ["student", "leader"],
+                                        description: "Target role",
+                                    },
+                                },
+                            },
+                            examples: {
+                                promote: { value: { role: "leader" } },
+                                demote: { value: { role: "student" } },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Role updated successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: {
+                                            type: "string",
+                                            example:
+                                                "User role updated to leader successfully",
+                                        },
+                                        user: {
+                                            type: "object",
+                                            properties: {
+                                                id: {
+                                                    type: "string",
+                                                    format: "uuid",
+                                                },
+                                                full_name: { type: "string" },
+                                                email: {
+                                                    type: "string",
+                                                    format: "email",
+                                                },
+                                                role: {
+                                                    type: "string",
+                                                    enum: ["student", "leader"],
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description:
+                            "Invalid role value or user already has that role",
+                    },
+                    401: { description: "Unauthorized" },
+                    403: {
+                        description: "Forbidden – admin or super_admin only",
+                    },
+                    404: { description: "User not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/users/management/staff": {
+            get: {
+                tags: ["Users"],
+                summary:
+                    "List doctors & teaching assistants for admin user management",
+                description:
+                    "Returns a paginated list of doctors and/or teaching assistants with their department and course count. Accessible by admin and super_admin only.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "page",
+                        in: "query",
+                        schema: { type: "integer", default: 1, minimum: 1 },
+                        description: "Page number",
+                    },
+                    {
+                        name: "limit",
+                        in: "query",
+                        schema: {
+                            type: "integer",
+                            default: 10,
+                            minimum: 1,
+                            maximum: 100,
+                        },
+                        description: "Number of records per page",
+                    },
+                    {
+                        name: "role",
+                        in: "query",
+                        schema: {
+                            type: "string",
+                            enum: ["doctor", "teaching_assistant"],
+                        },
+                        description:
+                            "Filter by role. Omit to return both doctors and teaching assistants.",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Paginated staff list",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ManagementStaffResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: {
+                        description: "Forbidden – admin or super_admin only",
+                    },
+                    500: {
+                        description: "Internal server error",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/users/upload-excel": {
+            post: {
+                tags: ["Users"],
+                summary: "Bulk create non-student users from Excel",
+                description:
+                    "Upload an Excel file (.xlsx) with columns: Name, Email, Password, Role. Student rows are rejected – use /users/upload-excel/students for students. Duplicate emails are skipped.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "multipart/form-data": {
+                            schema: {
+                                type: "object",
+                                required: ["file"],
+                                properties: {
+                                    file: {
+                                        type: "string",
+                                        format: "binary",
+                                        description:
+                                            "Excel file with columns: Name | Email | Password | Role",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    201: {
+                        description: "Users processed successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UploadExcelResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Bad request or no valid data" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/users/upload-excel/students": {
+            post: {
+                tags: ["Users"],
+                summary: "Bulk create student users from Excel",
+                description:
+                    "Upload an Excel file (.xlsx) with columns: Name, Email, NationalId, StudentId, DepartmentName. Password is automatically set to the NationalId. Duplicate emails and student IDs are skipped.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "multipart/form-data": {
+                            schema: {
+                                type: "object",
+                                required: ["file"],
+                                properties: {
+                                    file: {
+                                        type: "string",
+                                        format: "binary",
+                                        description:
+                                            "Excel file with columns: Name | Email | NationalId | StudentId | DepartmentName",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    201: {
+                        description: "Students processed successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UploadExcelResponse",
+                                },
+                                example: {
+                                    message: "Students processed successfully",
+                                    insertedCount: 30,
+                                    skippedDueToValidation: 1,
+                                    errors: [
+                                        {
+                                            row: 5,
+                                            error: "Department not found: Unknown Dept",
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Bad request or no valid data" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
     },
-  },
 };

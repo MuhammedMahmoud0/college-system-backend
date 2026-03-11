@@ -2,6 +2,7 @@ import express from "express";
 import {
     startAttendanceSession,
     getSessionDetails,
+    getSessionLiveInfo,
     scanQRCode,
     endAttendanceSession,
     getActiveSessions,
@@ -51,6 +52,13 @@ router.get(
     authMiddleware,
     authorizationMiddleware("doctor", "teaching_assistant", "admin"),
     getAllAttendanceSessions
+);
+
+// Get live-info (is_live, latitude, longitude) for an active session - MUST come before /sessions/:sessionId
+router.get(
+    "/sessions/:sessionId/live-info",
+    authMiddleware,
+    getSessionLiveInfo
 );
 
 // Get session details

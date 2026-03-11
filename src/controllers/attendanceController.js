@@ -191,6 +191,33 @@ export const startAttendanceSession = async (req, res) => {
 };
 
 /**
+ * Get live-info for an active session (is_live, latitude, longitude)
+ * GET /api/v1/attendance/sessions/:sessionId/live-info
+ */
+export const getSessionLiveInfo = async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        const session = activeSessions.get(sessionId);
+        if (!session) {
+            return res
+                .status(404)
+                .json({ error: "Session not found or expired" });
+        }
+
+        res.status(200).json({
+            sessionId,
+            is_live: session.isLive,
+            latitude: session.latitude,
+            longitude: session.longitude,
+        });
+    } catch (err) {
+        logger.error("Error getting session live info:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
  * Get current session details
  * GET /api/v1/attendance/sessions/:sessionId
  */

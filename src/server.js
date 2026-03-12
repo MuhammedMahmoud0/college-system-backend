@@ -22,6 +22,7 @@ import gradeRoutes from "./routes/gradeRoutes.js";
 import adminDashboardRoutes from "./routes/adminDashboardRoutes.js";
 import taskRoutes from "./routes/taskRoutes.js";
 import departmentRoutes from "./routes/departmentRoutes.js";
+import doctorDashboardRoutes from "./routes/doctorDashboardRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 import { initializeSocketIO } from "./utils/socketIO.js";
@@ -116,6 +117,9 @@ app.use("/api/v1/tasks", taskRoutes);
 
 // mount admin dashboard routes
 app.use("/api/v1/admin", adminDashboardRoutes);
+
+// mount doctor dashboard routes
+app.use("/api/v1/doctor", doctorDashboardRoutes);
 
 // mount department routes
 app.use("/api/v1/departments", departmentRoutes);

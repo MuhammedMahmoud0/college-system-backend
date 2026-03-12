@@ -22,6 +22,7 @@ import grade from "../swagger/grade.swagger.js";
 import task from "../swagger/task.swagger.js";
 import adminDashboard from "../swagger/adminDashboard.swagger.js";
 import department from "../swagger/department.swagger.js";
+import doctorDashboard from "../swagger/doctorDashboard.swagger.js";
 
 export const swaggerSpec = {
     ...base,
@@ -39,6 +40,7 @@ export const swaggerSpec = {
             ...task.schemas,
             ...adminDashboard.schemas,
             ...department.schemas,
+            ...doctorDashboard.schemas,
         },
     },
     paths: {
@@ -62,6 +64,7 @@ export const swaggerSpec = {
         ...grade.paths,
         ...task.paths,
         ...adminDashboard.paths,
+        ...doctorDashboard.paths,
     },
 };
 

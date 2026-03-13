@@ -636,6 +636,12 @@ export default {
             ],
             properties: {
                 offeringId: { type: "integer", example: 1 },
+                offering_id: {
+                    type: "integer",
+                    example: 1,
+                    description:
+                        "Alias for offeringId (snake_case accepted for backward compatibility).",
+                },
                 instructorId: {
                     type: "string",
                     format: "uuid",

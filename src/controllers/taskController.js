@@ -136,6 +136,90 @@ export const getTasks = async (req, res) => {
 };
 
 /**
+ * GET /api/v1/tasks/my/available
+ * Get tasks assigned to the authenticated student/leader that are still open for submission.
+ */
+export const getMyAvailableTasks = async (req, res) => {
+    try {
+        const studentId = req.user.id;
+        const now = new Date();
+
+        const enrollments = await prisma.enrollments.findMany({
+            where: { student_user_id: studentId },
+            select: { lecture_id: true, tutorial_lab_id: true },
+        });
+
+        if (enrollments.length === 0) {
+            return res.status(200).json({ count: 0, tasks: [] });
+        }
+
+        const lectureIds = [
+            ...new Set(enrollments.map((e) => e.lecture_id).filter(Boolean)),
+        ];
+        const tutorialLabIds = [
+            ...new Set(
+                enrollments.map((e) => e.tutorial_lab_id).filter(Boolean)
+            ),
+        ];
+
+        const scopeFilters = [];
+        if (lectureIds.length > 0) {
+            scopeFilters.push({ lecture_id: { in: lectureIds } });
+        }
+        if (tutorialLabIds.length > 0) {
+            scopeFilters.push({ tutorial_lab_id: { in: tutorialLabIds } });
+        }
+
+        if (scopeFilters.length === 0) {
+            return res.status(200).json({ count: 0, tasks: [] });
+        }
+
+        const tasks = await prisma.tasks.findMany({
+            where: {
+                OR: scopeFilters,
+                AND: [{ OR: [{ due_date: null }, { due_date: { gte: now } }] }],
+            },
+            include: {
+                lectures: {
+                    include: {
+                        course_offerings: { include: { courses: true } },
+                    },
+                },
+                tutorials_labs: {
+                    include: {
+                        course_offerings: { include: { courses: true } },
+                    },
+                },
+                task_submissions: {
+                    where: { student_id: studentId },
+                    select: {
+                        id: true,
+                        submitted_at: true,
+                        grade: true,
+                    },
+                    orderBy: { submitted_at: "desc" },
+                    take: 1,
+                },
+            },
+            orderBy: [{ due_date: "asc" }, { created_at: "desc" }],
+        });
+
+        const formattedTasks = tasks.map((task) => {
+            const { task_submissions, ...taskWithoutSubmissions } = task;
+            return {
+                ...taskWithoutSubmissions,
+                my_submission: task_submissions[0] || null,
+            };
+        });
+
+        return res.status(200).json({ count: formattedTasks.length, tasks: formattedTasks });
+    } catch (err) {
+        logger.error("Error fetching available tasks for student:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
  * GET /api/v1/tasks/:taskId
  * Get a specific task by ID.
  */
@@ -262,30 +346,25 @@ export const submitTask = async (req, res) => {
             return res.status(404).json({ error: "Task not found" });
         }
 
-        // Re-submit replaces existing submission if any
+        // Submission is allowed only once
         const existing = await prisma.task_submissions.findFirst({
             where: { task_id: parseInt(taskId), student_id: studentId },
         });
 
-        let submission;
         if (existing) {
-            submission = await prisma.task_submissions.update({
-                where: { id: existing.id },
-                data: {
-                    submission_content: submission_content || null,
-                    submitted_at: new Date(),
-                },
-            });
-        } else {
-            submission = await prisma.task_submissions.create({
-                data: {
-                    task_id: parseInt(taskId),
-                    student_id: studentId,
-                    submission_content: submission_content || null,
-                    submitted_at: new Date(),
-                },
+            return res.status(409).json({
+                error: "You have already submitted this task.",
             });
         }
+
+        const submission = await prisma.task_submissions.create({
+            data: {
+                task_id: parseInt(taskId),
+                student_id: studentId,
+                submission_content: submission_content || null,
+                submitted_at: new Date(),
+            },
+        });
 
         return res.status(201).json({
             message: "Task submitted successfully",
@@ -405,6 +484,58 @@ export const getMySubmission = async (req, res) => {
         return res.status(200).json({ submission });
     } catch (err) {
         logger.error("Error fetching submission:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * DELETE /api/v1/tasks/:taskId/my-submission
+ * Delete my submission for a task (student/leader), only before due date.
+ */
+export const deleteMySubmission = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const studentId = req.user.id;
+
+        const task = await prisma.tasks.findUnique({
+            where: { id: parseInt(taskId) },
+            select: { id: true, due_date: true },
+        });
+
+        if (!task) {
+            return res.status(404).json({ error: "Task not found" });
+        }
+
+        const now = new Date();
+        if (task.due_date && now >= task.due_date) {
+            return res.status(403).json({
+                error: "Submission can only be deleted before the due date.",
+            });
+        }
+
+        const submission = await prisma.task_submissions.findFirst({
+            where: {
+                task_id: parseInt(taskId),
+                student_id: studentId,
+            },
+            select: { id: true },
+        });
+
+        if (!submission) {
+            return res
+                .status(404)
+                .json({ error: "No submission found for this task" });
+        }
+
+        await prisma.task_submissions.delete({
+            where: { id: submission.id },
+        });
+
+        return res.status(200).json({
+            message: "Submission deleted successfully",
+        });
+    } catch (err) {
+        logger.error("Error deleting submission:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 };

@@ -6,6 +6,7 @@ import {
 import {
     createTask,
     getTasks,
+    getMyAvailableTasks,
     getTaskById,
     updateTask,
     deleteTask,
@@ -13,6 +14,7 @@ import {
     getSubmissions,
     gradeSubmission,
     getMySubmission,
+    deleteMySubmission,
 } from "../controllers/taskController.js";
 
 const router = Router();
@@ -28,6 +30,13 @@ router.post("/", authorizationMiddleware(...staffRoles), createTask);
 
 /** GET /api/v1/tasks?lecture_id=1  OR  ?tutorial_lab_id=2 — List tasks */
 router.get("/", getTasks);
+
+/** GET /api/v1/tasks/my/available — Student/Leader tasks open for submission */
+router.get(
+    "/my/available",
+    authorizationMiddleware("student", "leader"),
+    getMyAvailableTasks
+);
 
 /** GET /api/v1/tasks/:taskId — Get a specific task */
 router.get("/:taskId", getTaskById);
@@ -52,6 +61,13 @@ router.get(
     "/:taskId/my-submission",
     authorizationMiddleware("student", "leader"),
     getMySubmission
+);
+
+/** DELETE /api/v1/tasks/:taskId/my-submission — Student deletes their submission before due date */
+router.delete(
+    "/:taskId/my-submission",
+    authorizationMiddleware("student", "leader"),
+    deleteMySubmission
 );
 
 /** GET /api/v1/tasks/:taskId/submissions — Staff views all submissions */

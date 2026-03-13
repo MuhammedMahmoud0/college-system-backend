@@ -273,6 +273,68 @@ export const getDoctorAlerts = async (req, res) => {
 
         const lectureIds = lectures.map((l) => l.lecture_id);
 
+        // ── Low Midterm/Work Scores (<50% of max) ──────────────────────
+        if (lectureIds.length > 0) {
+            const gradeRows = await prisma.enrollments.findMany({
+                where: {
+                    lecture_id: { in: lectureIds },
+                    OR: [{ mid_score: { not: null } }, { work_score: { not: null } }],
+                },
+                select: {
+                    student_user_id: true,
+                    mid_score: true,
+                    work_score: true,
+                    lectures: {
+                        select: {
+                            grade_distribution: {
+                                select: { mid_max: true, work_max: true },
+                            },
+                        },
+                    },
+                },
+            });
+
+            const lowMidtermStudents = new Set();
+            const lowWorkStudents = new Set();
+
+            for (const row of gradeRows) {
+                const distribution = row.lectures?.grade_distribution;
+                if (!distribution) continue;
+
+                if (
+                    row.mid_score !== null &&
+                    distribution.mid_max > 0 &&
+                    row.mid_score < distribution.mid_max * 0.5
+                ) {
+                    lowMidtermStudents.add(row.student_user_id);
+                }
+
+                if (
+                    row.work_score !== null &&
+                    distribution.work_max > 0 &&
+                    row.work_score < distribution.work_max * 0.5
+                ) {
+                    lowWorkStudents.add(row.student_user_id);
+                }
+            }
+
+            if (lowMidtermStudents.size > 0) {
+                alerts.push({
+                    type: "low_midterm_scores",
+                    label: `${lowMidtermStudents.size} student(s) have a midterm score below 50% of max.`,
+                    data: { low_midterm_students_count: lowMidtermStudents.size },
+                });
+            }
+
+            if (lowWorkStudents.size > 0) {
+                alerts.push({
+                    type: "low_work_scores",
+                    label: `${lowWorkStudents.size} student(s) have a work score below 50% of max.`,
+                    data: { low_work_students_count: lowWorkStudents.size },
+                });
+            }
+        }
+
         // ── Active Task Monitoring ───────────────────────────────────────
         if (lectureIds.length > 0) {
             const activeTasks = await prisma.tasks.findMany({

@@ -213,7 +213,7 @@ export default {
                 tags: ["Tasks"],
                 summary: "Submit a task (student)",
                 description:
-                    "Submit or re-submit a task. Accessible to Student and Leader roles.",
+                    "Submit a task once. Accessible to Student and Leader roles.",
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     {
@@ -257,6 +257,9 @@ export default {
                             },
                         },
                     },
+                    409: {
+                        description: "Task already submitted by this student.",
+                    },
                     404: { description: "Task not found." },
                     401: { description: "Unauthorized." },
                     403: { description: "Forbidden." },
@@ -291,6 +294,102 @@ export default {
                     },
                     404: { description: "No submission found." },
                     401: { description: "Unauthorized." },
+                    500: { description: "Internal server error." },
+                },
+            },
+            delete: {
+                tags: ["Tasks"],
+                summary: "Delete own submission for a task (student/leader)",
+                description:
+                    "Deletes the authenticated student/leader submission for the task. Allowed only before task due_date.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "taskId",
+                        in: "path",
+                        required: true,
+                        schema: { type: "integer" },
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Submission deleted successfully.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: {
+                                            type: "string",
+                                            example:
+                                                "Submission deleted successfully",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    403: {
+                        description:
+                            "Submission can only be deleted before due date.",
+                    },
+                    404: { description: "Task or submission not found." },
+                    401: { description: "Unauthorized." },
+                    500: { description: "Internal server error." },
+                },
+            },
+        },
+
+        "/tasks/my/available": {
+            get: {
+                tags: ["Tasks"],
+                summary: "Get my available tasks (student/leader)",
+                description:
+                    "Returns tasks assigned to the authenticated student/leader through their enrollments, filtered to only tasks still available for submission (due_date is null or in the future).",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "Available tasks retrieved.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        count: {
+                                            type: "integer",
+                                            example: 2,
+                                        },
+                                        tasks: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                allOf: [
+                                                    {
+                                                        $ref: "#/components/schemas/TaskObject",
+                                                    },
+                                                    {
+                                                        type: "object",
+                                                        properties: {
+                                                            my_submission: {
+                                                                allOf: [
+                                                                    {
+                                                                        $ref: "#/components/schemas/TaskSubmissionObject",
+                                                                    },
+                                                                ],
+                                                                nullable: true,
+                                                            },
+                                                        },
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized." },
+                    403: { description: "Forbidden (student/leader only)." },
                     500: { description: "Internal server error." },
                 },
             },

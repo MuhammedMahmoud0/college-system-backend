@@ -114,11 +114,9 @@ export default {
                         "active_task",
                         "expired_task",
                         "ungraded_submissions",
-                        "low_midterm_scores",
-                        "low_work_scores",
                     ],
                     description:
-                        "Alert category: active_task, expired_task, ungraded_submissions, low_midterm_scores, or low_work_scores.",
+                        "Alert category: active_task, expired_task, or ungraded_submissions.",
                     example: "active_task",
                 },
                 label: {
@@ -327,9 +325,9 @@ export default {
         "/doctor/alerts": {
             get: {
                 tags: ["Doctor Dashboard"],
-                summary: "Doctor alerts (active tasks, expired tasks, ungraded submissions, low score counts)",
+                summary: "Doctor alerts (active tasks, expired tasks, ungraded submissions)",
                 description:
-                    "Returns a unified list of labeled alerts for the doctor's dashboard: active tasks with time remaining and unsubmitted counts, expired tasks with failed-to-submit counts, the total number of ungraded submissions, and counts of students below 50% of max in midterm/work. Each alert has a `type`, a human-readable `label`, and a `data` object.",
+                    "Returns a unified list of labeled alerts for the doctor's dashboard: active tasks with time remaining and unsubmitted counts, expired tasks with failed-to-submit counts, and the total number of ungraded submissions. Each alert has a `type`, a human-readable `label`, and a `data` object.",
                 security: [{ bearerAuth: [] }],
                 responses: {
                     200: {

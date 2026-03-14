@@ -512,10 +512,8 @@ export const deleteCourse = async (req, res) => {
 // POST /api/courses/lectures
 export const createLecture = async (req, res) => {
     try {
-        const body = req.body || {};
         const {
             offeringId,
-            offering_id,
             instructorId,
             capacity,
             dayOfWeek,
@@ -523,13 +521,11 @@ export const createLecture = async (req, res) => {
             endTime,
             location,
             group,
-        } = body;
-
-        const normalizedOfferingId = offeringId ?? offering_id;
+        } = req.body;
 
         // Validate required fields
         if (
-            !normalizedOfferingId ||
+            !offeringId ||
             !instructorId ||
             !capacity ||
             !dayOfWeek ||
@@ -551,7 +547,7 @@ export const createLecture = async (req, res) => {
 
         // Verify course offering exists
         const offering = await prisma.course_offerings.findUnique({
-            where: { offering_id: parseInt(normalizedOfferingId) },
+            where: { offering_id: parseInt(offeringId) },
         });
 
         if (!offering) {
@@ -579,7 +575,7 @@ export const createLecture = async (req, res) => {
 
         const newLecture = await prisma.lectures.create({
             data: {
-                offering_id: parseInt(normalizedOfferingId),
+                offering_id: parseInt(offeringId),
                 instructor_id: instructorId,
                 capacity: parseInt(capacity),
                 day_of_week: dayOfWeek,

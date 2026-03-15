@@ -378,6 +378,15 @@ export const deleteUser = async (req, res) => {
     try {
         const { id } = req.params;
 
+        const existingUser = await prisma.users.findUnique({
+            where: { id },
+            select: { id: true },
+        });
+
+        if (!existingUser) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
         await prisma.users.delete({ where: { id } });
 
         return res.status(200).json({
@@ -385,10 +394,6 @@ export const deleteUser = async (req, res) => {
             userId: id,
         });
     } catch (err) {
-        if (err?.code === "P2025") {
-            return res.status(404).json({ error: "User not found" });
-        }
-
         if (err?.code === "P2003") {
             return res.status(409).json({
                 error: "Cannot delete user because related records exist",

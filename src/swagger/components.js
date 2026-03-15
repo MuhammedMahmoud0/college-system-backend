@@ -241,6 +241,93 @@ export default {
                 userId: { type: "string" },
             },
         },
+        UpdateUserRequest: {
+            type: "object",
+            properties: {
+                name: {
+                    type: "string",
+                    description: "Full name",
+                },
+                email: {
+                    type: "string",
+                    format: "email",
+                },
+                password: {
+                    type: "string",
+                    description: "New password (will be hashed)",
+                },
+                role: {
+                    type: "string",
+                    enum: [
+                        "student",
+                        "doctor",
+                        "admin",
+                        "teaching_assistant",
+                        "super_admin",
+                        "leader",
+                    ],
+                },
+                phone: {
+                    type: "string",
+                    nullable: true,
+                },
+                address: {
+                    type: "string",
+                    nullable: true,
+                },
+                avatar_url: {
+                    type: "string",
+                    nullable: true,
+                },
+                national_id: {
+                    type: "string",
+                    nullable: true,
+                },
+            },
+            example: {
+                name: "Dr. Ahmed Hassan",
+                email: "ahmed.hassan@example.edu",
+                role: "doctor",
+                phone: "+201234567890",
+            },
+        },
+        UpdateUserResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "User updated successfully",
+                },
+                user: {
+                    type: "object",
+                    properties: {
+                        id: { type: "string", format: "uuid" },
+                        full_name: { type: "string" },
+                        email: { type: "string", format: "email" },
+                        role: { type: "string" },
+                        avatar_url: { type: "string", nullable: true },
+                        phone: { type: "string", nullable: true },
+                        address: { type: "string", nullable: true },
+                        national_id: { type: "string", nullable: true },
+                        updated_at: {
+                            type: "string",
+                            format: "date-time",
+                            nullable: true,
+                        },
+                    },
+                },
+            },
+        },
+        DeleteUserResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "User deleted successfully",
+                },
+                userId: { type: "string", format: "uuid" },
+            },
+        },
         UploadExcelResponse: {
             type: "object",
             properties: {
@@ -269,6 +356,80 @@ export default {
                         },
                     },
                     example: [],
+                },
+            },
+        },
+        UploadExcelQueuedResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Excel import job queued successfully",
+                },
+                jobId: {
+                    type: "string",
+                    description: "BullMQ job ID for tracking import progress",
+                    example: "42",
+                },
+                queued: {
+                    type: "boolean",
+                    example: true,
+                },
+                importType: {
+                    type: "string",
+                    enum: ["users", "students"],
+                    example: "students",
+                },
+                rowsCount: {
+                    type: "integer",
+                    example: 1200,
+                },
+            },
+        },
+        UploadExcelJobStatusResponse: {
+            type: "object",
+            properties: {
+                jobId: {
+                    type: "string",
+                    example: "42",
+                },
+                state: {
+                    type: "string",
+                    example: "completed",
+                },
+                progress: {
+                    type: "integer",
+                    example: 100,
+                },
+                attemptsMade: {
+                    type: "integer",
+                    example: 1,
+                },
+                createdAt: {
+                    type: "integer",
+                    description: "Unix timestamp in milliseconds",
+                    example: 1773558600000,
+                },
+                processedOn: {
+                    type: "integer",
+                    nullable: true,
+                    example: 1773558600500,
+                },
+                finishedOn: {
+                    type: "integer",
+                    nullable: true,
+                    example: 1773558604500,
+                },
+                failedReason: {
+                    type: "string",
+                    nullable: true,
+                    example: null,
+                },
+                result: {
+                    allOf: [
+                        { $ref: "#/components/schemas/UploadExcelResponse" },
+                    ],
+                    nullable: true,
                 },
             },
         },

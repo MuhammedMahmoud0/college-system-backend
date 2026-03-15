@@ -11,25 +11,25 @@ A full-featured REST + WebSocket backend for a university management platform, b
 
 ## Features
 
-| Domain | Highlights |
-|---|---|
-| **Auth** | JWT login/register, bcrypt password hashing, role-based access |
-| **Users** | CRUD for students, doctors, teaching assistants, admins |
-| **Student Profile** | Academic profile, CGPA, year level, faculty advisor |
-| **Courses & Offerings** | Course catalogue, per-semester offerings, prerequisites |
-| **Enrollment / Registration** | Enroll/drop lectures and tutorial labs with capacity checks |
-| **Schedule** | Weekly timetable per student or instructor |
-| **Attendance** | Real-time WebSocket check-in with GPS coordinates, manual overrides |
-| **Grades** | Mid/work/final scores, grade distributions, transcript export (Excel) |
-| **Exams** | Exam schedule, automated reminder notifications via background job |
-| **Tasks** | Assignments per lecture/lab with student submissions |
-| **Materials** | File uploads to Supabase Storage per lecture/tutorial lab |
-| **Community** | Groups, posts, comments, likes |
-| **Notifications** | Real-time push over Socket.IO, per-user preferences |
-| **Leaderboard** | Student ranking by CGPA / credits |
-| **Admin Dashboard** | Aggregate stats, announcements, academic calendar, system config |
-| **Departments** | Department management with financial (credit price) data |
-| **Swagger Docs** | Interactive API documentation at `/docs` |
+| Domain                        | Highlights                                                            |
+| ----------------------------- | --------------------------------------------------------------------- |
+| **Auth**                      | JWT login/register, bcrypt password hashing, role-based access        |
+| **Users**                     | CRUD for students, doctors, teaching assistants, admins               |
+| **Student Profile**           | Academic profile, CGPA, year level, faculty advisor                   |
+| **Courses & Offerings**       | Course catalogue, per-semester offerings, prerequisites               |
+| **Enrollment / Registration** | Enroll/drop lectures and tutorial labs with capacity checks           |
+| **Schedule**                  | Weekly timetable per student or instructor                            |
+| **Attendance**                | Real-time WebSocket check-in with GPS coordinates, manual overrides   |
+| **Grades**                    | Mid/work/final scores, grade distributions, transcript export (Excel) |
+| **Exams**                     | Exam schedule, automated reminder notifications via background job    |
+| **Tasks**                     | Assignments per lecture/lab with student submissions                  |
+| **Materials**                 | File uploads to Supabase Storage per lecture/tutorial lab             |
+| **Community**                 | Groups, posts, comments, likes                                        |
+| **Notifications**             | Real-time push over Socket.IO, per-user preferences                   |
+| **Leaderboard**               | Student ranking by CGPA / credits                                     |
+| **Admin Dashboard**           | Aggregate stats, announcements, academic calendar, system config      |
+| **Departments**               | Department management with financial (credit price) data              |
+| **Swagger Docs**              | Interactive API documentation at `/docs`                              |
 
 ---
 
@@ -106,7 +106,22 @@ PORT=3000
 # Supabase (required for file uploads)
 SUPABASE_URL="https://your-project-id.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key-here"
+
+# Async Excel imports (optional, recommended for large files)
+# Configure either REDIS_URL OR REDIS_HOST/REDIS_PORT
+# REDIS_URL="redis://:password@localhost:6379/0"
+REDIS_HOST="localhost"
+REDIS_PORT=6379
+# REDIS_PASSWORD=""
+REDIS_DB=0
+EXCEL_IMPORT_ASYNC_THRESHOLD=200
+USER_IMPORT_WORKER_CONCURRENCY=3
 ```
+
+If Redis is not configured, Excel imports still work in synchronous mode.
+If Redis is configured, imports above `EXCEL_IMPORT_ASYNC_THRESHOLD` are queued and can be tracked via:
+
+`GET /api/v1/users/upload-excel/jobs/{jobId}`
 
 **Getting Supabase credentials:**
 
@@ -137,14 +152,14 @@ Interactive API docs are available at `http://localhost:3000/docs`.
 
 ## Available Scripts
 
-| Script | Description |
-|---|---|
-| `npm run dev` | Start with `node --watch` (auto-restart on file changes) |
-| `npm start` | Start in production mode |
-| `npm run seed` | Seed the development database |
-| `npm run prisma:migrate` | Run Prisma migrations |
-| `npm run prisma:generate` | Regenerate Prisma client |
-| `npm run db:studio` | Open Prisma Studio (visual DB browser) |
+| Script                    | Description                                              |
+| ------------------------- | -------------------------------------------------------- |
+| `npm run dev`             | Start with `node --watch` (auto-restart on file changes) |
+| `npm start`               | Start in production mode                                 |
+| `npm run seed`            | Seed the development database                            |
+| `npm run prisma:migrate`  | Run Prisma migrations                                    |
+| `npm run prisma:generate` | Regenerate Prisma client                                 |
+| `npm run db:studio`       | Open Prisma Studio (visual DB browser)                   |
 
 ---
 
@@ -164,27 +179,27 @@ Default seeded password for all users: **`Passw0rd!`** — change this before an
 
 All endpoints are prefixed with `/api/v1`. Full interactive documentation (with request/response schemas) is available at `/docs`.
 
-| Prefix | Domain |
-|---|---|
-| `/auth` | Login, register |
-| `/users` | User CRUD |
-| `/student` | Student profile |
-| `/leaderboard` | Student rankings |
-| `/schedule` | Weekly timetables |
-| `/courses` | Course catalogue & prerequisites |
-| `/course-offerings` | Per-semester offerings |
-| `/registration` | Enroll / drop |
-| `/attendance` | Attendance records (WebSocket) |
-| `/grades` | Scores, grade distributions, transcripts |
-| `/exams` | Exam schedule |
-| `/tasks` | Assignments & submissions |
-| `/materials` | Course file uploads |
-| `/teachers` | Teacher / TA management |
-| `/community` | Groups, posts, comments, likes |
-| `/notifications` | User notifications & preferences |
-| `/admin` | Admin dashboard & stats |
-| `/departments` | Department & financial data |
-| `/config` | System configuration |
+| Prefix              | Domain                                   |
+| ------------------- | ---------------------------------------- |
+| `/auth`             | Login, register                          |
+| `/users`            | User CRUD                                |
+| `/student`          | Student profile                          |
+| `/leaderboard`      | Student rankings                         |
+| `/schedule`         | Weekly timetables                        |
+| `/courses`          | Course catalogue & prerequisites         |
+| `/course-offerings` | Per-semester offerings                   |
+| `/registration`     | Enroll / drop                            |
+| `/attendance`       | Attendance records (WebSocket)           |
+| `/grades`           | Scores, grade distributions, transcripts |
+| `/exams`            | Exam schedule                            |
+| `/tasks`            | Assignments & submissions                |
+| `/materials`        | Course file uploads                      |
+| `/teachers`         | Teacher / TA management                  |
+| `/community`        | Groups, posts, comments, likes           |
+| `/notifications`    | User notifications & preferences         |
+| `/admin`            | Admin dashboard & stats                  |
+| `/departments`      | Department & financial data              |
+| `/config`           | System configuration                     |
 
 ---
 
@@ -201,14 +216,14 @@ Connect to `ws://localhost:3000` using the Socket.IO client library.
 
 ## User Roles
 
-| Role | Description |
-|---|---|
-| `student` | Enrolled student |
-| `doctor` | Course instructor |
-| `teaching_assistant` | Tutorial/lab TA |
-| `admin` | Departmental administrator |
-| `super_admin` | Platform-wide administrator |
-| `leader` | Student union / club leader |
+| Role                 | Description                 |
+| -------------------- | --------------------------- |
+| `student`            | Enrolled student            |
+| `doctor`             | Course instructor           |
+| `teaching_assistant` | Tutorial/lab TA             |
+| `admin`              | Departmental administrator  |
+| `super_admin`        | Platform-wide administrator |
+| `leader`             | Student union / club leader |
 
 ---
 

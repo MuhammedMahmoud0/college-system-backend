@@ -121,6 +121,88 @@ export default {
                 },
             },
         },
+        "/users/{id}": {
+            patch: {
+                tags: ["Users"],
+                summary: "Update user",
+                description:
+                    "Updates one or more user fields. Requires admin or super_admin.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "id",
+                        in: "path",
+                        required: true,
+                        schema: { type: "string", format: "uuid" },
+                        description: "User UUID",
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/UpdateUserRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "User updated successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UpdateUserResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Bad request" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "User not found" },
+                    409: { description: "Email already exists" },
+                    500: { description: "Internal server error" },
+                },
+            },
+            delete: {
+                tags: ["Users"],
+                summary: "Delete user",
+                description:
+                    "Deletes a user. If the user has blocking related records, deletion is rejected.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "id",
+                        in: "path",
+                        required: true,
+                        schema: { type: "string", format: "uuid" },
+                        description: "User UUID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "User deleted successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/DeleteUserResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "User not found" },
+                    409: {
+                        description:
+                            "Cannot delete user because related records exist",
+                    },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
         "/users/management/students": {
             get: {
                 tags: ["Users"],
@@ -437,6 +519,17 @@ export default {
                             },
                         },
                     },
+                    202: {
+                        description:
+                            "Large file accepted for background processing",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UploadExcelQueuedResponse",
+                                },
+                            },
+                        },
+                    },
                     400: { description: "Bad request or no valid data" },
                     401: { description: "Unauthorized" },
                     403: { description: "Forbidden" },
@@ -492,9 +585,55 @@ export default {
                             },
                         },
                     },
+                    202: {
+                        description:
+                            "Large file accepted for background processing",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UploadExcelQueuedResponse",
+                                },
+                            },
+                        },
+                    },
                     400: { description: "Bad request or no valid data" },
                     401: { description: "Unauthorized" },
                     403: { description: "Forbidden" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/users/upload-excel/jobs/{jobId}": {
+            get: {
+                tags: ["Users"],
+                summary: "Get status of a queued Excel import job",
+                description:
+                    "Returns progress and final result for a previously queued large Excel import job.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "jobId",
+                        in: "path",
+                        required: true,
+                        schema: { type: "string" },
+                        description: "BullMQ job ID",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Job status",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UploadExcelJobStatusResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "Import job not found" },
+                    503: { description: "Queue is not configured" },
                     500: { description: "Internal server error" },
                 },
             },

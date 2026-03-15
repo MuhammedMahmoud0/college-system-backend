@@ -2,9 +2,12 @@ import express from "express";
 import {
     getUsers,
     addUsers,
+    updateUser,
+    deleteUser,
     addStudent,
     addExcelUsers,
     addExcelStudents,
+    getExcelImportJobStatus,
     getStudentsForManagement,
     getStaffForManagement,
     getLeaders,
@@ -52,6 +55,20 @@ router.post(
     addUsers
 );
 
+router.patch(
+    "/users/:id",
+    authMiddleware,
+    authorizationMiddleware("super_admin", "admin"),
+    updateUser
+);
+
+router.delete(
+    "/users/:id",
+    authMiddleware,
+    authorizationMiddleware("super_admin", "admin"),
+    deleteUser
+);
+
 // Students
 router.post(
     "/users/students",
@@ -76,6 +93,13 @@ router.post(
     authorizationMiddleware("super_admin", "admin"),
     uploadExcel.single("file"),
     addExcelStudents
+);
+
+router.get(
+    "/users/upload-excel/jobs/:jobId",
+    authMiddleware,
+    authorizationMiddleware("super_admin", "admin"),
+    getExcelImportJobStatus
 );
 
 export default router;

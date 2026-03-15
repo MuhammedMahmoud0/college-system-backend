@@ -1,7 +1,20 @@
 import { prisma } from "../config/connection.js";
 import bcrypt from "bcryptjs";
-import exceljs from "exceljs";
 import logger from "../utils/logger.js";
+import {
+    countDataRowsFromExcelBuffer,
+    processExcelStudentsBuffer,
+    processExcelUsersBuffer,
+} from "../utils/userImportService.js";
+import {
+    enqueueUserImportJob,
+    getUserImportJobStatus,
+    isUserImportQueueEnabled,
+} from "../utils/userImportQueue.js";
+
+const EXCEL_IMPORT_ASYNC_THRESHOLD = process.env.EXCEL_IMPORT_ASYNC_THRESHOLD
+    ? Number.parseInt(process.env.EXCEL_IMPORT_ASYNC_THRESHOLD, 10)
+    : 200;
 
 // ── GET /users/management/students ───────────────────────────────────────────
 // Returns both students and leaders (leaders are students with elevated role).
@@ -284,6 +297,109 @@ export const addUsers = async (req, res) => {
     }
 };
 
+// ── PATCH /users/:id ─────────────────────────────────────────────────────────
+// Updates basic user fields (name, email, role, password and profile fields).
+export const updateUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            name,
+            email,
+            password,
+            role,
+            phone,
+            address,
+            avatar_url,
+            national_id,
+        } = req.body;
+
+        const data = {};
+
+        if (name !== undefined) data.full_name = name;
+        if (email !== undefined) data.email = email;
+        if (role !== undefined) data.role = role;
+        if (phone !== undefined) data.phone = phone;
+        if (address !== undefined) data.address = address;
+        if (avatar_url !== undefined) data.avatar_url = avatar_url;
+        if (national_id !== undefined) data.national_id = national_id;
+
+        if (password !== undefined) {
+            if (!password) {
+                return res
+                    .status(400)
+                    .json({ error: "password cannot be empty" });
+            }
+            data.password_hash = await bcrypt.hash(password, 10);
+        }
+
+        if (Object.keys(data).length === 0) {
+            return res.status(400).json({
+                error: "At least one field must be provided for update",
+            });
+        }
+
+        const updated = await prisma.users.update({
+            where: { id },
+            data,
+            select: {
+                id: true,
+                full_name: true,
+                email: true,
+                role: true,
+                avatar_url: true,
+                phone: true,
+                address: true,
+                national_id: true,
+                updated_at: true,
+            },
+        });
+
+        return res.status(200).json({
+            message: "User updated successfully",
+            user: updated,
+        });
+    } catch (err) {
+        if (err?.code === "P2025") {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        if (err?.code === "P2002") {
+            return res.status(409).json({ error: "Email already exists" });
+        }
+
+        logger.error(err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// ── DELETE /users/:id ───────────────────────────────────────────────────────
+// Deletes a user if no blocking foreign key dependencies exist.
+export const deleteUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        await prisma.users.delete({ where: { id } });
+
+        return res.status(200).json({
+            message: "User deleted successfully",
+            userId: id,
+        });
+    } catch (err) {
+        if (err?.code === "P2025") {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        if (err?.code === "P2003") {
+            return res.status(409).json({
+                error: "Cannot delete user because related records exist",
+            });
+        }
+
+        logger.error(err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 // ── POST /users/students ──────────────────────────────────────────────────────
 // Creates a student user. Password is derived from national_id.
 export const addStudent = async (req, res) => {
@@ -429,88 +545,36 @@ export const addExcelUsers = async (req, res) => {
             return res.status(400).json({ error: "No file uploaded" });
         }
 
-        const workbook = new exceljs.Workbook();
-        await workbook.xlsx.load(req.file.buffer);
-        const worksheet = workbook.worksheets[0];
-
-        if (!worksheet) {
+        const rowsCountResult = await countDataRowsFromExcelBuffer(
+            req.file.buffer
+        );
+        if (!rowsCountResult.success) {
             return res
-                .status(400)
-                .json({ error: "No worksheet found in the Excel file" });
+                .status(rowsCountResult.status)
+                .json(rowsCountResult.payload);
         }
 
-        const validRoles = [
-            "doctor",
-            "teaching_assistant",
-            "admin",
-            "super_admin",
-        ];
-        const users = [];
-        const errors = [];
+        const shouldQueueLargeImport =
+            rowsCountResult.rowsCount > EXCEL_IMPORT_ASYNC_THRESHOLD;
 
-        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-            if (rowNumber === 1) return; // Skip header
+        if (shouldQueueLargeImport && isUserImportQueueEnabled()) {
+            const job = await enqueueUserImportJob({
+                importType: "users",
+                fileBuffer: req.file.buffer,
+                requestedBy: req.user?.id || null,
+            });
 
-            const [name, email, password, role] = row.values.slice(1);
-
-            if (!name || !email || !password || !role) {
-                errors.push({
-                    row: rowNumber,
-                    error: "Missing required fields (Name, Email, Password, Role)",
-                });
-                return;
-            }
-
-            if (role === "student") {
-                errors.push({
-                    row: rowNumber,
-                    error: "Use the students Excel endpoint for student accounts",
-                });
-                return;
-            }
-
-            if (!validRoles.includes(role)) {
-                errors.push({ row: rowNumber, error: `Invalid role: ${role}` });
-                return;
-            }
-
-            users.push({ name, email, password, role });
-        });
-
-        if (users.length === 0) {
-            return res
-                .status(400)
-                .json({ error: "No valid user data found", errors });
+            return res.status(202).json({
+                message: "Excel import job queued successfully",
+                jobId: String(job.id),
+                queued: true,
+                importType: "users",
+                rowsCount: rowsCountResult.rowsCount,
+            });
         }
 
-        let insertedCount = 0;
-
-        await prisma.$transaction(async (tx) => {
-            for (const user of users) {
-                const existing = await tx.users.findUnique({
-                    where: { email: user.email },
-                });
-                if (existing) continue;
-
-                const hashedPassword = await bcrypt.hash(user.password, 10);
-                await tx.users.create({
-                    data: {
-                        full_name: user.name,
-                        email: user.email,
-                        password_hash: hashedPassword,
-                        role: user.role,
-                    },
-                });
-                insertedCount++;
-            }
-        });
-
-        res.status(201).json({
-            message: "Users processed successfully",
-            insertedCount,
-            skippedDueToValidation: errors.length,
-            errors,
-        });
+        const result = await processExcelUsersBuffer(req.file.buffer);
+        return res.status(result.status).json(result.payload);
     } catch (err) {
         logger.error(err);
         res.status(500).json({ error: "Internal server error" });
@@ -527,125 +591,62 @@ export const addExcelStudents = async (req, res) => {
             return res.status(400).json({ error: "No file uploaded" });
         }
 
-        const workbook = new exceljs.Workbook();
-        await workbook.xlsx.load(req.file.buffer);
-        const worksheet = workbook.worksheets[0];
-
-        if (!worksheet) {
-            return res
-                .status(400)
-                .json({ error: "No worksheet found in the Excel file" });
-        }
-
-        const rows = [];
-        const errors = [];
-
-        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-            if (rowNumber === 1) return; // Skip header
-
-            const [name, email, nationalId, studentId, departmentName] =
-                row.values.slice(1);
-
-            if (
-                !name ||
-                !email ||
-                !nationalId ||
-                !studentId ||
-                !departmentName
-            ) {
-                errors.push({
-                    row: rowNumber,
-                    error: "Missing required fields (Name, Email, NationalId, StudentId, DepartmentName)",
-                });
-                return;
-            }
-
-            rows.push({ name, email, nationalId, studentId, departmentName });
-        });
-
-        if (rows.length === 0) {
-            return res
-                .status(400)
-                .json({ error: "No valid student data found", errors });
-        }
-
-        // Pre-load all referenced departments in one query
-        const uniqueDeptNames = [...new Set(rows.map((r) => r.departmentName))];
-        const departments = await prisma.departments.findMany({
-            where: { name: { in: uniqueDeptNames, mode: "insensitive" } },
-            select: { department_id: true, name: true },
-        });
-        const deptMap = new Map(
-            departments.map((d) => [d.name.toLowerCase(), d.department_id])
+        const rowsCountResult = await countDataRowsFromExcelBuffer(
+            req.file.buffer
         );
-
-        // Validate department names
-        for (const row of rows) {
-            if (!deptMap.has(row.departmentName.toLowerCase())) {
-                errors.push({
-                    row: rows.indexOf(row) + 2,
-                    error: `Department not found: ${row.departmentName}`,
-                });
-            }
-        }
-
-        const validRows = rows.filter((r) =>
-            deptMap.has(r.departmentName.toLowerCase())
-        );
-
-        if (validRows.length === 0) {
+        if (!rowsCountResult.success) {
             return res
-                .status(400)
-                .json({ error: "No valid student data found", errors });
+                .status(rowsCountResult.status)
+                .json(rowsCountResult.payload);
         }
 
-        let insertedCount = 0;
+        const shouldQueueLargeImport =
+            rowsCountResult.rowsCount > EXCEL_IMPORT_ASYNC_THRESHOLD;
 
-        await prisma.$transaction(async (tx) => {
-            for (const row of validRows) {
-                const [existingEmail, existingStudentId] = await Promise.all([
-                    tx.users.findUnique({ where: { email: row.email } }),
-                    tx.student_profiles.findUnique({
-                        where: { student_id: row.studentId },
-                    }),
-                ]);
+        if (shouldQueueLargeImport && isUserImportQueueEnabled()) {
+            const job = await enqueueUserImportJob({
+                importType: "students",
+                fileBuffer: req.file.buffer,
+                requestedBy: req.user?.id || null,
+            });
 
-                if (existingEmail || existingStudentId) continue;
+            return res.status(202).json({
+                message: "Excel import job queued successfully",
+                jobId: String(job.id),
+                queued: true,
+                importType: "students",
+                rowsCount: rowsCountResult.rowsCount,
+            });
+        }
 
-                const hashedPassword = await bcrypt.hash(row.nationalId, 10);
-
-                const newUser = await tx.users.create({
-                    data: {
-                        full_name: row.name,
-                        email: row.email,
-                        password_hash: hashedPassword,
-                        role: "student",
-                        national_id: row.nationalId,
-                    },
-                });
-
-                await tx.student_profiles.create({
-                    data: {
-                        user_id: newUser.id,
-                        student_id: row.studentId,
-                        department_id: deptMap.get(
-                            row.departmentName.toLowerCase()
-                        ),
-                    },
-                });
-
-                insertedCount++;
-            }
-        });
-
-        res.status(201).json({
-            message: "Students processed successfully",
-            insertedCount,
-            skippedDueToValidation: errors.length,
-            errors,
-        });
+        const result = await processExcelStudentsBuffer(req.file.buffer);
+        return res.status(result.status).json(result.payload);
     } catch (err) {
         logger.error(err);
         res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// ── GET /users/upload-excel/jobs/:jobId ─────────────────────────────────────
+// Returns current status for a queued large Excel import job.
+export const getExcelImportJobStatus = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        if (!isUserImportQueueEnabled()) {
+            return res.status(503).json({
+                error: "Import queue is not configured",
+            });
+        }
+
+        const status = await getUserImportJobStatus(jobId);
+        if (!status) {
+            return res.status(404).json({ error: "Import job not found" });
+        }
+
+        return res.status(200).json(status);
+    } catch (err) {
+        logger.error(err);
+        return res.status(500).json({ error: "Internal server error" });
     }
 };

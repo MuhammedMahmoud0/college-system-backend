@@ -27,6 +27,7 @@ import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 import { initializeSocketIO } from "./utils/socketIO.js";
 import { startExamReminderJob } from "./utils/examReminderJob.js";
+import { initializeUserImportQueue } from "./utils/userImportQueue.js";
 
 config();
 connectDB();
@@ -43,6 +44,9 @@ app.set("io", io);
 
 // Start exam reminder background job
 startExamReminderJob(io);
+
+// Start async Excel import queue worker (requires Redis)
+initializeUserImportQueue();
 
 // Middleware to parse JSON bodies
 app.use(express.json());

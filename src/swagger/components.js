@@ -287,8 +287,12 @@ export default {
             example: {
                 name: "Dr. Ahmed Hassan",
                 email: "ahmed.hassan@example.edu",
+                password: "NewSecurePass123",
                 role: "doctor",
                 phone: "+201234567890",
+                address: "Alexandria, Egypt",
+                avatar_url: "https://cdn.example.edu/avatars/ahmed.png",
+                national_id: "30001011234567",
             },
         },
         UpdateUserResponse: {

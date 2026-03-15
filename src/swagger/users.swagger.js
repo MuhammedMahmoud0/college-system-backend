@@ -126,7 +126,7 @@ export default {
                 tags: ["Users"],
                 summary: "Update user",
                 description:
-                    "Updates one or more user fields. Requires admin or super_admin.",
+                    "Updates one or more user fields (partial update). Supported fields: name, email, password, role, phone, address, avatar_url, national_id. Requires admin or super_admin.",
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     {
@@ -143,6 +143,27 @@ export default {
                         "application/json": {
                             schema: {
                                 $ref: "#/components/schemas/UpdateUserRequest",
+                            },
+                            examples: {
+                                allFields: {
+                                    value: {
+                                        name: "Dr. Ahmed Hassan",
+                                        email: "ahmed.hassan@example.edu",
+                                        password: "NewSecurePass123",
+                                        role: "doctor",
+                                        phone: "+201234567890",
+                                        address: "Alexandria, Egypt",
+                                        avatar_url:
+                                            "https://cdn.example.edu/avatars/ahmed.png",
+                                        national_id: "30001011234567",
+                                    },
+                                },
+                                partialUpdate: {
+                                    value: {
+                                        name: "Dr. Ahmed Hassan (Updated)",
+                                        phone: "+201111111111",
+                                    },
+                                },
                             },
                         },
                     },

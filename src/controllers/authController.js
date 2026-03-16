@@ -72,6 +72,17 @@ export const me = async (req, res) => {
         });
 
         return res.json({ ...user, ...data });
+    } else {
+        const data = await prisma.users.findUnique({
+            where: { id: user.userId },
+            select: {
+                email: true,
+                role: true,
+                avatar_url: true,
+                phone: true,
+                address: true,
+            },
+        });
+        return res.json({ ...user, ...data });
     }
-    return res.json({ user });
 };

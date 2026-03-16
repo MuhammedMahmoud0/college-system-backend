@@ -17,7 +17,7 @@ import {
     authMiddleware,
     authorizationMiddleware,
 } from "../middlewares/authMiddleware.js";
-import { uploadExcel } from "../middlewares/uploadMiddleware.js";
+import { upload, uploadExcel } from "../middlewares/uploadMiddleware.js";
 
 const router = express.Router();
 
@@ -59,6 +59,7 @@ router.patch(
     "/users/:id",
     authMiddleware,
     authorizationMiddleware("super_admin", "admin"),
+    upload.single("avatar"),
     updateUser
 );
 

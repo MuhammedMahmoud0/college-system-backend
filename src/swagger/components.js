@@ -275,9 +275,11 @@ export default {
                     type: "string",
                     nullable: true,
                 },
-                avatar_url: {
+                avatar: {
                     type: "string",
+                    format: "binary",
                     nullable: true,
+                    description: "Avatar image file",
                 },
                 national_id: {
                     type: "string",
@@ -291,7 +293,6 @@ export default {
                 role: "doctor",
                 phone: "+201234567890",
                 address: "Alexandria, Egypt",
-                avatar_url: "https://cdn.example.edu/avatars/ahmed.png",
                 national_id: "30001011234567",
             },
         },

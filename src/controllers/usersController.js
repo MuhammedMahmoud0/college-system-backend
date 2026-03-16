@@ -1,6 +1,8 @@
 import { prisma } from "../config/connection.js";
 import bcrypt from "bcryptjs";
 import logger from "../utils/logger.js";
+import { supabase } from "../utils/supabase.js";
+import path from "path";
 import {
     countDataRowsFromExcelBuffer,
     processExcelStudentsBuffer,
@@ -231,9 +233,13 @@ export const getUsers = async (req, res) => {
         const users = await prisma.users.findMany({
             select: {
                 id: true,
+                full_name: true,
                 email: true,
                 role: true,
+                avatar_url: true,
+                created_at: true,
             },
+            orderBy: { created_at: "desc" },
         });
         res.status(200).json({ users });
     } catch (err) {
@@ -298,38 +304,92 @@ export const addUsers = async (req, res) => {
 };
 
 // ── PATCH /users/:id ─────────────────────────────────────────────────────────
-// Updates basic user fields (name, email, role, password and profile fields).
+// Updates basic user fields and supports avatar image upload to Supabase Storage.
 export const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const {
-            name,
-            email,
-            password,
-            role,
-            phone,
-            address,
-            avatar_url,
-            national_id,
-        } = req.body;
+
+        const normalizeOptionalField = (value) => {
+            if (value === undefined || value === null) return undefined;
+            if (typeof value === "string" && value.trim() === "") {
+                return undefined;
+            }
+            return value;
+        };
+
+        const { name, email, password, role, phone, address, national_id } =
+            req.body;
+        const avatarFile = req.file;
+
+        const normalizedName = normalizeOptionalField(name);
+        const normalizedEmail = normalizeOptionalField(email);
+        const normalizedPassword = normalizeOptionalField(password);
+        const normalizedRole = normalizeOptionalField(role);
+        const normalizedPhone = normalizeOptionalField(phone);
+        const normalizedAddress = normalizeOptionalField(address);
+        const normalizedNationalId = normalizeOptionalField(national_id);
 
         const data = {};
 
-        if (name !== undefined) data.full_name = name;
-        if (email !== undefined) data.email = email;
-        if (role !== undefined) data.role = role;
-        if (phone !== undefined) data.phone = phone;
-        if (address !== undefined) data.address = address;
-        if (avatar_url !== undefined) data.avatar_url = avatar_url;
-        if (national_id !== undefined) data.national_id = national_id;
+        if (normalizedName !== undefined) data.full_name = normalizedName;
+        if (normalizedEmail !== undefined) data.email = normalizedEmail;
+        if (normalizedRole !== undefined) data.role = normalizedRole;
+        if (normalizedPhone !== undefined) data.phone = normalizedPhone;
+        if (normalizedAddress !== undefined) data.address = normalizedAddress;
+        if (normalizedNationalId !== undefined)
+            data.national_id = normalizedNationalId;
 
-        if (password !== undefined) {
-            if (!password) {
-                return res
-                    .status(400)
-                    .json({ error: "password cannot be empty" });
+        if (avatarFile) {
+            const currentUser = await prisma.users.findUnique({
+                where: { id },
+                select: { avatar_url: true },
+            });
+
+            if (!currentUser) {
+                return res.status(404).json({ error: "User not found" });
             }
-            data.password_hash = await bcrypt.hash(password, 10);
+
+            const ext = path.extname(avatarFile.originalname);
+            const fileName = `avatar_${id}_${Date.now()}${ext}`;
+            const filePath = `${id}/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from("avatars")
+                .upload(filePath, avatarFile.buffer, {
+                    contentType: avatarFile.mimetype,
+                    upsert: true,
+                });
+
+            if (uploadError) {
+                logger.error("Avatar upload error:", uploadError);
+                return res.status(500).json({
+                    error: "Failed to upload avatar",
+                });
+            }
+
+            const { data: publicUrlData } = supabase.storage
+                .from("avatars")
+                .getPublicUrl(filePath);
+
+            data.avatar_url = publicUrlData.publicUrl;
+
+            if (currentUser?.avatar_url) {
+                try {
+                    const oldPath =
+                        currentUser.avatar_url.split("/avatars/")[1];
+                    if (oldPath) {
+                        await supabase.storage
+                            .from("avatars")
+                            .remove([oldPath]);
+                    }
+                } catch (deleteErr) {
+                    logger.warn("Failed to delete old avatar:", deleteErr);
+                }
+            }
+        }
+
+        if (normalizedPassword !== undefined) {
+            data.password_hash = await bcrypt.hash(normalizedPassword, 10);
         }
 
         if (Object.keys(data).length === 0) {

@@ -6,6 +6,8 @@ const USERS_MESSAGE = "Users processed successfully";
 const STUDENTS_MESSAGE = "Students processed successfully";
 
 const toUniqueSet = (items) => [...new Set(items)];
+const toNormalizedString = (value) =>
+    value === null || value === undefined ? "" : String(value).trim();
 
 const createWorkbookFromBuffer = async (fileBuffer) => {
     const workbook = new exceljs.Workbook();
@@ -48,7 +50,11 @@ export const processExcelUsersBuffer = async (
     worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
 
-        const [name, email, password, role] = row.values.slice(1);
+        const [nameRaw, emailRaw, passwordRaw, roleRaw] = row.values.slice(1);
+        const name = toNormalizedString(nameRaw);
+        const email = toNormalizedString(emailRaw);
+        const password = toNormalizedString(passwordRaw);
+        const role = toNormalizedString(roleRaw);
 
         if (!name || !email || !password || !role) {
             errors.push({
@@ -149,8 +155,18 @@ export const processExcelStudentsBuffer = async (
     worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
 
-        const [name, email, nationalId, studentId, departmentName] =
-            row.values.slice(1);
+        const [
+            nameRaw,
+            emailRaw,
+            nationalIdRaw,
+            studentIdRaw,
+            departmentNameRaw,
+        ] = row.values.slice(1);
+        const name = toNormalizedString(nameRaw);
+        const email = toNormalizedString(emailRaw);
+        const nationalId = toNormalizedString(nationalIdRaw);
+        const studentId = toNormalizedString(studentIdRaw);
+        const departmentName = toNormalizedString(departmentNameRaw);
 
         if (!name || !email || !nationalId || !studentId || !departmentName) {
             errors.push({

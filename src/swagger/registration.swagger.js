@@ -147,6 +147,7 @@ export default {
                     "  - Each new session against the student's **already-enrolled** sessions.",
                     "- If any lecture or lab is **at full capacity**, the entire registration is rejected.",
                     "- If the student is **already enrolled** in a lecture, the registration is rejected.",
+                    "- Each successful enrollment generates a **pending invoice**: `credit_price × credit_hours`.",
                     "",
                     "### Important",
                     "All validations run inside a database transaction — either everything succeeds or nothing is saved.",
@@ -274,6 +275,20 @@ export default {
                                     $ref: "#/components/schemas/ErrorResponse",
                                 },
                                 example: { error: "Forbidden" },
+                            },
+                        },
+                    },
+                    402: {
+                        description:
+                            "Payment required — user has pending unpaid invoices",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                                example: {
+                                    error: "You have unpaid invoices. Please complete payment before continuing.",
+                                },
                             },
                         },
                     },
@@ -434,6 +449,20 @@ export default {
                                     $ref: "#/components/schemas/ErrorResponse",
                                 },
                                 example: { error: "Forbidden" },
+                            },
+                        },
+                    },
+                    402: {
+                        description:
+                            "Payment required — user has pending unpaid invoices",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                                example: {
+                                    error: "You have unpaid invoices. Please complete payment before continuing.",
+                                },
                             },
                         },
                     },
@@ -780,6 +809,34 @@ export default {
                         description: "The newly created enrollment records",
                         items: {
                             $ref: "#/components/schemas/EnrollmentRecord",
+                        },
+                    },
+                    billing: {
+                        type: "object",
+                        properties: {
+                            invoices: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        id: { type: "integer", example: 12 },
+                                        course_code: {
+                                            type: "string",
+                                            example: "CS201",
+                                        },
+                                        total_amount: {
+                                            type: "number",
+                                            example: 900,
+                                        },
+                                        status: {
+                                            type: "string",
+                                            example: "pending",
+                                        },
+                                    },
+                                },
+                            },
+                            totalBilled: { type: "number", example: 900 },
+                            currency: { type: "string", example: "USD" },
                         },
                     },
                 },

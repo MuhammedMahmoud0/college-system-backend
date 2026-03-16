@@ -107,6 +107,11 @@ PORT=3000
 SUPABASE_URL="https://your-project-id.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key-here"
 
+# PayPal (required for invoice payment)
+PAYPAL_ENV="sandbox" # sandbox | live
+PAYPAL_CLIENT_ID="your-paypal-client-id"
+PAYPAL_CLIENT_SECRET="your-paypal-client-secret"
+
 # Async Excel imports (optional, recommended for large files)
 # Configure either REDIS_URL OR REDIS_HOST/REDIS_PORT
 # REDIS_URL="redis://:password@localhost:6379/0"

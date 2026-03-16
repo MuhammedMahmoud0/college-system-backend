@@ -317,8 +317,16 @@ export const updateUser = async (req, res) => {
             return value;
         };
 
-        const { name, email, password, role, phone, address, national_id } =
-            req.body;
+        const {
+            name,
+            email,
+            password,
+            role,
+            phone,
+            address,
+            national_id,
+            department_id,
+        } = req.body;
         const avatarFile = req.file;
 
         const normalizedName = normalizeOptionalField(name);
@@ -328,6 +336,7 @@ export const updateUser = async (req, res) => {
         const normalizedPhone = normalizeOptionalField(phone);
         const normalizedAddress = normalizeOptionalField(address);
         const normalizedNationalId = normalizeOptionalField(national_id);
+        const normalizedDepartmentId = normalizeOptionalField(department_id);
 
         const data = {};
 
@@ -338,6 +347,43 @@ export const updateUser = async (req, res) => {
         if (normalizedAddress !== undefined) data.address = normalizedAddress;
         if (normalizedNationalId !== undefined)
             data.national_id = normalizedNationalId;
+
+        if (normalizedDepartmentId !== undefined) {
+            const [targetUser, department, studentProfile] = await Promise.all([
+                prisma.users.findUnique({
+                    where: { id },
+                    select: { id: true, role: true },
+                }),
+                prisma.departments.findUnique({
+                    where: { department_id: normalizedDepartmentId },
+                    select: { department_id: true },
+                }),
+                prisma.student_profiles.findUnique({
+                    where: { user_id: id },
+                    select: { user_id: true },
+                }),
+            ]);
+
+            if (!targetUser) {
+                return res.status(404).json({ error: "User not found" });
+            }
+
+            if (!department) {
+                return res.status(404).json({ error: "Department not found" });
+            }
+
+            if (!["student", "leader"].includes(targetUser.role)) {
+                return res.status(400).json({
+                    error: "Department can only be updated for student or leader accounts",
+                });
+            }
+
+            if (!studentProfile) {
+                return res.status(400).json({
+                    error: "Student profile not found for this student/leader account",
+                });
+            }
+        }
 
         if (avatarFile) {
             const currentUser = await prisma.users.findUnique({
@@ -392,27 +438,59 @@ export const updateUser = async (req, res) => {
             data.password_hash = await bcrypt.hash(normalizedPassword, 10);
         }
 
-        if (Object.keys(data).length === 0) {
+        const hasUserDataUpdate = Object.keys(data).length > 0;
+        const hasDepartmentUpdate = normalizedDepartmentId !== undefined;
+
+        if (!hasUserDataUpdate && !hasDepartmentUpdate) {
             return res.status(400).json({
                 error: "At least one field must be provided for update",
             });
         }
 
-        const updated = await prisma.users.update({
-            where: { id },
-            data,
-            select: {
-                id: true,
-                full_name: true,
-                email: true,
-                role: true,
-                avatar_url: true,
-                phone: true,
-                address: true,
-                national_id: true,
-                updated_at: true,
-            },
-        });
+        const userSelect = {
+            id: true,
+            full_name: true,
+            email: true,
+            role: true,
+            avatar_url: true,
+            phone: true,
+            address: true,
+            national_id: true,
+            updated_at: true,
+        };
+
+        let updated;
+
+        if (hasUserDataUpdate && hasDepartmentUpdate) {
+            const [updatedUser] = await prisma.$transaction([
+                prisma.users.update({
+                    where: { id },
+                    data,
+                    select: userSelect,
+                }),
+                prisma.student_profiles.update({
+                    where: { user_id: id },
+                    data: { department_id: normalizedDepartmentId },
+                }),
+            ]);
+            updated = updatedUser;
+        } else if (hasDepartmentUpdate) {
+            await prisma.student_profiles.update({
+                where: { user_id: id },
+                data: { department_id: normalizedDepartmentId },
+            });
+
+            updated = await prisma.users.findUnique({
+                where: { id },
+                select: userSelect,
+            });
+        } else {
+            updated = await prisma.users.update({
+                where: { id },
+                data,
+                select: userSelect,
+            });
+        }
 
         return res.status(200).json({
             message: "User updated successfully",

@@ -126,7 +126,7 @@ export default {
                 tags: ["Users"],
                 summary: "Update user",
                 description:
-                    "Updates one or more user fields (partial update). Supported fields: name, email, password, role, phone, address, national_id, and avatar image upload. Requires admin or super_admin.",
+                    "Updates one or more user fields (partial update). Supported fields: name, email, password, role, phone, address, national_id, department_id, and avatar image upload. department_id applies to student/leader accounts. Requires admin or super_admin.",
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     {

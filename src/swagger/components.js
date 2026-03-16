@@ -292,6 +292,14 @@ export default {
                     nullable: true,
                     default: "",
                 },
+                department_id: {
+                    type: "string",
+                    format: "uuid",
+                    nullable: true,
+                    default: "",
+                    description:
+                        "Department UUID (applies to student/leader accounts with student profile)",
+                },
             },
         },
         UpdateUserResponse: {

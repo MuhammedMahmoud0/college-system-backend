@@ -305,7 +305,7 @@ model post_likes {
 model student_profiles {
   user_id            String       @id @db.Uuid
   student_id         String       @unique
-  year_level         Int?
+  year_level         Int?         @default(1)
   cgpa               Float?
   department_id      String?      @db.Uuid
   faculty_advisor_id String?      @db.Uuid

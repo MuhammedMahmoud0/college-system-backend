@@ -4,7 +4,6 @@ import {
     authMiddleware,
     authorizationMiddleware,
 } from "../middlewares/authMiddleware.js";
-import { blockIfUnpaidInvoices } from "../middlewares/paymentMiddleware.js";
 
 const router = express.Router();
 
@@ -20,7 +19,6 @@ router.post(
     "/register",
     authMiddleware,
     authorizationMiddleware("student", "leader"),
-    blockIfUnpaidInvoices,
     registrationController.registerCourses
 );
 
@@ -29,7 +27,6 @@ router.post(
     "/register-lab",
     authMiddleware,
     authorizationMiddleware("student", "leader"),
-    blockIfUnpaidInvoices,
     registrationController.registerLab
 );
 

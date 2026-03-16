@@ -247,17 +247,21 @@ export default {
                 name: {
                     type: "string",
                     description: "Full name",
+                    default: "",
                 },
                 email: {
                     type: "string",
                     format: "email",
+                    default: "",
                 },
                 password: {
                     type: "string",
                     description: "New password (will be hashed)",
+                    default: "",
                 },
                 role: {
                     type: "string",
+                    default: "",
                     enum: [
                         "student",
                         "doctor",
@@ -270,10 +274,12 @@ export default {
                 phone: {
                     type: "string",
                     nullable: true,
+                    default: "",
                 },
                 address: {
                     type: "string",
                     nullable: true,
+                    default: "",
                 },
                 avatar: {
                     type: "string",
@@ -284,16 +290,8 @@ export default {
                 national_id: {
                     type: "string",
                     nullable: true,
+                    default: "",
                 },
-            },
-            example: {
-                name: "Dr. Ahmed Hassan",
-                email: "ahmed.hassan@example.edu",
-                password: "NewSecurePass123",
-                role: "doctor",
-                phone: "+201234567890",
-                address: "Alexandria, Egypt",
-                national_id: "30001011234567",
             },
         },
         UpdateUserResponse: {

@@ -97,24 +97,33 @@ export const processExcelUsersBuffer = async (
 
     const usersToInsert = [];
     const totalUsers = users.length;
-    let processedUsers = 0;
 
-    for (const user of users) {
+    const hashResults = await Promise.all(
+        users.map((user) =>
+            seenEmails.has(user.email)
+                ? null
+                : bcrypt.hash(user.password, 10).then((hashedPassword) => ({
+                      ...user,
+                      hashedPassword,
+                  }))
+        )
+    );
+
+    let processedUsers = 0;
+    for (const result of hashResults) {
         processedUsers++;
 
-        if (seenEmails.has(user.email)) {
+        if (!result || seenEmails.has(result.email)) {
             onProgress?.({ processed: processedUsers, total: totalUsers });
             continue;
         }
 
-        seenEmails.add(user.email);
-        const hashedPassword = await bcrypt.hash(user.password, 10);
-
+        seenEmails.add(result.email);
         usersToInsert.push({
-            full_name: user.name,
-            email: user.email,
-            password_hash: hashedPassword,
-            role: user.role,
+            full_name: result.name,
+            email: result.email,
+            password_hash: result.hashedPassword,
+            role: result.role,
         });
 
         onProgress?.({ processed: processedUsers, total: totalUsers });
@@ -236,48 +245,57 @@ export const processExcelStudentsBuffer = async (
 
     let insertedCount = 0;
     const totalRows = validRows.length;
-    let processedRows = 0;
 
-    for (const row of validRows) {
-        processedRows++;
+    const rowsToProcess = validRows.filter(
+        (row) => !seenEmails.has(row.email) && !seenStudentIds.has(row.studentId)
+    );
 
-        if (seenEmails.has(row.email) || seenStudentIds.has(row.studentId)) {
-            onProgress?.({ processed: processedRows, total: totalRows });
-            continue;
+    // Hash all passwords in parallel
+    const hashedPasswords = await Promise.all(
+        rowsToProcess.map((row) => bcrypt.hash(row.nationalId, 10))
+    );
+
+    const usersToInsert = rowsToProcess.map((row, i) => ({
+        full_name: row.name,
+        email: row.email,
+        password_hash: hashedPasswords[i],
+        role: "student",
+        national_id: row.nationalId,
+    }));
+
+    if (usersToInsert.length > 0) {
+        // Batch-create all users, then fetch their IDs to create profiles
+        await prisma.users.createMany({
+            data: usersToInsert,
+            skipDuplicates: true,
+        });
+
+        const insertedUsers = await prisma.users.findMany({
+            where: { email: { in: usersToInsert.map((u) => u.email) } },
+            select: { id: true, email: true },
+        });
+
+        const emailToUserId = new Map(insertedUsers.map((u) => [u.email, u.id]));
+
+        const profilesToInsert = rowsToProcess
+            .filter((row) => emailToUserId.has(row.email))
+            .map((row) => ({
+                user_id: emailToUserId.get(row.email),
+                student_id: row.studentId,
+                department_id: deptMap.get(row.departmentName.toLowerCase()),
+            }));
+
+        if (profilesToInsert.length > 0) {
+            await prisma.student_profiles.createMany({
+                data: profilesToInsert,
+                skipDuplicates: true,
+            });
         }
 
-        const hashedPassword = await bcrypt.hash(row.nationalId, 10);
-
-        await prisma.$transaction(
-            async (tx) => {
-                const newUser = await tx.users.create({
-                    data: {
-                        full_name: row.name,
-                        email: row.email,
-                        password_hash: hashedPassword,
-                        role: "student",
-                        national_id: row.nationalId,
-                    },
-                });
-
-                await tx.student_profiles.create({
-                    data: {
-                        user_id: newUser.id,
-                        student_id: row.studentId,
-                        department_id: deptMap.get(
-                            row.departmentName.toLowerCase()
-                        ),
-                    },
-                });
-            },
-            { timeout: 10000 }
-        );
-
-        seenEmails.add(row.email);
-        seenStudentIds.add(row.studentId);
-        insertedCount++;
-        onProgress?.({ processed: processedRows, total: totalRows });
+        insertedCount = profilesToInsert.length;
     }
+
+    onProgress?.({ processed: totalRows, total: totalRows });
 
     return {
         success: true,

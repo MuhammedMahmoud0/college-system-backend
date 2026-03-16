@@ -8,7 +8,6 @@ import {
 
 const USER_IMPORT_QUEUE_NAME = "user_excel_imports";
 
-let redisConnection;
 let userImportQueue;
 let userImportWorker;
 let isQueueReady = false;
@@ -75,7 +74,6 @@ const resetQueueRuntimeState = () => {
     isQueueReady = false;
     userImportQueue = undefined;
     userImportWorker = undefined;
-    redisConnection = undefined;
 };
 
 export const initializeUserImportQueue = async () => {
@@ -94,15 +92,18 @@ export const initializeUserImportQueue = async () => {
     }
 
     try {
-        redisConnection = new IORedis(connectionConfig, {
+        // Use a temporary IORedis instance only to verify connectivity.
+        // Queue and Worker receive the raw config so BullMQ manages its own
+        // connections — passing a pre-existing instance causes BullMQ to call
+        // .duplicate() which inherits lazyConnect:true and never connects.
+        const checkConnection = new IORedis(connectionConfig, {
             lazyConnect: true,
             maxRetriesPerRequest: null,
             retryStrategy: () => null,
         });
 
-        redisConnection.on("error", (error) => {
+        checkConnection.on("error", (error) => {
             const message = error?.message || "Unknown Redis error";
-
             if (
                 message.includes("NOAUTH") ||
                 message.includes("WRONGPASS") ||
@@ -113,15 +114,21 @@ export const initializeUserImportQueue = async () => {
                 );
                 return;
             }
-
             logger.error("[UserImportQueue] Redis connection error:", error);
         });
 
-        await redisConnection.connect();
-        await redisConnection.ping();
+        await checkConnection.connect();
+        await checkConnection.ping();
+        await checkConnection.quit();
+
+        // Pass raw config to BullMQ so it manages its own Redis connections.
+        const bullmqConnection =
+            typeof connectionConfig === "string"
+                ? { url: connectionConfig }
+                : connectionConfig;
 
         userImportQueue = new Queue(USER_IMPORT_QUEUE_NAME, {
-            connection: redisConnection,
+            connection: bullmqConnection,
             defaultJobOptions: {
                 attempts: 1,
                 removeOnComplete: { count: 100 },
@@ -133,7 +140,7 @@ export const initializeUserImportQueue = async () => {
             USER_IMPORT_QUEUE_NAME,
             processImportJob,
             {
-                connection: redisConnection,
+                connection: bullmqConnection,
                 concurrency: process.env.USER_IMPORT_WORKER_CONCURRENCY
                     ? Number.parseInt(
                           process.env.USER_IMPORT_WORKER_CONCURRENCY,
@@ -163,12 +170,6 @@ export const initializeUserImportQueue = async () => {
             "[UserImportQueue] Failed to initialize queue. Falling back to synchronous imports. Check REDIS_PASSWORD/REDIS_URL.",
             err
         );
-
-        try {
-            await redisConnection?.quit();
-        } catch {
-            redisConnection?.disconnect();
-        }
 
         resetQueueRuntimeState();
     }

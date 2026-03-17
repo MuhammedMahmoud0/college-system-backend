@@ -23,6 +23,8 @@ import adminDashboardRoutes from "./routes/adminDashboardRoutes.js";
 import taskRoutes from "./routes/taskRoutes.js";
 import departmentRoutes from "./routes/departmentRoutes.js";
 import doctorDashboardRoutes from "./routes/doctorDashboardRoutes.js";
+import financialRoutes from "./routes/financialRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 import logger from "./utils/logger.js";
 import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 import { initializeSocketIO } from "./utils/socketIO.js";
@@ -127,6 +129,12 @@ app.use("/api/v1/doctor", doctorDashboardRoutes);
 
 // mount department routes
 app.use("/api/v1/departments", departmentRoutes);
+
+// mount financial routes
+app.use("/api/v1/financials", financialRoutes);
+
+// mount payment routes
+app.use("/api/v1/payments", paymentRoutes);
 
 // Swagger API documentation route
 app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));

@@ -262,6 +262,43 @@ export const registerCourses = async (req, res) => {
             },
         });
 
+        const departmentIds = [
+            ...new Set(
+                lectures
+                    .map(
+                        (lecture) =>
+                            lecture.course_offerings.courses.department_id
+                    )
+                    .filter(Boolean)
+            ),
+        ];
+
+        const financialRows = await prisma.financials.findMany({
+            where: { department_id: { in: departmentIds } },
+            select: {
+                department_id: true,
+                credit_price: true,
+            },
+        });
+
+        const creditPriceByDepartment = new Map(
+            financialRows.map((row) => [
+                row.department_id,
+                Number.parseFloat(row.credit_price),
+            ])
+        );
+
+        const missingFinancialDepartments = departmentIds.filter(
+            (departmentId) => !creditPriceByDepartment.has(departmentId)
+        );
+
+        if (missingFinancialDepartments.length > 0) {
+            return res.status(400).json({
+                error: "Credit price is not configured for one or more course departments",
+                missingDepartmentIds: missingFinancialDepartments,
+            });
+        }
+
         // Fetch already-enrolled sessions for this student to check conflicts against
         const existingEnrollments = await prisma.enrollments.findMany({
             where: { student_user_id: studentId, status: "enrolled" },
@@ -382,6 +419,8 @@ export const registerCourses = async (req, res) => {
         try {
             const result = await prisma.$transaction(async (tx) => {
                 const enrollmentsCreated = [];
+                const invoicesCreated = [];
+                let totalBilled = 0;
 
                 // Process each lecture-lab pair
                 // Group lectures and labs by course offering
@@ -464,6 +503,30 @@ export const registerCourses = async (req, res) => {
                             },
                         });
 
+                        const courseDepartmentId =
+                            lecture.course_offerings.courses.department_id;
+                        const creditPrice =
+                            creditPriceByDepartment.get(courseDepartmentId);
+                        const totalAmount =
+                            Number(lecture.course_offerings.courses.credits) *
+                            Number(creditPrice);
+
+                        const invoice = await tx.invoices.create({
+                            data: {
+                                student_user_id: studentId,
+                                enrollment_id: enrollment.id,
+                                course_code:
+                                    lecture.course_offerings.course_code,
+                                semester: lecture.course_offerings.semester,
+                                year: lecture.course_offerings.year,
+                                credit_hours:
+                                    lecture.course_offerings.courses.credits,
+                                credit_price: Number(creditPrice).toFixed(2),
+                                total_amount: totalAmount.toFixed(2),
+                                status: "pending",
+                            },
+                        });
+
                         // Increment enrolled_count for lecture and lab
                         await tx.lectures.update({
                             where: { lecture_id: lecture.lecture_id },
@@ -475,10 +538,16 @@ export const registerCourses = async (req, res) => {
                         });
 
                         enrollmentsCreated.push(enrollment);
+                        invoicesCreated.push(invoice);
+                        totalBilled += totalAmount;
                     }
                 }
 
-                return enrollmentsCreated;
+                return {
+                    enrollmentsCreated,
+                    invoicesCreated,
+                    totalBilled,
+                };
             });
 
             const courseNames = [
@@ -489,15 +558,29 @@ export const registerCourses = async (req, res) => {
                 userId: studentId,
                 message: `You have successfully registered for: ${courseNames.join(
                     ", "
-                )}.`,
+                )}. A bill of $${result.totalBilled.toFixed(
+                    2
+                )} was added to your account.`,
                 type: "general",
                 io,
             });
 
             res.status(201).json({
                 message: "Registration successful",
-                enrollments: result.length,
-                details: result,
+                enrollments: result.enrollmentsCreated.length,
+                details: result.enrollmentsCreated,
+                billing: {
+                    invoices: result.invoicesCreated.map((invoice) => ({
+                        id: invoice.id,
+                        course_code: invoice.course_code,
+                        total_amount: Number.parseFloat(invoice.total_amount),
+                        status: invoice.status,
+                    })),
+                    totalBilled: Number.parseFloat(
+                        result.totalBilled.toFixed(2)
+                    ),
+                    currency: "USD",
+                },
             });
         } catch (transactionError) {
             logger.error("Transaction error:", transactionError);
@@ -736,6 +819,19 @@ export const unregisterSession = async (req, res) => {
                         .filter((id) => id !== null)
                 ),
             ];
+
+            const enrollmentIds = enrollments.map(
+                (enrollment) => enrollment.id
+            );
+
+            if (enrollmentIds.length > 0) {
+                await prisma.invoices.deleteMany({
+                    where: {
+                        student_user_id: studentId,
+                        enrollment_id: { in: enrollmentIds },
+                    },
+                });
+            }
 
             const deleteResult = await prisma.enrollments.deleteMany({
                 where: {

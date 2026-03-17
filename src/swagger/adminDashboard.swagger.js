@@ -87,7 +87,7 @@ export default {
                 tags: ["Admin Dashboard"],
                 summary: "Get system alerts",
                 description:
-                    "Scans the database and returns a list of actionable alerts. Checks for: lectures at ≥95% capacity, new faculty/TA accounts not yet assigned to a course, students with enrolled courses that do not have any PAID invoice, and courses with ≥20% dropout rate. Restricted to Admin and Super Admin.",
+                    "Scans the database and returns a list of actionable alerts. Checks for: lectures at ≥95% capacity, new faculty/TA accounts not yet assigned to a course, students with enrollments that do not have a PAID invoice, and courses with ≥20% dropout rate. Restricted to Admin and Super Admin.",
                 security: [{ bearerAuth: [] }],
                 responses: {
                     200: {
@@ -293,7 +293,7 @@ export default {
                 tags: ["Admin Dashboard"],
                 summary: "Get outstanding payment aging buckets",
                 description:
-                    "Returns overdue student counts bucketed by days since semester start for enrolled students that do not have any PAID invoice: 0–30 days, 31–60 days, and 60+ days. Restricted to Admin and Super Admin.",
+                    "Returns overdue student counts bucketed by days since invoice created_at for invoices with status not equal to paid (pending, failed, refunded): 0–30 days, 31–60 days, and 60+ days. Restricted to Admin and Super Admin.",
                 security: [{ bearerAuth: [] }],
                 responses: {
                     200: {

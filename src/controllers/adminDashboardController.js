@@ -19,49 +19,60 @@ const semesterStartDate = (semester, year) => {
     return new Date(year, month, 1);
 };
 
-// ─── Helper: get overdue students (enrolled with no PAID invoice) ──────────
-const getOverdueStudentsByMaxDays = async (now = new Date()) => {
+// ─── Helper: invoice overdue data by student ────────────────────────────────
+// Overdue means: enrolled student with NO paid invoice on an enrollment.
+// Aging buckets are computed ONLY from invoice.created_at where invoice exists
+// and invoice status is not "paid" (pending, failed, refunded).
+const getInvoiceOverdueSnapshot = async (now = new Date()) => {
     const enrollments = await prisma.enrollments.findMany({
         where: { status: "enrolled" },
         select: {
             student_user_id: true,
             invoices: {
-                select: { status: true },
-            },
-            lectures: {
-                select: {
-                    course_offerings: {
-                        select: { semester: true, year: true },
-                    },
-                },
+                select: { status: true, created_at: true },
             },
         },
     });
 
-    const maxDaysByStudent = new Map();
+    const studentsWithoutPaidInvoice = new Set();
+    const maxDaysByStudentFromInvoice = new Map();
 
     for (const enrollment of enrollments) {
-        const hasPaidInvoice = enrollment.invoices?.status === "paid";
+        const invoice = enrollment.invoices;
+        const hasPaidInvoice = invoice?.status === "paid";
         if (hasPaidInvoice) continue;
 
-        const { semester, year } = enrollment.lectures.course_offerings;
-        const startDate = semesterStartDate(semester, year);
-        if (startDate > now) continue;
+        studentsWithoutPaidInvoice.add(enrollment.student_user_id);
 
-        const daysElapsed = Math.floor(
-            (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+        // Payment-aging must use invoice.created_at; skip if invoice is missing.
+        if (!invoice?.created_at) continue;
+
+        const createdAt = new Date(invoice.created_at);
+        if (Number.isNaN(createdAt.getTime())) continue;
+
+        const daysElapsed = Math.max(
+            0,
+            Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24))
         );
 
-        const currentMax = maxDaysByStudent.get(enrollment.student_user_id) ?? -1;
+        const currentMax =
+            maxDaysByStudentFromInvoice.get(enrollment.student_user_id) ?? -1;
         if (daysElapsed > currentMax) {
-            maxDaysByStudent.set(enrollment.student_user_id, daysElapsed);
+            maxDaysByStudentFromInvoice.set(enrollment.student_user_id, daysElapsed);
         }
     }
 
-    return Array.from(maxDaysByStudent.entries()).map(([student_user_id, days]) => ({
+    const overdueStudentsByInvoiceAge = Array.from(
+        maxDaysByStudentFromInvoice.entries()
+    ).map(([student_user_id, days]) => ({
         student_user_id,
         days,
     }));
+
+    return {
+        studentsWithoutPaidInvoiceCount: studentsWithoutPaidInvoice.size,
+        overdueStudentsByInvoiceAge,
+    };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,12 +145,12 @@ export const getAlerts = async (req, res) => {
         }
 
         // ── Alert C: Students with enrolled courses but no PAID invoice ──────
-        const overdueStudents = await getOverdueStudentsByMaxDays(now);
+        const invoiceSnapshot = await getInvoiceOverdueSnapshot(now);
 
-        if (overdueStudents.length > 0) {
+        if (invoiceSnapshot.studentsWithoutPaidInvoiceCount > 0) {
             alerts.push({
                 priority: "high",
-                message: `${overdueStudents.length} student(s) have payment overdue.`,
+                message: `${invoiceSnapshot.studentsWithoutPaidInvoiceCount} student(s) have payment overdue.`,
                 link: `/admin/stats/payment-aging`,
             });
         }
@@ -369,7 +380,8 @@ export const getPaymentAging = async (req, res) => {
     try {
         const now = new Date();
 
-        const overdueStudents = await getOverdueStudentsByMaxDays(now);
+        const invoiceSnapshot = await getInvoiceOverdueSnapshot(now);
+        const overdueStudents = invoiceSnapshot.overdueStudentsByInvoiceAge;
 
         const buckets = {
             "0-30": 0,
@@ -387,8 +399,7 @@ export const getPaymentAging = async (req, res) => {
             }
         }
 
-        const totalOverdueStudents =
-            buckets["0-30"] + buckets["31-60"] + buckets["60+"];
+        const totalOverdueStudents = overdueStudents.length;
 
         return res.status(200).json({
             total_overdue_students: totalOverdueStudents,

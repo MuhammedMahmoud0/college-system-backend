@@ -31,7 +31,9 @@ const isRedisNetworkError = (error) => {
         message.includes("etimedout") ||
         message.includes("econnreset") ||
         message.includes("econnrefused") ||
-        message.includes("connection is closed")
+        message.includes("connection is closed") ||
+        message.includes("stream isn't writeable") ||
+        message.includes("enableofflinequeue")
     );
 };
 
@@ -151,7 +153,11 @@ const closeQueueRuntime = async () => {
 };
 
 const disableQueueOnRedisNetworkFailure = async (error) => {
-    if (isQueueShuttingDown || !isQueueReady) {
+    if (isQueueShuttingDown) {
+        return;
+    }
+
+    if (!userImportQueue && !userImportWorker) {
         return;
     }
 

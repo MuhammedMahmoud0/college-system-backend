@@ -69,6 +69,42 @@ export default {
                 },
             },
         },
+        "/payments/invoices/paypal-order/bulk": {
+            post: {
+                tags: ["Payments"],
+                summary: "Create PayPal order for multiple invoices",
+                description:
+                    "Creates one PayPal order for either selected pending invoices or all pending invoices for the authenticated user.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/BulkInvoiceSelectionRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    201: {
+                        description: "Bulk PayPal order created",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/BulkPayPalOrderResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Invalid selection" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "No matching pending invoices" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
         "/payments/invoices/{invoiceId}/capture": {
             post: {
                 tags: ["Payments"],
@@ -119,6 +155,42 @@ export default {
                     401: { description: "Unauthorized" },
                     403: { description: "Forbidden" },
                     404: { description: "Invoice not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/payments/invoices/capture/bulk": {
+            post: {
+                tags: ["Payments"],
+                summary: "Capture PayPal order for multiple invoices",
+                description:
+                    "Captures a previously created bulk order and marks all selected pending invoices as paid.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/BulkCaptureRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Bulk payment captured",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/BulkCaptureResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Capture failed or invalid request" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "No pending invoices found" },
                     500: { description: "Internal server error" },
                 },
             },
@@ -259,6 +331,69 @@ export default {
                     type: "string",
                     example: "8RU61172RB300401A",
                 },
+            },
+        },
+        BulkInvoiceSelectionRequest: {
+            type: "object",
+            properties: {
+                payAll: {
+                    type: "boolean",
+                    description:
+                        "When true, includes all pending invoices for the user",
+                    example: true,
+                },
+                invoiceIds: {
+                    type: "array",
+                    items: { type: "integer" },
+                    description:
+                        "Used when payAll is false. Contains selected pending invoice IDs.",
+                    example: [4, 7, 11],
+                },
+            },
+        },
+        BulkPayPalOrderResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "PayPal order created for selected invoices",
+                },
+                orderId: { type: "string" },
+                approveUrl: { type: "string", nullable: true },
+                invoiceIds: {
+                    type: "array",
+                    items: { type: "integer" },
+                },
+                totalAmount: { type: "number", example: 1800 },
+                currency: { type: "string", example: "USD" },
+            },
+        },
+        BulkCaptureRequest: {
+            type: "object",
+            required: ["orderId"],
+            properties: {
+                orderId: { type: "string" },
+                payAll: { type: "boolean", example: true },
+                invoiceIds: {
+                    type: "array",
+                    items: { type: "integer" },
+                    example: [4, 7, 11],
+                },
+            },
+        },
+        BulkCaptureResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Payment captured successfully",
+                },
+                invoiceIds: {
+                    type: "array",
+                    items: { type: "integer" },
+                },
+                transactionId: { type: "string" },
+                status: { type: "string", example: "paid" },
             },
         },
     },

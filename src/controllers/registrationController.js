@@ -1,6 +1,7 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
 import { sendNotification } from "../utils/notificationService.js";
+import { paypalRequest, validatePayPalConfig } from "../config/paypal.js";
 
 /**
  * Helper function to check if two time slots overlap
@@ -26,6 +27,19 @@ const formatTime = (time) => {
         minute: "2-digit",
         hour12: false,
     });
+};
+
+const toMoneyString = (value) => Number.parseFloat(value).toFixed(2);
+
+const isSandboxBypassTransaction = (transactionId) =>
+    typeof transactionId === "string" &&
+    transactionId.startsWith("sandbox_bypass_");
+
+const extractCaptureId = (transactionId) => {
+    if (!transactionId || typeof transactionId !== "string") return null;
+    return transactionId.includes(":")
+        ? transactionId.split(":")[0]
+        : transactionId;
 };
 
 // GET /api/registration/available-offerings
@@ -823,14 +837,133 @@ export const unregisterSession = async (req, res) => {
             const enrollmentIds = enrollments.map(
                 (enrollment) => enrollment.id
             );
+            let deletedPendingInvoices = 0;
+            let refundedPaidInvoices = 0;
 
             if (enrollmentIds.length > 0) {
-                await prisma.invoices.deleteMany({
+                const relatedInvoices = await prisma.invoices.findMany({
                     where: {
                         student_user_id: studentId,
                         enrollment_id: { in: enrollmentIds },
                     },
+                    include: {
+                        payments: {
+                            where: { status: "paid" },
+                            orderBy: { created_at: "desc" },
+                        },
+                    },
                 });
+
+                const unpaidInvoiceIds = relatedInvoices
+                    .filter((invoice) =>
+                        ["pending", "failed"].includes(invoice.status)
+                    )
+                    .map((invoice) => invoice.id);
+
+                if (unpaidInvoiceIds.length > 0) {
+                    const deleteInvoiceResult =
+                        await prisma.invoices.deleteMany({
+                            where: {
+                                student_user_id: studentId,
+                                id: { in: unpaidInvoiceIds },
+                            },
+                        });
+                    deletedPendingInvoices = deleteInvoiceResult.count;
+                }
+
+                const paidInvoices = relatedInvoices.filter(
+                    (invoice) => invoice.status === "paid"
+                );
+
+                for (const invoice of paidInvoices) {
+                    const latestPaidPayment = invoice.payments[0];
+
+                    if (!latestPaidPayment) {
+                        return res.status(400).json({
+                            error: `Cannot refund invoice ${invoice.id}: missing payment transaction`,
+                        });
+                    }
+
+                    let refundTransactionId = null;
+
+                    if (
+                        isSandboxBypassTransaction(
+                            latestPaidPayment.transaction_id
+                        )
+                    ) {
+                        refundTransactionId = `sandbox_refund_${Date.now()}:${
+                            invoice.id
+                        }`;
+                    } else {
+                        if (!validatePayPalConfig()) {
+                            return res.status(500).json({
+                                error: "PayPal is not configured on server for refund processing",
+                            });
+                        }
+
+                        const captureId = extractCaptureId(
+                            latestPaidPayment.transaction_id
+                        );
+
+                        if (!captureId) {
+                            return res.status(400).json({
+                                error: `Cannot refund invoice ${invoice.id}: invalid capture transaction id`,
+                            });
+                        }
+
+                        const refundResponse = await paypalRequest(
+                            `/v2/payments/captures/${captureId}/refund`,
+                            {
+                                method: "POST",
+                                body: JSON.stringify({
+                                    amount: {
+                                        currency_code: "USD",
+                                        value: toMoneyString(
+                                            invoice.total_amount
+                                        ),
+                                    },
+                                }),
+                            }
+                        );
+
+                        const refundStatus = refundResponse?.status;
+                        if (
+                            !["COMPLETED", "PENDING"].includes(
+                                refundStatus || ""
+                            )
+                        ) {
+                            return res.status(400).json({
+                                error: `Refund failed for invoice ${invoice.id}`,
+                                paypalStatus: refundStatus || null,
+                            });
+                        }
+
+                        refundTransactionId =
+                            refundResponse?.id ||
+                            `paypal_refund_${Date.now()}:${invoice.id}`;
+                    }
+
+                    await prisma.$transaction(async (tx) => {
+                        await tx.invoices.update({
+                            where: { id: invoice.id },
+                            data: {
+                                status: "refunded",
+                            },
+                        });
+
+                        await tx.payments.create({
+                            data: {
+                                invoice_id: invoice.id,
+                                gateway: "paypal",
+                                transaction_id: refundTransactionId,
+                                amount: toMoneyString(invoice.total_amount),
+                                status: "refunded",
+                            },
+                        });
+                    });
+
+                    refundedPaidInvoices += 1;
+                }
             }
 
             const deleteResult = await prisma.enrollments.deleteMany({
@@ -864,6 +997,10 @@ export const unregisterSession = async (req, res) => {
                 message: `Successfully unregistered from ${lecture.course_offerings.courses.name}. Lecture and associated lab removed.`,
                 courseCode: lecture.course_offerings.course_code,
                 enrollmentsDeleted: deleteResult.count,
+                billing: {
+                    pendingInvoicesDeleted: deletedPendingInvoices,
+                    paidInvoicesRefunded: refundedPaidInvoices,
+                },
             });
         }
 

@@ -22,10 +22,24 @@ router.post(
 );
 
 router.post(
+    "/invoices/paypal-order/bulk",
+    authMiddleware,
+    authorizationMiddleware("student", "leader"),
+    paymentController.createPayPalOrderBulk
+);
+
+router.post(
     "/invoices/:invoiceId/capture",
     authMiddleware,
     authorizationMiddleware("student", "leader"),
     paymentController.capturePayPalOrder
+);
+
+router.post(
+    "/invoices/capture/bulk",
+    authMiddleware,
+    authorizationMiddleware("student", "leader"),
+    paymentController.capturePayPalOrderBulk
 );
 
 export default router;

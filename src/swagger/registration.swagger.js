@@ -491,11 +491,15 @@ export default {
                     "### Unregister from a full course — provide `lectureId`",
                     "- Deletes **all** enrollment rows for that lecture.",
                     "- Both the lecture and the associated lab are fully removed.",
+                    "- Billing behavior:",
+                    "  - Unpaid invoice (`pending`/`failed`) for that enrollment is deleted.",
+                    "  - Paid invoice is refunded via PayPal and marked as `refunded`.",
                     "- Use this to completely drop a course.",
                     "",
                     "### Unregister from a lab only — provide `tutorialLabId`",
                     "- Sets `tutorial_lab_id = null` on the enrollment row.",
                     "- The **lecture enrollment is kept** — the student remains registered for the course.",
+                    "- No refund is performed for lab-only unregister.",
                     "- Use `POST /registration/register-lab` afterwards to pick a different lab.",
                     "",
                     "**Only one of `lectureId` or `tutorialLabId` should be provided per request.**",
@@ -538,6 +542,10 @@ export default {
                                                 "Successfully unregistered from Data Structures. Lecture and associated lab removed.",
                                             courseCode: "CS201",
                                             enrollmentsDeleted: 1,
+                                            billing: {
+                                                pendingInvoicesDeleted: 1,
+                                                paidInvoicesRefunded: 0,
+                                            },
                                         },
                                     },
                                     labDrop: {
@@ -577,6 +585,14 @@ export default {
                                     lectureNotFound: {
                                         summary: "Lecture ID does not exist",
                                         value: { error: "Lecture not found" },
+                                    },
+                                    refundFailed: {
+                                        summary:
+                                            "Paid invoice refund failed (unregister blocked)",
+                                        value: {
+                                            error: "Refund failed for invoice 12",
+                                            paypalStatus: "DENIED",
+                                        },
                                     },
                                     enrollmentNotFound: {
                                         summary:
@@ -918,6 +934,25 @@ export default {
                         description:
                             "Number of enrollment rows deleted. Only present when `lectureId` is used (full course drop).",
                         example: 1,
+                    },
+                    billing: {
+                        type: "object",
+                        description:
+                            "Billing impact summary. Present when `lectureId` is used.",
+                        properties: {
+                            pendingInvoicesDeleted: {
+                                type: "integer",
+                                description:
+                                    "How many unpaid invoices were removed",
+                                example: 1,
+                            },
+                            paidInvoicesRefunded: {
+                                type: "integer",
+                                description:
+                                    "How many paid invoices were refunded",
+                                example: 0,
+                            },
+                        },
                     },
                 },
             },

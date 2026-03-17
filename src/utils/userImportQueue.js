@@ -11,6 +11,29 @@ const USER_IMPORT_QUEUE_NAME = "user_excel_imports";
 let userImportQueue;
 let userImportWorker;
 let isQueueReady = false;
+let isQueueShuttingDown = false;
+
+const isRedisNetworkError = (error) => {
+    if (!error) {
+        return false;
+    }
+
+    if (
+        error.code === "ETIMEDOUT" ||
+        error.code === "ECONNRESET" ||
+        error.code === "ECONNREFUSED"
+    ) {
+        return true;
+    }
+
+    const message = (error.message || "").toLowerCase();
+    return (
+        message.includes("etimedout") ||
+        message.includes("econnreset") ||
+        message.includes("econnrefused") ||
+        message.includes("connection is closed")
+    );
+};
 
 const getQueueConnectionConfig = () => {
     if (process.env.REDIS_URL) {
@@ -34,6 +57,45 @@ const getQueueConnectionConfig = () => {
         db: process.env.REDIS_DB
             ? Number.parseInt(process.env.REDIS_DB, 10)
             : 0,
+    };
+};
+
+const getBullMQConnectionConfig = (connectionConfig) => {
+    const baseOptions = {
+        connectTimeout: process.env.REDIS_CONNECT_TIMEOUT_MS
+            ? Number.parseInt(process.env.REDIS_CONNECT_TIMEOUT_MS, 10)
+            : 10000,
+        enableOfflineQueue: false,
+        maxRetriesPerRequest: null,
+        enableReadyCheck: true,
+        retryStrategy: (times) => {
+            if (times >= 3) {
+                return null;
+            }
+            return Math.min(times * 500, 2000);
+        },
+    };
+
+    if (typeof connectionConfig === "string") {
+        const parsed = new URL(connectionConfig);
+        const dbFromPath = parsed.pathname
+            ? Number.parseInt(parsed.pathname.replace("/", ""), 10)
+            : Number.NaN;
+
+        return {
+            ...baseOptions,
+            host: parsed.hostname,
+            port: parsed.port ? Number.parseInt(parsed.port, 10) : 6379,
+            username: parsed.username || undefined,
+            password: parsed.password || undefined,
+            db: Number.isNaN(dbFromPath) ? 0 : dbFromPath,
+            tls: parsed.protocol === "rediss:" ? {} : undefined,
+        };
+    }
+
+    return {
+        ...connectionConfig,
+        ...baseOptions,
     };
 };
 
@@ -74,6 +136,41 @@ const resetQueueRuntimeState = () => {
     isQueueReady = false;
     userImportQueue = undefined;
     userImportWorker = undefined;
+    isQueueShuttingDown = false;
+};
+
+const closeQueueRuntime = async () => {
+    const closeWorkerPromise = userImportWorker
+        ? userImportWorker.close()
+        : Promise.resolve();
+    const closeQueuePromise = userImportQueue
+        ? userImportQueue.close()
+        : Promise.resolve();
+
+    await Promise.allSettled([closeWorkerPromise, closeQueuePromise]);
+};
+
+const disableQueueOnRedisNetworkFailure = async (error) => {
+    if (isQueueShuttingDown || !isQueueReady) {
+        return;
+    }
+
+    isQueueShuttingDown = true;
+    const reason = error?.code || error?.message || "unknown network failure";
+    logger.warn(
+        `[UserImportQueue] Redis became unreachable (${reason}). Disabling queue and falling back to synchronous imports.`
+    );
+
+    try {
+        await closeQueueRuntime();
+    } catch (closeError) {
+        logger.error(
+            "[UserImportQueue] Failed to close queue runtime:",
+            closeError
+        );
+    } finally {
+        resetQueueRuntimeState();
+    }
 };
 
 export const initializeUserImportQueue = async () => {
@@ -98,6 +195,9 @@ export const initializeUserImportQueue = async () => {
         // .duplicate() which inherits lazyConnect:true and never connects.
         const checkConnection = new IORedis(connectionConfig, {
             lazyConnect: true,
+            connectTimeout: process.env.REDIS_CONNECT_TIMEOUT_MS
+                ? Number.parseInt(process.env.REDIS_CONNECT_TIMEOUT_MS, 10)
+                : 10000,
             maxRetriesPerRequest: null,
             retryStrategy: () => null,
         });
@@ -121,11 +221,8 @@ export const initializeUserImportQueue = async () => {
         await checkConnection.ping();
         await checkConnection.quit();
 
-        // Pass raw config to BullMQ so it manages its own Redis connections.
-        const bullmqConnection =
-            typeof connectionConfig === "string"
-                ? { url: connectionConfig }
-                : connectionConfig;
+        // Pass normalized connection options that ioredis understands.
+        const bullmqConnection = getBullMQConnectionConfig(connectionConfig);
 
         userImportQueue = new Queue(USER_IMPORT_QUEUE_NAME, {
             connection: bullmqConnection,
@@ -149,6 +246,22 @@ export const initializeUserImportQueue = async () => {
                     : 3,
             }
         );
+
+        userImportQueue.on("error", (error) => {
+            if (isRedisNetworkError(error)) {
+                void disableQueueOnRedisNetworkFailure(error);
+                return;
+            }
+            logger.error("[UserImportQueue] Queue Redis error:", error);
+        });
+
+        userImportWorker.on("error", (error) => {
+            if (isRedisNetworkError(error)) {
+                void disableQueueOnRedisNetworkFailure(error);
+                return;
+            }
+            logger.error("[UserImportQueue] Worker Redis error:", error);
+        });
 
         userImportWorker.on("completed", (job) => {
             logger.info(

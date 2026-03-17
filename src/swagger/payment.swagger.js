@@ -105,7 +105,17 @@ export default {
                             },
                         },
                     },
-                    400: { description: "Capture failed or invalid request" },
+                    400: {
+                        description:
+                            "Capture failed, invalid request, or order not approved yet",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/CapturePayPalNotApprovedResponse",
+                                },
+                            },
+                        },
+                    },
                     401: { description: "Unauthorized" },
                     403: { description: "Forbidden" },
                     404: { description: "Invoice not found" },
@@ -215,6 +225,40 @@ export default {
                 invoiceId: { type: "integer", example: 14 },
                 transactionId: { type: "string", example: "2D723339RG245992X" },
                 status: { type: "string", example: "paid" },
+            },
+        },
+        CapturePayPalNotApprovedResponse: {
+            type: "object",
+            properties: {
+                error: {
+                    type: "string",
+                    example:
+                        "Payer has not approved this order yet. Redirect the payer to approveUrl first.",
+                },
+                paypalStatus: {
+                    type: "string",
+                    example: "CREATED",
+                },
+                paypalIssue: {
+                    type: "string",
+                    nullable: true,
+                    example: "COMPLIANCE_VIOLATION",
+                },
+                paypalDebugId: {
+                    type: "string",
+                    nullable: true,
+                    example: "f2a1d8f164f9a",
+                },
+                approveUrl: {
+                    type: "string",
+                    nullable: true,
+                    example:
+                        "https://www.sandbox.paypal.com/checkoutnow?token=8RU61172RB300401A",
+                },
+                orderId: {
+                    type: "string",
+                    example: "8RU61172RB300401A",
+                },
             },
         },
     },

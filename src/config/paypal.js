@@ -61,8 +61,18 @@ const paypalRequest = async (path, options = {}) => {
     const data = await response.json();
 
     if (!response.ok) {
-        const details = data?.details?.[0]?.description || data?.message;
-        throw new Error(details || "PayPal request failed");
+        const detail = data?.details?.[0];
+        const message =
+            detail?.description || data?.message || "PayPal request failed";
+        const error = new Error(message);
+
+        error.statusCode = response.status;
+        error.paypalName = data?.name || null;
+        error.paypalIssue = detail?.issue || null;
+        error.paypalDebugId = data?.debug_id || null;
+        error.paypalResponse = data;
+
+        throw error;
     }
 
     return data;

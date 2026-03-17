@@ -189,6 +189,24 @@ export const capturePayPalOrder = async (req, res) => {
             });
         }
 
+        const orderDetails = await paypalRequest(
+            `/v2/checkout/orders/${captureOrderId}`,
+            { method: "GET" }
+        );
+
+        const approveUrl =
+            orderDetails.links?.find((link) => link.rel === "approve")?.href ||
+            null;
+
+        if (orderDetails.status !== "APPROVED") {
+            return res.status(400).json({
+                error: "Payer has not approved this order yet. Redirect the payer to approveUrl first.",
+                paypalStatus: orderDetails.status,
+                approveUrl,
+                orderId: captureOrderId,
+            });
+        }
+
         const capture = await paypalRequest(
             `/v2/checkout/orders/${captureOrderId}/capture`,
             {
@@ -243,8 +261,37 @@ export const capturePayPalOrder = async (req, res) => {
         });
     } catch (err) {
         logger.error("Error capturing PayPal order:", err);
+
+        const isComplianceViolation =
+            err.paypalIssue === "COMPLIANCE_VIOLATION" ||
+            err.message?.toLowerCase().includes("compliance violation");
+
+        if (isComplianceViolation) {
+            return res.status(400).json({
+                error: "Transaction blocked by PayPal due to compliance checks. Please contact PayPal support and provide paypalDebugId.",
+                paypalDebugId: err.paypalDebugId || null,
+                paypalIssue: err.paypalIssue || null,
+            });
+        }
+
+        if (err.message?.includes("Payer has not yet approved")) {
+            return res.status(400).json({
+                error: "Payer has not approved this order yet. Open approveUrl from create-order response, approve payment, then retry capture.",
+                paypalDebugId: err.paypalDebugId || null,
+            });
+        }
+
+        if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+            return res.status(400).json({
+                error: err.message || "PayPal rejected this payment request",
+                paypalDebugId: err.paypalDebugId || null,
+                paypalIssue: err.paypalIssue || null,
+            });
+        }
+
         return res.status(500).json({
             error: err.message || "Failed to capture payment",
+            paypalDebugId: err.paypalDebugId || null,
         });
     }
 };

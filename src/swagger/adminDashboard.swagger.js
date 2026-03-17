@@ -69,13 +69,12 @@ export default {
             properties: {
                 label: {
                     type: "string",
-                    example: "60+ Days (Overdue)",
+                    example: "60+ Days",
                 },
-                amount: {
-                    type: "number",
-                    format: "float",
-                    description: "Total outstanding tuition amount in the configured currency.",
-                    example: 48500.0,
+                student_count: {
+                    type: "integer",
+                    description: "Number of overdue students in this aging bucket.",
+                    example: 15,
                 },
             },
         },
@@ -88,7 +87,7 @@ export default {
                 tags: ["Admin Dashboard"],
                 summary: "Get system alerts",
                 description:
-                    "Scans the database and returns a list of actionable alerts. Checks for: lectures at ≥95% capacity, new faculty/TA accounts not yet assigned to a course, students with tuition obligations overdue >30 days, and courses with ≥20% dropout rate. Restricted to Admin and Super Admin.",
+                    "Scans the database and returns a list of actionable alerts. Checks for: lectures at ≥95% capacity, new faculty/TA accounts not yet assigned to a course, students with enrolled courses that do not have any PAID invoice, and courses with ≥20% dropout rate. Restricted to Admin and Super Admin.",
                 security: [{ bearerAuth: [] }],
                 responses: {
                     200: {
@@ -115,8 +114,8 @@ export default {
                                     data: [
                                         {
                                             priority: "high",
-                                            message: "15 enrolled students have outstanding tuition from a semester that started more than 30 days ago.",
-                                            link: "/admin/reports/revenue",
+                                            message: "15 student(s) have payment overdue.",
+                                            link: "/admin/stats/payment-aging",
                                         },
                                         {
                                             priority: "medium",
@@ -294,7 +293,7 @@ export default {
                 tags: ["Admin Dashboard"],
                 summary: "Get outstanding payment aging buckets",
                 description:
-                    "Calculates total theoretical outstanding tuition (credits × credit_price × enrolled students) bucketed by how many days ago the offering's semester started: 0–30 days, 31–60 days, and 60+ days (overdue). Restricted to Admin and Super Admin.",
+                    "Returns overdue student counts bucketed by days since semester start for enrolled students that do not have any PAID invoice: 0–30 days, 31–60 days, and 60+ days. Restricted to Admin and Super Admin.",
                 security: [{ bearerAuth: [] }],
                 responses: {
                     200: {
@@ -304,7 +303,7 @@ export default {
                                 schema: {
                                     type: "object",
                                     properties: {
-                                        grand_total: { type: "number", example: 125000.0 },
+                                        total_overdue_students: { type: "integer", example: 36 },
                                         data: {
                                             type: "array",
                                             items: { $ref: "#/components/schemas/PaymentAgingItem" },
@@ -312,11 +311,11 @@ export default {
                                     },
                                 },
                                 example: {
-                                    grand_total: 125000.0,
+                                    total_overdue_students: 36,
                                     data: [
-                                        { label: "0–30 Days", amount: 30000.0 },
-                                        { label: "31–60 Days", amount: 46500.0 },
-                                        { label: "60+ Days (Overdue)", amount: 48500.0 },
+                                        { label: "0-30 Days", student_count: 11 },
+                                        { label: "31-60 Days", student_count: 9 },
+                                        { label: "60+ Days", student_count: 16 },
                                     ],
                                 },
                             },

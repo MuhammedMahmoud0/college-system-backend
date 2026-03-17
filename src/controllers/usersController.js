@@ -18,6 +18,38 @@ const EXCEL_IMPORT_ASYNC_THRESHOLD = process.env.EXCEL_IMPORT_ASYNC_THRESHOLD
   ? Number.parseInt(process.env.EXCEL_IMPORT_ASYNC_THRESHOLD, 10)
   : 200;
 
+const GENERAL_GROUP_NAME = "General";
+
+const ensureUserInGeneralGroup = async (userId) => {
+  let generalGroup = await prisma.community_groups.findFirst({
+    where: { name: GENERAL_GROUP_NAME },
+    orderBy: { id: "asc" },
+  });
+
+  if (!generalGroup) {
+    generalGroup = await prisma.community_groups.create({
+      data: {
+        name: GENERAL_GROUP_NAME,
+        description: "Default group for all users",
+      },
+    });
+  }
+
+  await prisma.group_members.upsert({
+    where: {
+      group_id_user_id: {
+        group_id: generalGroup.id,
+        user_id: userId,
+      },
+    },
+    update: {},
+    create: {
+      group_id: generalGroup.id,
+      user_id: userId,
+    },
+  });
+};
+
 // ── GET /users/management/students ───────────────────────────────────────────
 // Returns both students and leaders (leaders are students with elevated role).
 export const getStudentsForManagement = async (req, res) => {
@@ -285,6 +317,8 @@ export const addUsers = async (req, res) => {
         role,
       },
     });
+
+    await ensureUserInGeneralGroup(newUser.id);
 
     res.status(201).json({
       message: "User created successfully",
@@ -574,6 +608,8 @@ export const addStudent = async (req, res) => {
         national_id,
       },
     });
+
+    await ensureUserInGeneralGroup(newUser.id);
 
     await prisma.student_profiles.create({
       data: {

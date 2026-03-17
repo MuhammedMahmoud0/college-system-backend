@@ -19,6 +19,51 @@ const semesterStartDate = (semester, year) => {
     return new Date(year, month, 1);
 };
 
+// ─── Helper: get overdue students (enrolled with no PAID invoice) ──────────
+const getOverdueStudentsByMaxDays = async (now = new Date()) => {
+    const enrollments = await prisma.enrollments.findMany({
+        where: { status: "enrolled" },
+        select: {
+            student_user_id: true,
+            invoices: {
+                select: { status: true },
+            },
+            lectures: {
+                select: {
+                    course_offerings: {
+                        select: { semester: true, year: true },
+                    },
+                },
+            },
+        },
+    });
+
+    const maxDaysByStudent = new Map();
+
+    for (const enrollment of enrollments) {
+        const hasPaidInvoice = enrollment.invoices?.status === "paid";
+        if (hasPaidInvoice) continue;
+
+        const { semester, year } = enrollment.lectures.course_offerings;
+        const startDate = semesterStartDate(semester, year);
+        if (startDate > now) continue;
+
+        const daysElapsed = Math.floor(
+            (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        const currentMax = maxDaysByStudent.get(enrollment.student_user_id) ?? -1;
+        if (daysElapsed > currentMax) {
+            maxDaysByStudent.set(enrollment.student_user_id, daysElapsed);
+        }
+    }
+
+    return Array.from(maxDaysByStudent.entries()).map(([student_user_id, days]) => ({
+        student_user_id,
+        days,
+    }));
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. GET /api/v1/admin/alerts
 //    Scans real data for urgent issues across capacity, faculty, and financials.
@@ -88,38 +133,14 @@ export const getAlerts = async (req, res) => {
             }
         }
 
-        // ── Alert C: Students with tuition obligations overdue >30 days ──────
-        //    course_offerings has no direct enrollments — go through lectures.
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        // ── Alert C: Students with enrolled courses but no PAID invoice ──────
+        const overdueStudents = await getOverdueStudentsByMaxDays(now);
 
-        const activeEnrollments = await prisma.enrollments.findMany({
-            where: { status: "enrolled" },
-            select: {
-                student_user_id: true,
-                lectures: {
-                    select: {
-                        course_offerings: {
-                            select: { semester: true, year: true },
-                        },
-                    },
-                },
-            },
-        });
-
-        const overdueStudentIds = new Set();
-        for (const enrollment of activeEnrollments) {
-            const { semester, year } = enrollment.lectures.course_offerings;
-            const startDate = semesterStartDate(semester, year);
-            if (startDate <= thirtyDaysAgo) {
-                overdueStudentIds.add(enrollment.student_user_id);
-            }
-        }
-
-        if (overdueStudentIds.size > 0) {
+        if (overdueStudents.length > 0) {
             alerts.push({
                 priority: "high",
-                message: `${overdueStudentIds.size} enrolled student(s) have outstanding tuition obligations from semester(s) that started more than 30 days ago.`,
-                link: `/admin/reports/revenue`,
+                message: `${overdueStudents.length} student(s) have payment overdue.`,
+                link: `/admin/stats/payment-aging`,
             });
         }
 
@@ -348,59 +369,41 @@ export const getPaymentAging = async (req, res) => {
     try {
         const now = new Date();
 
-        // course_offerings has no direct enrollments — join through lectures
-        const offeringData = await prisma.$queryRaw`
-            SELECT
-                co.semester::text                           AS semester,
-                co.year                                     AS year,
-                c.credits                                   AS credits,
-                COALESCE(f.credit_price, 0)::float          AS credit_price,
-                COUNT(DISTINCT e.student_user_id)::int      AS enrolled_count
-            FROM course_offerings co
-            JOIN lectures l         ON l.offering_id  = co.offering_id
-            JOIN enrollments e      ON e.lecture_id   = l.lecture_id
-                                   AND e.status       = 'enrolled'
-            JOIN courses c          ON c.code         = co.course_code
-            JOIN departments d      ON d.department_id = c.department_id
-            LEFT JOIN financials f  ON f.department_id = d.department_id
-            GROUP BY co.semester, co.year, c.credits, f.credit_price
-        `;
+        const overdueStudents = await getOverdueStudentsByMaxDays(now);
 
-        const buckets = { "0-30": 0, "31-60": 0, "60+": 0 };
+        const buckets = {
+            "0-30": 0,
+            "31-60": 0,
+            "60+": 0,
+        };
 
-        for (const row of offeringData) {
-            const startDate = semesterStartDate(row.semester, row.year);
-            const daysElapsed = Math.floor(
-                (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-            );
-            const amount = row.credits * row.credit_price * row.enrolled_count;
-
-            if (daysElapsed <= 30) {
-                buckets["0-30"] += amount;
-            } else if (daysElapsed <= 60) {
-                buckets["31-60"] += amount;
+        for (const student of overdueStudents) {
+            if (student.days <= 30) {
+                buckets["0-30"] += 1;
+            } else if (student.days <= 60) {
+                buckets["31-60"] += 1;
             } else {
-                buckets["60+"] += amount;
+                buckets["60+"] += 1;
             }
         }
 
-        const grandTotal =
+        const totalOverdueStudents =
             buckets["0-30"] + buckets["31-60"] + buckets["60+"];
 
         return res.status(200).json({
-            grand_total: parseFloat(grandTotal.toFixed(2)),
+            total_overdue_students: totalOverdueStudents,
             data: [
                 {
-                    label: "0–30 Days",
-                    amount: parseFloat(buckets["0-30"].toFixed(2)),
+                    label: "0-30 Days",
+                    student_count: buckets["0-30"],
                 },
                 {
-                    label: "31–60 Days",
-                    amount: parseFloat(buckets["31-60"].toFixed(2)),
+                    label: "31-60 Days",
+                    student_count: buckets["31-60"],
                 },
                 {
-                    label: "60+ Days (Overdue)",
-                    amount: parseFloat(buckets["60+"].toFixed(2)),
+                    label: "60+ Days",
+                    student_count: buckets["60+"],
                 },
             ],
         });

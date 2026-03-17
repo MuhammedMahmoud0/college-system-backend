@@ -5,20 +5,112 @@ import {
     sendBulkNotification,
 } from "../utils/notificationService.js";
 
+const GENERAL_GROUP_NAME = "General";
+
+const getOrCreateGeneralGroup = async () => {
+    const existing = await prisma.community_groups.findFirst({
+        where: { name: GENERAL_GROUP_NAME },
+        orderBy: { id: "asc" },
+    });
+
+    if (existing) {
+        return existing;
+    }
+
+    return prisma.community_groups.create({
+        data: {
+            name: GENERAL_GROUP_NAME,
+            description: "Default group for all users",
+        },
+    });
+};
+
+const ensureUserInGeneralGroup = async (userId) => {
+    const generalGroup = await getOrCreateGeneralGroup();
+
+    await prisma.group_members.upsert({
+        where: {
+            group_id_user_id: {
+                group_id: generalGroup.id,
+                user_id: userId,
+            },
+        },
+        update: {},
+        create: {
+            group_id: generalGroup.id,
+            user_id: userId,
+        },
+    });
+
+    return generalGroup;
+};
+
+const getJoinedGroupIds = async (userId) => {
+    const memberships = await prisma.group_members.findMany({
+        where: { user_id: userId },
+        select: { group_id: true },
+    });
+
+    return memberships.map((membership) => membership.group_id);
+};
+
+const isGroupMember = async (groupId, userId) => {
+    const membership = await prisma.group_members.findUnique({
+        where: {
+            group_id_user_id: {
+                group_id: groupId,
+                user_id: userId,
+            },
+        },
+    });
+
+    return !!membership;
+};
+
 // POST /api/community/posts - Create a new post
 export const createPost = async (req, res) => {
     try {
         const { content, image_url, group_id } = req.body;
 
-        if (!content) {
-            return res.status(400).json({ error: "Content is required" });
+        if (!content || !group_id) {
+            return res
+                .status(400)
+                .json({ error: "Content and group_id are required" });
+        }
+
+        const generalGroup = await ensureUserInGeneralGroup(req.user.id);
+
+        const targetGroup = await prisma.community_groups.findUnique({
+            where: { id: group_id },
+        });
+
+        if (!targetGroup) {
+            return res.status(404).json({ error: "Group not found" });
+        }
+
+        if (
+            targetGroup.id === generalGroup.id &&
+            !["admin", "super_admin"].includes(req.user.role)
+        ) {
+            return res.status(403).json({
+                error: "Only admins and super admins can post in the General group",
+            });
+        }
+
+        if (targetGroup.id !== generalGroup.id) {
+            const isMember = await isGroupMember(targetGroup.id, req.user.id);
+            if (!isMember) {
+                return res.status(403).json({
+                    error: "You must join this group before posting",
+                });
+            }
         }
 
         const post = await prisma.community_posts.create({
             data: {
                 content,
                 image_url: image_url || null,
-                group_id: group_id || null,
+                group_id,
                 author_id: req.user.id,
             },
             include: {
@@ -81,7 +173,13 @@ export const getCommunityFeed = async (req, res) => {
         const skip = (page - 1) * limit;
         const currentUserId = req.user.id;
 
+        await ensureUserInGeneralGroup(currentUserId);
+        const joinedGroupIds = await getJoinedGroupIds(currentUserId);
+
         const posts = await prisma.community_posts.findMany({
+            where: {
+                group_id: { in: joinedGroupIds },
+            },
             skip,
             take: limit,
             include: {
@@ -132,6 +230,7 @@ export const getCommunityFeed = async (req, res) => {
         // Transform posts to include computed fields
         const transformedPosts = posts.map((post) => ({
             ...post,
+            group_id: post.group_id,
             author_id: post.users.id,
             author_name: post.users.full_name,
             author_avatar: post.users.avatar_url,
@@ -485,6 +584,8 @@ export const joinGroup = async (req, res) => {
         const groupId = parseInt(req.params.id);
         const userId = req.user.id;
 
+        const generalGroup = await ensureUserInGeneralGroup(userId);
+
         // Check if group exists
         const group = await prisma.community_groups.findUnique({
             where: { id: groupId },
@@ -505,6 +606,12 @@ export const joinGroup = async (req, res) => {
         });
 
         if (existingMembership) {
+            if (groupId === generalGroup.id) {
+                return res.status(400).json({
+                    error: "You cannot leave the General group",
+                });
+            }
+
             // Unjoin: delete the membership
             await prisma.group_members.delete({
                 where: {
@@ -665,7 +772,20 @@ export const updatePost = async (req, res) => {
             return res.status(404).json({ error: "Post not found" });
         }
 
-        if (post.author_id !== userId) {
+        const generalGroup = await getOrCreateGeneralGroup();
+        if (
+            post.group_id === generalGroup.id &&
+            !["admin", "super_admin"].includes(req.user.role)
+        ) {
+            return res.status(403).json({
+                error: "Only admins and super admins can edit posts in the General group",
+            });
+        }
+
+        if (
+            post.group_id !== generalGroup.id &&
+            post.author_id !== userId
+        ) {
             return res
                 .status(403)
                 .json({ error: "You can only edit your own posts" });
@@ -714,6 +834,16 @@ export const deletePost = async (req, res) => {
             return res
                 .status(403)
                 .json({ error: "You can only delete your own posts" });
+        }
+
+        const generalGroup = await getOrCreateGeneralGroup();
+        if (
+            post.group_id === generalGroup.id &&
+            !["admin", "super_admin"].includes(userRole)
+        ) {
+            return res.status(403).json({
+                error: "Only admins and super admins can delete posts in the General group",
+            });
         }
 
         await prisma.community_posts.delete({ where: { id: postId } });
@@ -793,6 +923,8 @@ export const getMyGroups = async (req, res) => {
     try {
         const userId = req.user.id;
 
+        await ensureUserInGeneralGroup(userId);
+
         const memberships = await prisma.group_members.findMany({
             where: { user_id: userId },
             include: {
@@ -827,6 +959,9 @@ export const getUserPosts = async (req, res) => {
         const skip = (page - 1) * limit;
         const currentUserId = req.user.id;
 
+        await ensureUserInGeneralGroup(currentUserId);
+        const joinedGroupIds = await getJoinedGroupIds(currentUserId);
+
         // Check if the user exists
         const user = await prisma.users.findUnique({
             where: { id: userId },
@@ -846,6 +981,7 @@ export const getUserPosts = async (req, res) => {
         const posts = await prisma.community_posts.findMany({
             where: {
                 author_id: userId,
+                group_id: { in: joinedGroupIds },
             },
             skip,
             take: limit,
@@ -896,12 +1032,16 @@ export const getUserPosts = async (req, res) => {
 
         // Get total count for pagination
         const totalPosts = await prisma.community_posts.count({
-            where: { author_id: userId },
+            where: {
+                author_id: userId,
+                group_id: { in: joinedGroupIds },
+            },
         });
 
         // Transform posts to include computed fields
         const transformedPosts = posts.map((post) => ({
             ...post,
+            group_id: post.group_id,
             author_name: post.users.full_name,
             author_avatar: post.users.avatar_url,
             group_name: post.community_groups?.name || null,
@@ -935,6 +1075,122 @@ export const getUserPosts = async (req, res) => {
         });
     } catch (err) {
         logger.error("Error fetching user posts:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// GET /api/community/groups/:id/posts - Get posts for a specific group
+export const getGroupPosts = async (req, res) => {
+    try {
+        const groupId = parseInt(req.params.id);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        const currentUserId = req.user.id;
+
+        await ensureUserInGeneralGroup(currentUserId);
+
+        const group = await prisma.community_groups.findUnique({
+            where: { id: groupId },
+            select: { id: true, name: true },
+        });
+
+        if (!group) {
+            return res.status(404).json({ error: "Group not found" });
+        }
+
+        const isMember = await isGroupMember(groupId, currentUserId);
+        if (!isMember) {
+            return res.status(403).json({
+                error: "You must join this group to view its posts",
+            });
+        }
+
+        const posts = await prisma.community_posts.findMany({
+            where: { group_id: groupId },
+            skip,
+            take: limit,
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        avatar_url: true,
+                    },
+                },
+                community_groups: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+                _count: {
+                    select: {
+                        post_likes: true,
+                        post_comments: true,
+                    },
+                },
+                post_comments: {
+                    take: 3,
+                    orderBy: { created_at: "desc" },
+                    include: {
+                        users: {
+                            select: {
+                                id: true,
+                                full_name: true,
+                                avatar_url: true,
+                            },
+                        },
+                    },
+                },
+                post_likes: {
+                    where: {
+                        user_id: currentUserId,
+                    },
+                    select: {
+                        user_id: true,
+                    },
+                },
+            },
+            orderBy: { created_at: "desc" },
+        });
+
+        const totalPosts = await prisma.community_posts.count({
+            where: { group_id: groupId },
+        });
+
+        const transformedPosts = posts.map((post) => ({
+            ...post,
+            group_id: post.group_id,
+            author_name: post.users.full_name,
+            author_avatar: post.users.avatar_url,
+            group_name: post.community_groups?.name || null,
+            likes_count: post._count.post_likes,
+            comments_count: post._count.post_comments,
+            is_liked_by_me: post.post_likes.length > 0,
+            recent_comments: post.post_comments.map((comment) => ({
+                id: comment.id,
+                content: comment.content,
+                created_at: comment.created_at,
+                author_id: comment.users.id,
+                author_name: comment.users.full_name,
+                author_avatar: comment.users.avatar_url,
+            })),
+            post_likes: undefined,
+        }));
+
+        res.status(200).json({
+            group,
+            posts: transformedPosts,
+            pagination: {
+                page,
+                limit,
+                total: totalPosts,
+                totalPages: Math.ceil(totalPosts / limit),
+            },
+        });
+    } catch (err) {
+        logger.error("Error fetching group posts:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 };

@@ -11,7 +11,7 @@ export default {
                         "application/json": {
                             schema: {
                                 type: "object",
-                                required: ["content"],
+                                required: ["content", "group_id"],
                                 properties: {
                                     content: {
                                         type: "string",
@@ -75,6 +75,8 @@ export default {
         "/community/feed": {
             get: {
                 summary: "Get community feed with all posts",
+                description:
+                    "Returns posts visible to the authenticated user only (public posts and posts from groups the user joined).",
                 tags: ["Community"],
                 security: [{ bearerAuth: [] }],
                 parameters: [
@@ -527,7 +529,7 @@ export default {
             get: {
                 summary: "Get all posts by a specific user",
                 description:
-                    "Retrieve all posts created by a specific user (for viewing user profiles). Accessible to all authenticated users.",
+                    "Retrieve posts by a specific user that are visible to the authenticated user (public posts and groups the authenticated user joined).",
                 tags: ["Community"],
                 security: [{ bearerAuth: [] }],
                 parameters: [
@@ -809,6 +811,84 @@ export default {
                     500: {
                         description: "Internal server error",
                     },
+                },
+            },
+        },
+        "/community/groups/{id}/posts": {
+            get: {
+                summary: "Get posts for a specific group",
+                description:
+                    "Returns posts from the specified group. User must be a member of the group.",
+                tags: ["Community"],
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "id",
+                        required: true,
+                        schema: {
+                            type: "integer",
+                        },
+                        description: "Group ID",
+                    },
+                    {
+                        in: "query",
+                        name: "page",
+                        schema: {
+                            type: "integer",
+                            default: 1,
+                        },
+                        description: "Page number for pagination",
+                    },
+                    {
+                        in: "query",
+                        name: "limit",
+                        schema: {
+                            type: "integer",
+                            default: 10,
+                        },
+                        description: "Number of posts per page",
+                    },
+                ],
+                responses: {
+                    200: {
+                        description: "Successfully retrieved group posts",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        group: {
+                                            type: "object",
+                                            properties: {
+                                                id: { type: "integer", example: 1 },
+                                                name: { type: "string", example: "General" },
+                                            },
+                                        },
+                                        posts: {
+                                            type: "array",
+                                            items: {
+                                                $ref: "#/components/schemas/CommunityFeedPost",
+                                            },
+                                        },
+                                        pagination: {
+                                            type: "object",
+                                            properties: {
+                                                page: { type: "integer", example: 1 },
+                                                limit: { type: "integer", example: 10 },
+                                                total: { type: "integer", example: 25 },
+                                                totalPages: { type: "integer", example: 3 },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden - user is not a group member" },
+                    404: { description: "Group not found" },
+                    500: { description: "Internal server error" },
                 },
             },
         },
@@ -1365,6 +1445,11 @@ export default {
                 properties: {
                     id: {
                         type: "integer",
+                        example: 1,
+                    },
+                    group_id: {
+                        type: "integer",
+                        nullable: true,
                         example: 1,
                     },
                     author_id: {

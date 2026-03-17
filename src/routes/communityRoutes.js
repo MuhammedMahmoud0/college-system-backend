@@ -22,6 +22,7 @@ router.get('/posts/:id/comments', communityController.getPostComments);
 router.post('/groups', authorizationMiddleware('doctor', 'admin', 'super_admin', 'teaching_assistant', 'leader'), communityController.createGroup);
 router.get('/groups/suggested', communityController.getSuggestedGroups);
 router.get('/groups/my', communityController.getMyGroups);
+router.get('/groups/:id/posts', communityController.getGroupPosts);
 router.post('/groups/:id/join', communityController.joinGroup);
 router.patch('/groups/:id', authorizationMiddleware('admin', 'super_admin'), communityController.updateGroup);
 router.delete('/groups/:id', authorizationMiddleware('admin', 'super_admin'), communityController.deleteGroup);

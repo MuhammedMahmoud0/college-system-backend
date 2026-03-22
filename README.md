@@ -112,6 +112,13 @@ PAYPAL_ENV="sandbox" # sandbox | live
 PAYPAL_CLIENT_ID="your-paypal-client-id"
 PAYPAL_CLIENT_SECRET="your-paypal-client-secret"
 
+# Paymob (optional second payment gateway)
+PAYMOB_API_KEY="your-paymob-api-key"
+PAYMOB_INTEGRATION_ID="your-paymob-integration-id"
+PAYMOB_IFRAME_ID="your-paymob-iframe-id"
+# Optional, defaults to https://accept.paymobsolutions.com
+PAYMOB_BASE_URL="https://accept.paymobsolutions.com"
+
 # Async Excel imports (optional, recommended for large files)
 # Configure either REDIS_URL OR REDIS_HOST/REDIS_PORT
 # REDIS_URL="redis://:password@localhost:6379/0"

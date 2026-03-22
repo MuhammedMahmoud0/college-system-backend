@@ -69,6 +69,40 @@ export default {
                 },
             },
         },
+        "/payments/invoices/{invoiceId}/paymob-order": {
+            post: {
+                tags: ["Payments"],
+                summary: "Create Paymob checkout for invoice",
+                description:
+                    "Creates a Paymob checkout session for a pending invoice owned by the authenticated student/leader.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "invoiceId",
+                        required: true,
+                        schema: { type: "integer" },
+                    },
+                ],
+                responses: {
+                    201: {
+                        description: "Paymob checkout created",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/CreatePaymobOrderResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Invalid request" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "Invoice not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
         "/payments/invoices/paypal-order/bulk": {
             post: {
                 tags: ["Payments"],
@@ -93,6 +127,42 @@ export default {
                             "application/json": {
                                 schema: {
                                     $ref: "#/components/schemas/BulkPayPalOrderResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: { description: "Invalid selection" },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "No matching pending invoices" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/payments/invoices/paymob-order/bulk": {
+            post: {
+                tags: ["Payments"],
+                summary: "Create Paymob checkout for multiple invoices",
+                description:
+                    "Creates one Paymob checkout session for selected pending invoices or all pending invoices for the authenticated user.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/BulkInvoiceSelectionRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    201: {
+                        description: "Bulk Paymob checkout created",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/BulkPaymobOrderResponse",
                                 },
                             },
                         },
@@ -159,6 +229,90 @@ export default {
                 },
             },
         },
+        "/payments/invoices/{invoiceId}/paymob-verify": {
+            post: {
+                tags: ["Payments"],
+                summary: "Verify Paymob transaction",
+                description:
+                    "Verifies a Paymob transaction for the invoice and marks it as paid when the transaction is successful.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        in: "path",
+                        name: "invoiceId",
+                        required: true,
+                        schema: { type: "integer" },
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/VerifyPaymobPaymentRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Paymob payment verified",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/VerifyPaymobPaymentResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description: "Verification failed or invalid request",
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "Invoice not found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/payments/invoices/paymob-verify/bulk": {
+            post: {
+                tags: ["Payments"],
+                summary: "Verify Paymob transaction for multiple invoices",
+                description:
+                    "Verifies a Paymob transaction for selected pending invoices or all pending invoices, then marks them paid on success.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/BulkVerifyPaymobRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Bulk Paymob payment verified",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/BulkVerifyPaymobResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description: "Verification failed or invalid request",
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    404: { description: "No pending invoices found" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
         "/payments/invoices/capture/bulk": {
             post: {
                 tags: ["Payments"],
@@ -201,7 +355,11 @@ export default {
             type: "object",
             properties: {
                 id: { type: "integer" },
-                gateway: { type: "string", example: "paypal" },
+                gateway: {
+                    type: "string",
+                    enum: ["paypal", "paymob"],
+                    example: "paypal",
+                },
                 transaction_id: { type: "string" },
                 amount: { type: "number", example: 900 },
                 status: { type: "string", example: "paid" },
@@ -275,6 +433,53 @@ export default {
                     example:
                         "https://www.sandbox.paypal.com/checkoutnow?token=8RU61172RB300401A",
                 },
+            },
+        },
+        CreatePaymobOrderResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Paymob checkout created",
+                },
+                invoiceId: { type: "integer", example: 14 },
+                orderId: { type: "integer", example: 9944332 },
+                merchantOrderId: {
+                    type: "string",
+                    example: "invoice_14_1774089894200",
+                },
+                iframeUrl: {
+                    type: "string",
+                    example:
+                        "https://accept.paymobsolutions.com/api/acceptance/iframes/123456?payment_token=TOKEN",
+                },
+                paymentToken: { type: "string" },
+                currency: { type: "string", example: "EGP" },
+                amountCents: { type: "integer", example: 90000 },
+            },
+        },
+        VerifyPaymobPaymentRequest: {
+            type: "object",
+            required: ["transactionId"],
+            properties: {
+                transactionId: {
+                    type: "string",
+                    description: "Paymob transaction id returned after payment",
+                    example: "1122334455",
+                },
+            },
+        },
+        VerifyPaymobPaymentResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Paymob payment verified successfully",
+                },
+                invoiceId: { type: "integer", example: 14 },
+                transactionId: { type: "string", example: "1122334455" },
+                orderId: { type: "integer", nullable: true, example: 9944332 },
+                status: { type: "string", example: "paid" },
             },
         },
         CapturePayPalRequest: {
@@ -366,6 +571,73 @@ export default {
                 },
                 totalAmount: { type: "number", example: 1800 },
                 currency: { type: "string", example: "USD" },
+            },
+        },
+        BulkPaymobOrderResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Paymob checkout created for selected invoices",
+                },
+                orderId: { type: "integer", example: 9944332 },
+                merchantOrderId: {
+                    type: "string",
+                    example:
+                        "bulk_8f66a5e1-62b4-45be-b80f-927ecf8e8fb0_1774089894200",
+                },
+                iframeUrl: {
+                    type: "string",
+                    example:
+                        "https://accept.paymobsolutions.com/api/acceptance/iframes/123456?payment_token=TOKEN",
+                },
+                paymentToken: { type: "string" },
+                invoiceIds: {
+                    type: "array",
+                    items: { type: "integer" },
+                },
+                totalAmount: { type: "number", example: 1800 },
+                amountCents: { type: "integer", example: 180000 },
+                currency: { type: "string", example: "EGP" },
+            },
+        },
+        BulkVerifyPaymobRequest: {
+            type: "object",
+            required: ["transactionId", "orderId"],
+            properties: {
+                transactionId: {
+                    type: "string",
+                    example: "1122334455",
+                },
+                orderId: {
+                    type: "integer",
+                    example: 9944332,
+                },
+                payAll: {
+                    type: "boolean",
+                    example: true,
+                },
+                invoiceIds: {
+                    type: "array",
+                    items: { type: "integer" },
+                    example: [4, 7, 11],
+                },
+            },
+        },
+        BulkVerifyPaymobResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Paymob bulk payment verified successfully",
+                },
+                invoiceIds: {
+                    type: "array",
+                    items: { type: "integer" },
+                },
+                transactionId: { type: "string", example: "1122334455" },
+                orderId: { type: "integer", nullable: true, example: 9944332 },
+                status: { type: "string", example: "paid" },
             },
         },
         BulkCaptureRequest: {

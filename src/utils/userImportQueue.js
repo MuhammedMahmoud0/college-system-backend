@@ -67,15 +67,21 @@ const getBullMQConnectionConfig = (connectionConfig) => {
         connectTimeout: process.env.REDIS_CONNECT_TIMEOUT_MS
             ? Number.parseInt(process.env.REDIS_CONNECT_TIMEOUT_MS, 10)
             : 10000,
-        enableOfflineQueue: false,
+        // ✅ FIX 1: allow buffering
+        enableOfflineQueue: true,
+
+        // ✅ REQUIRED by BullMQ
         maxRetriesPerRequest: null,
+
         enableReadyCheck: true,
+
+        // ✅ FIX 2: NEVER stop retrying
         retryStrategy: (times) => {
-            if (times >= 3) {
-                return null;
-            }
-            return Math.min(times * 500, 2000);
+            return Math.min(times * 500, 3000);
         },
+
+        // ✅ FIX 3: keep connection alive
+        keepAlive: 30000,
     };
 
     if (typeof connectionConfig === "string") {

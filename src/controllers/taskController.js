@@ -397,13 +397,32 @@ export const getSubmissions = async (req, res) => {
             where: { task_id: parseInt(taskId) },
             include: {
                 users: {
-                    select: { id: true, full_name: true, email: true },
+                    select: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                        avatar_url: true,
+                    },
                 },
             },
             orderBy: { submitted_at: "asc" },
         });
 
-        return res.status(200).json({ count: submissions.length, submissions });
+        const formattedSubmissions = submissions.map((submission) => ({
+            id: submission.id,
+            task_id: submission.task_id,
+            student_id: submission.student_id,
+            submission_content: submission.submission_content,
+            submitted_at: submission.submitted_at,
+            grade: submission.grade,
+            full_name: submission.users?.full_name || null,
+            email: submission.users?.email || null,
+            avatar_url: submission.users?.avatar_url || null,
+        }));
+
+        return res
+            .status(200)
+            .json({ count: formattedSubmissions.length, submissions: formattedSubmissions });
     } catch (err) {
         logger.error("Error fetching submissions:", err);
         res.status(500).json({ error: "Internal server error" });

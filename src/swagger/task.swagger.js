@@ -418,13 +418,13 @@ export default {
                                 schema: {
                                     type: "object",
                                     properties: {
+                                        count: { type: "integer" },
                                         submissions: {
                                             type: "array",
                                             items: {
-                                                $ref: "#/components/schemas/TaskSubmissionObject",
+                                                $ref: "#/components/schemas/TaskSubmissionWithStudentObject",
                                             },
                                         },
-                                        total: { type: "integer" },
                                     },
                                 },
                             },
@@ -580,6 +580,33 @@ export default {
                 submitted_at: { type: "string", format: "date-time" },
                 grade: { type: "number", example: 85.5, nullable: true },
             },
+        },
+        TaskSubmissionWithStudentObject: {
+            allOf: [
+                {
+                    $ref: "#/components/schemas/TaskSubmissionObject",
+                },
+                {
+                    type: "object",
+                    properties: {
+                        full_name: {
+                            type: "string",
+                            example: "Ali Hassan",
+                            nullable: true,
+                        },
+                        email: {
+                            type: "string",
+                            format: "email",
+                            nullable: true,
+                        },
+                        avatar_url: {
+                            type: "string",
+                            format: "uri",
+                            nullable: true,
+                        },
+                    },
+                },
+            ],
         },
     },
 };

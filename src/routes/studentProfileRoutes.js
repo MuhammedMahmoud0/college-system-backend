@@ -1,6 +1,8 @@
 import express from "express";
 import {
     getStudentProfile,
+    getDigitalStudentIdBack,
+    getDigitalStudentIdFront,
     updateStudentProfile,
 } from "../controllers/studentProfileController.js";
 import {
@@ -16,7 +18,7 @@ router.get(
     "/profile",
     authMiddleware,
     authorizationMiddleware("student"),
-    getStudentProfile
+    getStudentProfile,
 );
 
 // Route to update student profile (with optional avatar upload)
@@ -25,7 +27,21 @@ router.put(
     authMiddleware,
     authorizationMiddleware("student"),
     upload.single("avatar"), // Accept avatar file
-    updateStudentProfile
+    updateStudentProfile,
+);
+
+router.get(
+    "/digital-id/front",
+    authMiddleware,
+    authorizationMiddleware("student", "leader"),
+    getDigitalStudentIdFront,
+);
+
+router.get(
+    "/digital-id/back",
+    authMiddleware,
+    authorizationMiddleware("student", "leader"),
+    getDigitalStudentIdBack,
 );
 
 export default router;

@@ -230,11 +230,14 @@ export default {
                 startDate: {
                     type: "string",
                     nullable: true,
+                    description: "Start date from *_start event_date.",
                     example: "2026-08-16",
                 },
                 endDate: {
                     type: "string",
                     nullable: true,
+                    description:
+                        "End date from *_end event_date, or fallback to *_start.end_date when no explicit *_end event exists.",
                     example: "2026-09-01",
                 },
                 nextOpenDate: {

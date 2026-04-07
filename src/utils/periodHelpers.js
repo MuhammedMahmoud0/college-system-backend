@@ -84,7 +84,10 @@ const buildPeriod = ({ semester, year, startEvent, endEvent }) => {
     const startDate = startEvent?.event_date
         ? new Date(startEvent.event_date)
         : null;
-    const endDate = endEvent?.event_date ? new Date(endEvent.event_date) : null;
+    // Prefer explicit *_end events, but support start-event end_date as a fallback window end.
+    const resolvedEndDate =
+        endEvent?.event_date || startEvent?.end_date || null;
+    const endDate = resolvedEndDate ? new Date(resolvedEndDate) : null;
 
     const now = new Date();
     const openStart = startDate ? new Date(startDate) : null;
@@ -140,6 +143,7 @@ const getPeriodWindow = async ({ startType, endType, semester, year }) => {
             id: true,
             event_type: true,
             event_date: true,
+            end_date: true,
             semester: true,
             academic_year: true,
         },

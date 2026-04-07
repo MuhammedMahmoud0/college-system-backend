@@ -1,0 +1,8 @@
+endpoints for the admins to add grades for a certain student with a certain course. The endpoint should be a POST request to /add-grade with the following parameters:
+- student_id: the ID of the student for whom the grade is being added
+- course_id: the ID of the course for which the grade is being added
+- grade: the grade that is being added for the student in the specified course
+
+and the addmins can add a course for a certain student. The endpoint should be a POST request to /add-course with the following parameters:
+- student_id: the ID of the student for whom the course is being added
+- course_id: the ID of the course that is being added for the student

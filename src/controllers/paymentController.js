@@ -8,14 +8,46 @@ import {
     registerPaymobOrder,
     validatePaymobConfig,
 } from "../config/paymob.js";
+import {
+    getCurrentSemester,
+    getPaymentPeriod,
+    getRegistrationPeriod,
+} from "../utils/periodHelpers.js";
 import logger from "../utils/logger.js";
 
-const toMoneyString = (value) => Number.parseFloat(value).toFixed(2);
+const toMoneyString = (value) => Number.parseFloat(value || 0).toFixed(2);
 const toCents = (value) =>
     Math.round(Number.parseFloat(value || 0) * 100).toString();
 const shouldBypassSandboxCompliance =
     process.env.PAYPAL_ENV !== "live" &&
     process.env.PAYPAL_SANDBOX_BYPASS_COMPLIANCE === "true";
+
+const EMPTY_PERIOD = {
+    isOpen: false,
+    semester: null,
+    year: null,
+    startDate: null,
+    endDate: null,
+    nextOpenDate: null,
+};
+
+const ensurePayAllRequest = (body = {}) => {
+    if (body.payAll !== true) {
+        return {
+            ok: false,
+            error: "payAll must be true. Individual invoice selection is no longer supported.",
+        };
+    }
+
+    if (Array.isArray(body.invoiceIds) && body.invoiceIds.length > 0) {
+        return {
+            ok: false,
+            error: "invoiceIds is no longer supported. Set payAll to true to pay all pending semester invoices.",
+        };
+    }
+
+    return { ok: true };
+};
 
 const buildPaymobBillingData = (user) => {
     const [firstName, ...restName] = (user?.full_name || "Student User")
@@ -39,43 +71,10 @@ const buildPaymobBillingData = (user) => {
     };
 };
 
-const parseInvoiceSelection = (body) => {
-    const payAll = body?.payAll === true;
-    const invoiceIds = Array.isArray(body?.invoiceIds)
-        ? [
-              ...new Set(
-                  body.invoiceIds
-                      .map((id) => Number.parseInt(id))
-                      .filter(Number.isInteger)
-              ),
-          ]
-        : [];
-
-    return {
-        payAll,
-        invoiceIds,
-    };
-};
-
-const getPendingInvoicesForPayment = async (studentId, invoiceIds, payAll) => {
-    if (!payAll && invoiceIds.length === 0) {
-        return [];
-    }
-
-    return prisma.invoices.findMany({
-        where: {
-            student_user_id: studentId,
-            status: "pending",
-            ...(payAll ? {} : { id: { in: invoiceIds } }),
-        },
-        orderBy: { id: "asc" },
-    });
-};
-
 const createOrderForInvoices = async (invoices, label = "Tuition invoices") => {
     const totalAmount = invoices.reduce(
         (sum, invoice) => sum + Number.parseFloat(invoice.total_amount),
-        0
+        0,
     );
 
     const orderPayload = {
@@ -103,7 +102,7 @@ const createOrderForInvoices = async (invoices, label = "Tuition invoices") => {
 const toTotalAmountCents = (invoices) =>
     invoices.reduce(
         (sum, invoice) => sum + Number.parseInt(toCents(invoice.total_amount)),
-        0
+        0,
     );
 
 const buildPaymobItemsForInvoices = (invoices) =>
@@ -113,6 +112,197 @@ const buildPaymobItemsForInvoices = (invoices) =>
         description: `${invoice.course_code} ${invoice.semester} ${invoice.year}`,
         quantity: 1,
     }));
+
+const mapInvoice = (invoice) => ({
+    ...invoice,
+    credit_price: Number.parseFloat(invoice.credit_price),
+    total_amount: Number.parseFloat(invoice.total_amount),
+    payments: (invoice.payments || []).map((payment) => ({
+        ...payment,
+        amount: Number.parseFloat(payment.amount),
+    })),
+});
+
+const mapStudentPayment = (payment) => ({
+    ...payment,
+    total_amount: Number.parseFloat(payment.total_amount),
+});
+
+const buildInvoiceGroups = (invoices) => {
+    const bySemester = new Map();
+
+    for (const invoice of invoices) {
+        const key = `${invoice.semester}-${invoice.year}`;
+
+        if (!bySemester.has(key)) {
+            bySemester.set(key, {
+                semester: invoice.semester,
+                year: invoice.year,
+                invoices: [],
+                summary: {
+                    totalInvoices: 0,
+                    pendingInvoices: 0,
+                    totalDue: 0,
+                },
+            });
+        }
+
+        const group = bySemester.get(key);
+        group.invoices.push(invoice);
+        group.summary.totalInvoices += 1;
+
+        if (invoice.status === "pending") {
+            group.summary.pendingInvoices += 1;
+            group.summary.totalDue += Number.parseFloat(invoice.total_amount);
+        }
+    }
+
+    return Array.from(bySemester.values()).map((group) => ({
+        ...group,
+        summary: {
+            ...group.summary,
+            totalDue: Number.parseFloat(group.summary.totalDue.toFixed(2)),
+        },
+    }));
+};
+
+const getPendingSemesterInvoices = async ({
+    studentId,
+    semester,
+    year,
+    paypalOrderId,
+}) => {
+    return prisma.invoices.findMany({
+        where: {
+            student_user_id: studentId,
+            status: "pending",
+            semester,
+            year,
+            ...(paypalOrderId ? { paypal_order_id: paypalOrderId } : {}),
+        },
+        orderBy: { id: "asc" },
+    });
+};
+
+const getInvoiceSemesterContext = (invoices) => {
+    if (!Array.isArray(invoices) || invoices.length === 0) {
+        return null;
+    }
+
+    const semester = invoices[0].semester;
+    const year = invoices[0].year;
+
+    const hasMixedSemester = invoices.some(
+        (invoice) => invoice.semester !== semester || invoice.year !== year,
+    );
+
+    if (hasMixedSemester) {
+        throw new Error("Selected invoices must belong to a single semester");
+    }
+
+    return { semester, year };
+};
+
+const createOrUpdateStudentPaymentRecord = async ({
+    tx,
+    studentId,
+    semester,
+    year,
+    totalAmount,
+    invoiceCount,
+    gateway,
+    transactionId,
+    paidAt,
+}) => {
+    return tx.student_payments.upsert({
+        where: {
+            student_user_id_semester_year: {
+                student_user_id: studentId,
+                semester,
+                year,
+            },
+        },
+        create: {
+            student_user_id: studentId,
+            semester,
+            year,
+            total_amount: toMoneyString(totalAmount),
+            invoice_count: invoiceCount,
+            gateway,
+            transaction_id: transactionId,
+            paid_at: paidAt,
+        },
+        update: {
+            total_amount: toMoneyString(totalAmount),
+            invoice_count: invoiceCount,
+            gateway,
+            transaction_id: transactionId,
+            paid_at: paidAt,
+        },
+    });
+};
+
+const resolveCurrentSemesterPeriods = async () => {
+    const currentSemester = await getCurrentSemester();
+
+    if (!currentSemester) {
+        return {
+            semester: null,
+            year: null,
+            registrationPeriod: EMPTY_PERIOD,
+            paymentPeriod: EMPTY_PERIOD,
+        };
+    }
+
+    const [registrationPeriod, paymentPeriod] = await Promise.all([
+        getRegistrationPeriod(currentSemester.semester, currentSemester.year),
+        getPaymentPeriod(currentSemester.semester, currentSemester.year),
+    ]);
+
+    return {
+        semester: currentSemester.semester,
+        year: currentSemester.year,
+        registrationPeriod,
+        paymentPeriod,
+    };
+};
+
+const resolveOpenPaymentContext = async () => {
+    const currentSemester = await getCurrentSemester();
+
+    if (!currentSemester) {
+        return {
+            ok: false,
+            status: 404,
+            body: {
+                error: "No active semester found for payment",
+            },
+        };
+    }
+
+    const paymentPeriod = await getPaymentPeriod(
+        currentSemester.semester,
+        currentSemester.year,
+    );
+
+    if (!paymentPeriod.isOpen) {
+        return {
+            ok: false,
+            status: 403,
+            body: {
+                error: `Payment period is currently closed for ${currentSemester.semester} ${currentSemester.year}`,
+                paymentPeriod,
+            },
+        };
+    }
+
+    return {
+        ok: true,
+        semester: currentSemester.semester,
+        year: currentSemester.year,
+        paymentPeriod,
+    };
+};
 
 const captureAndMarkInvoicesPaid = async ({ studentId, orderId, invoices }) => {
     const orderDetails = await paypalRequest(`/v2/checkout/orders/${orderId}`, {
@@ -141,12 +331,12 @@ const captureAndMarkInvoicesPaid = async ({ studentId, orderId, invoices }) => {
         {
             method: "POST",
             body: JSON.stringify({}),
-        }
+        },
     );
 
     const captureUnit = capture.purchase_units?.[0]?.payments?.captures?.[0];
     const captureStatus = captureUnit?.status;
-    const transactionId = captureUnit?.id || capture.id;
+    const captureTransactionId = captureUnit?.id || capture.id;
 
     if (captureStatus !== "COMPLETED") {
         await prisma.invoices.updateMany({
@@ -167,6 +357,13 @@ const captureAndMarkInvoicesPaid = async ({ studentId, orderId, invoices }) => {
         };
     }
 
+    const invoiceContext = getInvoiceSemesterContext(invoices);
+    const paidAt = new Date();
+    const totalAmount = invoices.reduce(
+        (sum, invoice) => sum + Number.parseFloat(invoice.total_amount),
+        0,
+    );
+
     await prisma.$transaction(async (tx) => {
         await tx.invoices.updateMany({
             where: {
@@ -175,7 +372,7 @@ const captureAndMarkInvoicesPaid = async ({ studentId, orderId, invoices }) => {
             },
             data: {
                 status: "paid",
-                payment_date: new Date(),
+                payment_date: paidAt,
                 paypal_order_id: orderId,
             },
         });
@@ -185,12 +382,24 @@ const captureAndMarkInvoicesPaid = async ({ studentId, orderId, invoices }) => {
                 data: {
                     invoice_id: invoice.id,
                     gateway: "paypal",
-                    transaction_id: `${transactionId}:${invoice.id}`,
+                    transaction_id: `${captureTransactionId}:${invoice.id}`,
                     amount: toMoneyString(invoice.total_amount),
                     status: "paid",
                 },
             });
         }
+
+        await createOrUpdateStudentPaymentRecord({
+            tx,
+            studentId,
+            semester: invoiceContext.semester,
+            year: invoiceContext.year,
+            totalAmount,
+            invoiceCount: invoices.length,
+            gateway: "paypal",
+            transactionId: captureTransactionId,
+            paidAt,
+        });
     });
 
     return {
@@ -199,8 +408,10 @@ const captureAndMarkInvoicesPaid = async ({ studentId, orderId, invoices }) => {
         body: {
             message: "Payment captured successfully",
             invoiceIds: invoices.map((invoice) => invoice.id),
-            transactionId,
+            transactionId: captureTransactionId,
             status: "paid",
+            semester: invoiceContext.semester,
+            year: invoiceContext.year,
         },
     };
 };
@@ -210,6 +421,13 @@ const markInvoicesPaidWithPaymob = async ({
     invoices,
     paymobTransactionId,
 }) => {
+    const invoiceContext = getInvoiceSemesterContext(invoices);
+    const paidAt = new Date();
+    const totalAmount = invoices.reduce(
+        (sum, invoice) => sum + Number.parseFloat(invoice.total_amount),
+        0,
+    );
+
     await prisma.$transaction(async (tx) => {
         await tx.invoices.updateMany({
             where: {
@@ -218,7 +436,7 @@ const markInvoicesPaidWithPaymob = async ({
             },
             data: {
                 status: "paid",
-                payment_date: new Date(),
+                payment_date: paidAt,
             },
         });
 
@@ -233,6 +451,18 @@ const markInvoicesPaidWithPaymob = async ({
                 },
             });
         }
+
+        await createOrUpdateStudentPaymentRecord({
+            tx,
+            studentId,
+            semester: invoiceContext.semester,
+            year: invoiceContext.year,
+            totalAmount,
+            invoiceCount: invoices.length,
+            gateway: "paymob",
+            transactionId: String(paymobTransactionId),
+            paidAt,
+        });
     });
 };
 
@@ -253,47 +483,46 @@ export const getMyInvoices = async (req, res) => {
             ...(status ? { status } : {}),
         };
 
-        const invoices = await prisma.invoices.findMany({
-            where,
-            include: {
-                payments: {
-                    orderBy: { created_at: "desc" },
-                    select: {
-                        id: true,
-                        gateway: true,
-                        transaction_id: true,
-                        amount: true,
-                        status: true,
-                        created_at: true,
+        const [invoices, periodContext] = await Promise.all([
+            prisma.invoices.findMany({
+                where,
+                include: {
+                    payments: {
+                        orderBy: { created_at: "desc" },
+                        select: {
+                            id: true,
+                            gateway: true,
+                            transaction_id: true,
+                            amount: true,
+                            status: true,
+                            created_at: true,
+                        },
                     },
                 },
-            },
-            orderBy: { created_at: "desc" },
-        });
+                orderBy: [{ year: "desc" }, { created_at: "desc" }],
+            }),
+            resolveCurrentSemesterPeriods(),
+        ]);
 
-        const pendingInvoices = invoices.filter(
-            (invoice) => invoice.status === "pending"
+        const mappedInvoices = invoices.map(mapInvoice);
+        const pendingInvoices = mappedInvoices.filter(
+            (invoice) => invoice.status === "pending",
         );
         const totalDue = pendingInvoices.reduce(
             (sum, invoice) => sum + Number.parseFloat(invoice.total_amount),
-            0
+            0,
         );
 
         return res.status(200).json({
-            invoices: invoices.map((invoice) => ({
-                ...invoice,
-                credit_price: Number.parseFloat(invoice.credit_price),
-                total_amount: Number.parseFloat(invoice.total_amount),
-                payments: invoice.payments.map((payment) => ({
-                    ...payment,
-                    amount: Number.parseFloat(payment.amount),
-                })),
-            })),
+            invoices: mappedInvoices,
+            groupedInvoices: buildInvoiceGroups(mappedInvoices),
             summary: {
-                totalInvoices: invoices.length,
+                totalInvoices: mappedInvoices.length,
                 pendingInvoices: pendingInvoices.length,
                 totalDue: Number.parseFloat(totalDue.toFixed(2)),
             },
+            registrationPeriod: periodContext.registrationPeriod,
+            paymentPeriod: periodContext.paymentPeriod,
         });
     } catch (err) {
         logger.error("Error getting my invoices:", err);
@@ -301,84 +530,44 @@ export const getMyInvoices = async (req, res) => {
     }
 };
 
-export const createPayPalOrder = async (req, res) => {
+export const getMyPayments = async (req, res) => {
     try {
         const studentId = req.user.id;
-        const invoiceId = Number.parseInt(req.params.invoiceId);
 
-        if (!Number.isInteger(invoiceId)) {
-            return res.status(400).json({ error: "Invalid invoice id" });
-        }
-
-        if (!validatePayPalConfig()) {
-            return res.status(500).json({
-                error: "PayPal is not configured on the server",
-            });
-        }
-
-        const invoice = await prisma.invoices.findFirst({
+        const payments = await prisma.student_payments.findMany({
             where: {
-                id: invoiceId,
                 student_user_id: studentId,
             },
+            orderBy: [{ paid_at: "desc" }, { created_at: "desc" }],
         });
 
-        if (!invoice) {
-            return res.status(404).json({ error: "Invoice not found" });
-        }
+        const mappedPayments = payments.map(mapStudentPayment);
+        const totalAmountPaid = mappedPayments.reduce(
+            (sum, payment) => sum + Number.parseFloat(payment.total_amount),
+            0,
+        );
 
-        if (invoice.status === "paid") {
-            return res.status(400).json({ error: "Invoice is already paid" });
-        }
-
-        const orderPayload = {
-            intent: "CAPTURE",
-            purchase_units: [
-                {
-                    reference_id: String(invoice.id),
-                    description: `Tuition invoice for ${invoice.course_code} (${invoice.semester} ${invoice.year})`,
-                    amount: {
-                        currency_code: "USD",
-                        value: toMoneyString(invoice.total_amount),
-                    },
-                },
-            ],
-        };
-
-        const order = await paypalRequest("/v2/checkout/orders", {
-            method: "POST",
-            body: JSON.stringify(orderPayload),
-        });
-
-        await prisma.invoices.update({
-            where: { id: invoice.id },
-            data: {
-                paypal_order_id: order.id,
-                status: "pending",
+        return res.status(200).json({
+            payments: mappedPayments,
+            summary: {
+                totalPayments: mappedPayments.length,
+                totalAmountPaid: Number.parseFloat(totalAmountPaid.toFixed(2)),
             },
         });
-
-        const approveLink =
-            order.links?.find((link) => link.rel === "approve")?.href || null;
-
-        return res.status(201).json({
-            message: "PayPal order created",
-            invoiceId: invoice.id,
-            orderId: order.id,
-            approveUrl: approveLink,
-        });
     } catch (err) {
-        logger.error("Error creating PayPal order:", err);
-        return res.status(500).json({
-            error: err.message || "Failed to create PayPal order",
-        });
+        logger.error("Error getting payment history:", err);
+        return res.status(500).json({ error: "Internal server error" });
     }
 };
 
-export const createPayPalOrderBulk = async (req, res) => {
+export const createPayPalOrder = async (req, res) => {
     try {
         const studentId = req.user.id;
-        const { payAll, invoiceIds } = parseInvoiceSelection(req.body || {});
+        const payAllValidation = ensurePayAllRequest(req.body || {});
+
+        if (!payAllValidation.ok) {
+            return res.status(400).json({ error: payAllValidation.error });
+        }
 
         if (!validatePayPalConfig()) {
             return res.status(500).json({
@@ -386,21 +575,26 @@ export const createPayPalOrderBulk = async (req, res) => {
             });
         }
 
-        const invoices = await getPendingInvoicesForPayment(
+        const paymentContext = await resolveOpenPaymentContext();
+        if (!paymentContext.ok) {
+            return res.status(paymentContext.status).json(paymentContext.body);
+        }
+
+        const invoices = await getPendingSemesterInvoices({
             studentId,
-            invoiceIds,
-            payAll
-        );
+            semester: paymentContext.semester,
+            year: paymentContext.year,
+        });
 
         if (invoices.length === 0) {
             return res.status(404).json({
-                error: "No pending invoices found for selected scope",
+                error: `No pending invoices found for ${paymentContext.semester} ${paymentContext.year}`,
             });
         }
 
         const order = await createOrderForInvoices(
             invoices,
-            "Tuition invoices"
+            `Tuition invoices for ${paymentContext.semester} ${paymentContext.year}`,
         );
 
         await prisma.invoices.updateMany({
@@ -419,19 +613,22 @@ export const createPayPalOrderBulk = async (req, res) => {
 
         const totalAmount = invoices.reduce(
             (sum, invoice) => sum + Number.parseFloat(invoice.total_amount),
-            0
+            0,
         );
 
         return res.status(201).json({
-            message: "PayPal order created for selected invoices",
+            message: `PayPal order created for all pending invoices in ${paymentContext.semester} ${paymentContext.year}`,
+            payAll: true,
             orderId: order.id,
             approveUrl: approveLink,
             invoiceIds: invoices.map((invoice) => invoice.id),
+            invoiceCount: invoices.length,
             totalAmount: Number.parseFloat(totalAmount.toFixed(2)),
             currency: "USD",
+            paymentPeriod: paymentContext.paymentPeriod,
         });
     } catch (err) {
-        logger.error("Error creating bulk PayPal order:", err);
+        logger.error("Error creating PayPal order:", err);
         return res.status(500).json({
             error: err.message || "Failed to create PayPal order",
         });
@@ -441,10 +638,10 @@ export const createPayPalOrderBulk = async (req, res) => {
 export const createPaymobOrder = async (req, res) => {
     try {
         const studentId = req.user.id;
-        const invoiceId = Number.parseInt(req.params.invoiceId);
+        const payAllValidation = ensurePayAllRequest(req.body || {});
 
-        if (!Number.isInteger(invoiceId)) {
-            return res.status(400).json({ error: "Invalid invoice id" });
+        if (!payAllValidation.ok) {
+            return res.status(400).json({ error: payAllValidation.error });
         }
 
         if (!validatePaymobConfig()) {
@@ -453,81 +650,17 @@ export const createPaymobOrder = async (req, res) => {
             });
         }
 
-        const [invoice, user] = await Promise.all([
-            prisma.invoices.findFirst({
-                where: {
-                    id: invoiceId,
-                    student_user_id: studentId,
-                },
-            }),
-            prisma.users.findUnique({
-                where: { id: studentId },
-                select: {
-                    full_name: true,
-                    email: true,
-                    phone: true,
-                    address: true,
-                },
-            }),
-        ]);
-
-        if (!invoice) {
-            return res.status(404).json({ error: "Invoice not found" });
-        }
-
-        if (invoice.status === "paid") {
-            return res.status(400).json({ error: "Invoice is already paid" });
-        }
-
-        const authToken = await getPaymobAuthToken();
-        const merchantOrderId = `invoice_${invoice.id}_${Date.now()}`;
-
-        const order = await registerPaymobOrder({
-            authToken,
-            amountCents: toCents(invoice.total_amount),
-            merchantOrderId,
-            items: buildPaymobItemsForInvoices([invoice]),
-        });
-
-        const paymentKey = await createPaymobPaymentKey({
-            authToken,
-            amountCents: toCents(invoice.total_amount),
-            orderId: order.id,
-            billingData: buildPaymobBillingData(user),
-        });
-
-        return res.status(201).json({
-            message: "Paymob checkout created",
-            invoiceId: invoice.id,
-            orderId: order.id,
-            merchantOrderId,
-            iframeUrl: buildPaymobIframeUrl(paymentKey.token),
-            paymentToken: paymentKey.token,
-            currency: "EGP",
-            amountCents: Number.parseInt(toCents(invoice.total_amount)),
-        });
-    } catch (err) {
-        logger.error("Error creating Paymob order:", err);
-        return res.status(500).json({
-            error: err.message || "Failed to create Paymob checkout",
-            paymobError: err.paymobResponse || null,
-        });
-    }
-};
-
-export const createPaymobOrderBulk = async (req, res) => {
-    try {
-        const studentId = req.user.id;
-        const { payAll, invoiceIds } = parseInvoiceSelection(req.body || {});
-
-        if (!validatePaymobConfig()) {
-            return res.status(500).json({
-                error: "Paymob is not configured on the server",
-            });
+        const paymentContext = await resolveOpenPaymentContext();
+        if (!paymentContext.ok) {
+            return res.status(paymentContext.status).json(paymentContext.body);
         }
 
         const [invoices, user] = await Promise.all([
-            getPendingInvoicesForPayment(studentId, invoiceIds, payAll),
+            getPendingSemesterInvoices({
+                studentId,
+                semester: paymentContext.semester,
+                year: paymentContext.year,
+            }),
             prisma.users.findUnique({
                 where: { id: studentId },
                 select: {
@@ -541,7 +674,7 @@ export const createPaymobOrderBulk = async (req, res) => {
 
         if (invoices.length === 0) {
             return res.status(404).json({
-                error: "No pending invoices found for selected scope",
+                error: `No pending invoices found for ${paymentContext.semester} ${paymentContext.year}`,
             });
         }
 
@@ -565,22 +698,25 @@ export const createPaymobOrderBulk = async (req, res) => {
 
         const totalAmount = invoices.reduce(
             (sum, invoice) => sum + Number.parseFloat(invoice.total_amount),
-            0
+            0,
         );
 
         return res.status(201).json({
-            message: "Paymob checkout created for selected invoices",
+            message: `Paymob checkout created for all pending invoices in ${paymentContext.semester} ${paymentContext.year}`,
+            payAll: true,
             orderId: order.id,
             merchantOrderId,
             iframeUrl: buildPaymobIframeUrl(paymentKey.token),
             paymentToken: paymentKey.token,
             invoiceIds: invoices.map((invoice) => invoice.id),
+            invoiceCount: invoices.length,
             totalAmount: Number.parseFloat(totalAmount.toFixed(2)),
             amountCents: totalAmountCents,
             currency: "EGP",
+            paymentPeriod: paymentContext.paymentPeriod,
         });
     } catch (err) {
-        logger.error("Error creating bulk Paymob order:", err);
+        logger.error("Error creating Paymob order:", err);
         return res.status(500).json({
             error: err.message || "Failed to create Paymob checkout",
             paymobError: err.paymobResponse || null,
@@ -591,147 +727,7 @@ export const createPaymobOrderBulk = async (req, res) => {
 export const verifyPaymobPayment = async (req, res) => {
     try {
         const studentId = req.user.id;
-        const invoiceId = Number.parseInt(req.params.invoiceId);
-        const { transactionId } = req.body || {};
-
-        if (!Number.isInteger(invoiceId)) {
-            return res.status(400).json({ error: "Invalid invoice id" });
-        }
-
-        if (!transactionId) {
-            return res.status(400).json({ error: "transactionId is required" });
-        }
-
-        if (!validatePaymobConfig()) {
-            return res.status(500).json({
-                error: "Paymob is not configured on the server",
-            });
-        }
-
-        const invoice = await prisma.invoices.findFirst({
-            where: {
-                id: invoiceId,
-                student_user_id: studentId,
-            },
-        });
-
-        if (!invoice) {
-            return res.status(404).json({ error: "Invoice not found" });
-        }
-
-        if (invoice.status === "paid") {
-            return res.status(200).json({
-                message: "Invoice is already paid",
-                invoiceId: invoice.id,
-            });
-        }
-
-        const authToken = await getPaymobAuthToken();
-        const transaction = await getPaymobTransaction({
-            authToken,
-            transactionId,
-        });
-
-        const isTransactionPaid =
-            transaction?.success === true &&
-            transaction?.pending !== true &&
-            transaction?.is_refunded !== true &&
-            transaction?.is_voided !== true;
-
-        if (!isTransactionPaid) {
-            return res.status(400).json({
-                error: "Paymob transaction is not completed",
-                paymobStatus: {
-                    success: transaction?.success ?? null,
-                    pending: transaction?.pending ?? null,
-                    isRefunded: transaction?.is_refunded ?? null,
-                    isVoided: transaction?.is_voided ?? null,
-                },
-            });
-        }
-
-        const merchantOrderId = transaction?.order?.merchant_order_id;
-
-        if (
-            !merchantOrderId ||
-            !merchantOrderId.startsWith(`invoice_${invoice.id}_`)
-        ) {
-            return res.status(400).json({
-                error: "Transaction does not belong to this invoice",
-            });
-        }
-
-        const expectedAmountCents = Number.parseInt(
-            toCents(invoice.total_amount)
-        );
-        if (Number(transaction?.amount_cents) !== expectedAmountCents) {
-            return res.status(400).json({
-                error: "Transaction amount does not match invoice amount",
-                expectedAmountCents,
-                transactionAmountCents: Number(transaction?.amount_cents || 0),
-            });
-        }
-
-        const paymentTransactionId = `paymob_${transaction.id}:${invoice.id}`;
-        const existingPayment = await prisma.payments.findFirst({
-            where: {
-                gateway: "paymob",
-                transaction_id: paymentTransactionId,
-            },
-        });
-
-        if (existingPayment) {
-            await prisma.invoices.update({
-                where: { id: invoice.id },
-                data: {
-                    status: "paid",
-                    payment_date: new Date(),
-                },
-            });
-
-            return res.status(200).json({
-                message: "Payment already verified",
-                invoiceId: invoice.id,
-                transactionId: transaction.id,
-                status: "paid",
-            });
-        }
-
-        await markInvoicesPaidWithPaymob({
-            studentId,
-            invoices: [invoice],
-            paymobTransactionId: transaction.id,
-        });
-
-        return res.status(200).json({
-            message: "Paymob payment verified successfully",
-            invoiceId: invoice.id,
-            transactionId: transaction.id,
-            orderId: transaction?.order?.id || null,
-            status: "paid",
-        });
-    } catch (err) {
-        logger.error("Error verifying Paymob payment:", err);
-
-        if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
-            return res.status(400).json({
-                error: err.message || "Paymob rejected this payment request",
-                paymobError: err.paymobResponse || null,
-            });
-        }
-
-        return res.status(500).json({
-            error: err.message || "Failed to verify Paymob payment",
-            paymobError: err.paymobResponse || null,
-        });
-    }
-};
-
-export const verifyPaymobPaymentBulk = async (req, res) => {
-    try {
-        const studentId = req.user.id;
         const { transactionId, orderId } = req.body || {};
-        const { payAll, invoiceIds } = parseInvoiceSelection(req.body || {});
 
         if (!transactionId) {
             return res.status(400).json({ error: "transactionId is required" });
@@ -747,15 +743,39 @@ export const verifyPaymobPaymentBulk = async (req, res) => {
             });
         }
 
-        const invoices = await getPendingInvoicesForPayment(
+        const paymentContext = await resolveOpenPaymentContext();
+        if (!paymentContext.ok) {
+            return res.status(paymentContext.status).json(paymentContext.body);
+        }
+
+        const invoices = await getPendingSemesterInvoices({
             studentId,
-            invoiceIds,
-            payAll
-        );
+            semester: paymentContext.semester,
+            year: paymentContext.year,
+        });
 
         if (invoices.length === 0) {
+            const existingSemesterPayment =
+                await prisma.student_payments.findUnique({
+                    where: {
+                        student_user_id_semester_year: {
+                            student_user_id: studentId,
+                            semester: paymentContext.semester,
+                            year: paymentContext.year,
+                        },
+                    },
+                });
+
+            if (existingSemesterPayment) {
+                return res.status(200).json({
+                    message: "Semester payment already completed",
+                    payment: mapStudentPayment(existingSemesterPayment),
+                    status: "paid",
+                });
+            }
+
             return res.status(404).json({
-                error: "No pending invoices found for selected scope",
+                error: `No pending invoices found for ${paymentContext.semester} ${paymentContext.year}`,
             });
         }
 
@@ -795,14 +815,14 @@ export const verifyPaymobPaymentBulk = async (req, res) => {
             !merchantOrderId.startsWith(`bulk_${studentId}_`)
         ) {
             return res.status(400).json({
-                error: "Transaction does not belong to this user bulk order",
+                error: "Transaction does not belong to this user payment order",
             });
         }
 
         const expectedAmountCents = toTotalAmountCents(invoices);
         if (Number(transaction?.amount_cents) !== expectedAmountCents) {
             return res.status(400).json({
-                error: "Transaction amount does not match selected invoices amount",
+                error: "Transaction amount does not match semester invoices amount",
                 expectedAmountCents,
                 transactionAmountCents: Number(transaction?.amount_cents || 0),
             });
@@ -824,11 +844,15 @@ export const verifyPaymobPaymentBulk = async (req, res) => {
             return res.status(200).json({
                 message: "Payment already verified",
                 invoiceIds: [
-                    ...new Set(existingPayments.map((p) => p.invoice_id)),
+                    ...new Set(
+                        existingPayments.map((payment) => payment.invoice_id),
+                    ),
                 ],
                 transactionId: transaction.id,
                 orderId: transaction?.order?.id || null,
                 status: "paid",
+                semester: paymentContext.semester,
+                year: paymentContext.year,
             });
         }
 
@@ -839,14 +863,16 @@ export const verifyPaymobPaymentBulk = async (req, res) => {
         });
 
         return res.status(200).json({
-            message: "Paymob bulk payment verified successfully",
+            message: "Paymob payment verified successfully",
             invoiceIds: invoices.map((invoice) => invoice.id),
             transactionId: transaction.id,
             orderId: transaction?.order?.id || null,
             status: "paid",
+            semester: paymentContext.semester,
+            year: paymentContext.year,
         });
     } catch (err) {
-        logger.error("Error verifying bulk Paymob payment:", err);
+        logger.error("Error verifying Paymob payment:", err);
 
         if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
             return res.status(400).json({
@@ -865,53 +891,53 @@ export const verifyPaymobPaymentBulk = async (req, res) => {
 export const capturePayPalOrder = async (req, res) => {
     try {
         const studentId = req.user.id;
-        const invoiceId = Number.parseInt(req.params.invoiceId);
         const { orderId } = req.body || {};
 
-        if (!Number.isInteger(invoiceId)) {
-            return res.status(400).json({ error: "Invalid invoice id" });
+        if (!orderId || typeof orderId !== "string") {
+            return res.status(400).json({ error: "orderId is required" });
         }
 
-        const invoice = await prisma.invoices.findFirst({
-            where: {
-                id: invoiceId,
-                student_user_id: studentId,
-            },
+        const paymentContext = await resolveOpenPaymentContext();
+        if (!paymentContext.ok) {
+            return res.status(paymentContext.status).json(paymentContext.body);
+        }
+
+        const invoices = await getPendingSemesterInvoices({
+            studentId,
+            semester: paymentContext.semester,
+            year: paymentContext.year,
+            paypalOrderId: orderId,
         });
 
-        if (!invoice) {
-            return res.status(404).json({ error: "Invoice not found" });
-        }
+        if (invoices.length === 0) {
+            const existingSemesterPayment =
+                await prisma.student_payments.findUnique({
+                    where: {
+                        student_user_id_semester_year: {
+                            student_user_id: studentId,
+                            semester: paymentContext.semester,
+                            year: paymentContext.year,
+                        },
+                    },
+                });
 
-        if (invoice.status === "paid") {
-            return res.status(200).json({
-                message: "Invoice is already paid",
-                invoiceId: invoice.id,
-            });
-        }
+            if (existingSemesterPayment) {
+                return res.status(200).json({
+                    message: "Semester payment already completed",
+                    payment: mapStudentPayment(existingSemesterPayment),
+                    status: "paid",
+                });
+            }
 
-        const captureOrderId = orderId || invoice.paypal_order_id;
-
-        if (!captureOrderId) {
-            return res.status(400).json({
-                error: "No PayPal order found for this invoice. Create order first.",
-            });
-        }
-
-        if (
-            invoice.paypal_order_id &&
-            orderId &&
-            invoice.paypal_order_id !== orderId
-        ) {
-            return res.status(400).json({
-                error: "Provided orderId does not match this invoice",
+            return res.status(404).json({
+                error: "No pending invoices found for this order in the active payment period",
             });
         }
 
         const captureResult = await captureAndMarkInvoicesPaid({
             studentId,
-            orderId: captureOrderId,
-            invoices: [invoice],
+            orderId,
+            invoices,
         });
 
         return res.status(captureResult.status).json(captureResult.body);
@@ -924,45 +950,77 @@ export const capturePayPalOrder = async (req, res) => {
 
         if (isComplianceViolation) {
             if (shouldBypassSandboxCompliance) {
-                const invoiceId = Number.parseInt(req.params.invoiceId);
-                const invoice = await prisma.invoices.findFirst({
-                    where: {
-                        id: invoiceId,
-                        student_user_id: req.user.id,
-                    },
+                const studentId = req.user.id;
+                const { orderId } = req.body || {};
+
+                const paymentContext = await resolveOpenPaymentContext();
+                if (!paymentContext.ok) {
+                    return res
+                        .status(paymentContext.status)
+                        .json(paymentContext.body);
+                }
+
+                const invoices = await getPendingSemesterInvoices({
+                    studentId,
+                    semester: paymentContext.semester,
+                    year: paymentContext.year,
+                    paypalOrderId: orderId,
                 });
 
-                if (invoice) {
-                    const mockTransactionId = `sandbox_bypass_${Date.now()}:${
-                        invoice.id
-                    }`;
+                if (invoices.length > 0) {
+                    const paidAt = new Date();
                     await prisma.$transaction(async (tx) => {
-                        await tx.invoices.update({
-                            where: { id: invoice.id },
+                        await tx.invoices.updateMany({
+                            where: {
+                                id: {
+                                    in: invoices.map((invoice) => invoice.id),
+                                },
+                            },
                             data: {
                                 status: "paid",
-                                payment_date: new Date(),
+                                payment_date: paidAt,
                             },
                         });
 
-                        await tx.payments.create({
-                            data: {
-                                invoice_id: invoice.id,
-                                gateway: "paypal",
-                                transaction_id: mockTransactionId,
-                                amount: toMoneyString(invoice.total_amount),
-                                status: "paid",
-                            },
+                        for (const invoice of invoices) {
+                            await tx.payments.create({
+                                data: {
+                                    invoice_id: invoice.id,
+                                    gateway: "paypal",
+                                    transaction_id: `sandbox_bypass_${Date.now()}:${invoice.id}`,
+                                    amount: toMoneyString(invoice.total_amount),
+                                    status: "paid",
+                                },
+                            });
+                        }
+
+                        const totalAmount = invoices.reduce(
+                            (sum, invoice) =>
+                                sum + Number.parseFloat(invoice.total_amount),
+                            0,
+                        );
+
+                        await createOrUpdateStudentPaymentRecord({
+                            tx,
+                            studentId,
+                            semester: paymentContext.semester,
+                            year: paymentContext.year,
+                            totalAmount,
+                            invoiceCount: invoices.length,
+                            gateway: "paypal",
+                            transactionId: `sandbox_bypass_${Date.now()}`,
+                            paidAt,
                         });
                     });
 
                     return res.status(200).json({
                         message:
                             "Payment marked as paid using sandbox compliance bypass",
-                        invoiceId: invoice.id,
-                        transactionId: mockTransactionId,
+                        invoiceIds: invoices.map((invoice) => invoice.id),
                         status: "paid",
                         bypassed: true,
+                        semester: paymentContext.semester,
+                        year: paymentContext.year,
                         paypalDebugId: err.paypalDebugId || null,
                     });
                 }
@@ -979,124 +1037,6 @@ export const capturePayPalOrder = async (req, res) => {
             return res.status(400).json({
                 error: "Payer has not approved this order yet. Open approveUrl from create-order response, approve payment, then retry capture.",
                 paypalDebugId: err.paypalDebugId || null,
-            });
-        }
-
-        if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
-            return res.status(400).json({
-                error: err.message || "PayPal rejected this payment request",
-                paypalDebugId: err.paypalDebugId || null,
-                paypalIssue: err.paypalIssue || null,
-            });
-        }
-
-        return res.status(500).json({
-            error: err.message || "Failed to capture payment",
-            paypalDebugId: err.paypalDebugId || null,
-        });
-    }
-};
-
-export const capturePayPalOrderBulk = async (req, res) => {
-    try {
-        const studentId = req.user.id;
-        const { orderId } = req.body || {};
-
-        if (!orderId || typeof orderId !== "string") {
-            return res.status(400).json({ error: "orderId is required" });
-        }
-
-        const { payAll, invoiceIds } = parseInvoiceSelection(req.body || {});
-
-        const invoices = await prisma.invoices.findMany({
-            where: {
-                student_user_id: studentId,
-                status: "pending",
-                paypal_order_id: orderId,
-                ...(payAll
-                    ? {}
-                    : invoiceIds.length > 0
-                    ? { id: { in: invoiceIds } }
-                    : {}),
-            },
-            orderBy: { id: "asc" },
-        });
-
-        if (invoices.length === 0) {
-            return res.status(404).json({
-                error: "No pending invoices found for this order",
-            });
-        }
-
-        const captureResult = await captureAndMarkInvoicesPaid({
-            studentId,
-            orderId,
-            invoices,
-        });
-
-        return res.status(captureResult.status).json(captureResult.body);
-    } catch (err) {
-        logger.error("Error capturing bulk PayPal order:", err);
-
-        const isComplianceViolation =
-            err.paypalIssue === "COMPLIANCE_VIOLATION" ||
-            err.message?.toLowerCase().includes("compliance violation");
-
-        if (isComplianceViolation) {
-            if (shouldBypassSandboxCompliance) {
-                const { orderId } = req.body || {};
-                const invoices = await prisma.invoices.findMany({
-                    where: {
-                        student_user_id: req.user.id,
-                        status: "pending",
-                        paypal_order_id: orderId,
-                    },
-                });
-
-                if (invoices.length > 0) {
-                    await prisma.$transaction(async (tx) => {
-                        await tx.invoices.updateMany({
-                            where: {
-                                id: {
-                                    in: invoices.map((invoice) => invoice.id),
-                                },
-                            },
-                            data: {
-                                status: "paid",
-                                payment_date: new Date(),
-                            },
-                        });
-
-                        for (const invoice of invoices) {
-                            await tx.payments.create({
-                                data: {
-                                    invoice_id: invoice.id,
-                                    gateway: "paypal",
-                                    transaction_id: `sandbox_bypass_${Date.now()}:${
-                                        invoice.id
-                                    }`,
-                                    amount: toMoneyString(invoice.total_amount),
-                                    status: "paid",
-                                },
-                            });
-                        }
-                    });
-
-                    return res.status(200).json({
-                        message:
-                            "Payment marked as paid using sandbox compliance bypass",
-                        invoiceIds: invoices.map((invoice) => invoice.id),
-                        status: "paid",
-                        bypassed: true,
-                        paypalDebugId: err.paypalDebugId || null,
-                    });
-                }
-            }
-
-            return res.status(400).json({
-                error: "Transaction blocked by PayPal due to compliance checks. Please contact PayPal support and provide paypalDebugId.",
-                paypalDebugId: err.paypalDebugId || null,
-                paypalIssue: err.paypalIssue || null,
             });
         }
 

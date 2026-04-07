@@ -17,7 +17,8 @@ export default {
                     "- Returns **all** offerings for the semester with no eligibility filtering.",
                     "- `enrolled` flag is not included.",
                     "",
-                    "Use the `semester` query parameter to switch between semesters. Defaults to the most recent semester in the database.",
+                    "Use `semester` and optional `year` query parameters to select a target term. Defaults to the most recent offering in the database.",
+                    "Response includes `registrationPeriod` metadata so clients can show whether registration is currently open.",
                 ].join("\n"),
                 security: [{ bearerAuth: [] }],
                 parameters: [
@@ -27,10 +28,21 @@ export default {
                         required: false,
                         schema: {
                             type: "string",
-                            example: "Fall 2025",
+                            example: "Fall",
                         },
                         description:
-                            "Semester to fetch offerings for (e.g. `Fall 2025`, `Spring 2026`). Omit to use the latest available semester.",
+                            "Semester to fetch offerings for (e.g. `Fall`, `Spring`). Omit to use latest available semester.",
+                    },
+                    {
+                        name: "year",
+                        in: "query",
+                        required: false,
+                        schema: {
+                            type: "integer",
+                            example: 2026,
+                        },
+                        description:
+                            "Academic year for the selected semester. Omit to use latest available year for that semester.",
                     },
                 ],
                 responses: {
@@ -43,7 +55,8 @@ export default {
                                     $ref: "#/components/schemas/AvailableOfferingsResponse",
                                 },
                                 example: {
-                                    semester: "Spring 2026",
+                                    semester: "Spring",
+                                    year: 2026,
                                     offerings: [
                                         {
                                             offeringId: 3,
@@ -101,6 +114,14 @@ export default {
                                             ],
                                         },
                                     ],
+                                    registrationPeriod: {
+                                        isOpen: true,
+                                        semester: "Spring",
+                                        year: 2026,
+                                        startDate: "2026-01-10",
+                                        endDate: "2026-01-24",
+                                        nextOpenDate: null,
+                                    },
                                 },
                             },
                         },
@@ -147,6 +168,7 @@ export default {
                     "  - Each new session against the student's **already-enrolled** sessions.",
                     "- If any lecture or lab is **at full capacity**, the entire registration is rejected.",
                     "- If the student is **already enrolled** in a lecture, the registration is rejected.",
+                    "- Registration must be within an open registration period for the active semester.",
                     "- Each successful enrollment generates a **pending invoice**: `credit_price × credit_hours`.",
                     "",
                     "### Important",
@@ -268,13 +290,40 @@ export default {
                     },
                     403: {
                         description:
-                            "Forbidden — only students and leaders can register",
+                            "Forbidden (role) or registration period is closed",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/ErrorResponse",
+                                    oneOf: [
+                                        {
+                                            $ref: "#/components/schemas/ErrorResponse",
+                                        },
+                                        {
+                                            $ref: "#/components/schemas/RegistrationClosedResponse",
+                                        },
+                                    ],
                                 },
-                                example: { error: "Forbidden" },
+                                examples: {
+                                    forbidden: {
+                                        summary:
+                                            "Forbidden — only students and leaders can register",
+                                        value: { error: "Forbidden" },
+                                    },
+                                    registrationClosed: {
+                                        summary: "Registration period closed",
+                                        value: {
+                                            error: "Registration is currently closed",
+                                            registrationPeriod: {
+                                                isOpen: false,
+                                                semester: "Fall",
+                                                year: 2026,
+                                                startDate: "2026-08-01",
+                                                endDate: "2026-08-15",
+                                                nextOpenDate: null,
+                                            },
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
@@ -493,7 +542,7 @@ export default {
                     "- Both the lecture and the associated lab are fully removed.",
                     "- Billing behavior:",
                     "  - Unpaid invoice (`pending`/`failed`) for that enrollment is deleted.",
-                    "  - Paid invoice is refunded via PayPal and marked as `refunded`.",
+                    "  - Paid invoice is refunded via PayPal and marked as `refunded` (only while registration period is open).",
                     "- Use this to completely drop a course.",
                     "",
                     "### Unregister from a lab only — provide `tutorialLabId`",
@@ -501,6 +550,8 @@ export default {
                     "- The **lecture enrollment is kept** — the student remains registered for the course.",
                     "- No refund is performed for lab-only unregister.",
                     "- Use `POST /registration/register-lab` afterwards to pick a different lab.",
+                    "",
+                    "If registration period is closed, unregistration and refunds are blocked.",
                     "",
                     "**Only one of `lectureId` or `tutorialLabId` should be provided per request.**",
                 ].join("\n"),
@@ -625,13 +676,40 @@ export default {
                     },
                     403: {
                         description:
-                            "Forbidden — only students and leaders can unregister",
+                            "Forbidden (role) or registration period is closed",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/ErrorResponse",
+                                    oneOf: [
+                                        {
+                                            $ref: "#/components/schemas/ErrorResponse",
+                                        },
+                                        {
+                                            $ref: "#/components/schemas/RegistrationClosedResponse",
+                                        },
+                                    ],
                                 },
-                                example: { error: "Forbidden" },
+                                examples: {
+                                    forbidden: {
+                                        summary:
+                                            "Forbidden — only students and leaders can unregister",
+                                        value: { error: "Forbidden" },
+                                    },
+                                    registrationClosed: {
+                                        summary: "Registration period closed",
+                                        value: {
+                                            error: "Registration is currently closed. Unregistration and refunds are disabled.",
+                                            registrationPeriod: {
+                                                isOpen: false,
+                                                semester: "Fall",
+                                                year: 2026,
+                                                startDate: "2026-08-01",
+                                                endDate: "2026-08-15",
+                                                nextOpenDate: null,
+                                            },
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
@@ -775,12 +853,55 @@ export default {
                     semester: {
                         type: "string",
                         description: "The semester these offerings belong to",
-                        example: "Spring 2026",
+                        example: "Spring",
+                    },
+                    year: {
+                        type: "integer",
+                        description: "Academic year for the selected semester",
+                        example: 2026,
                     },
                     offerings: {
                         type: "array",
                         description: "List of available course offerings",
                         items: { $ref: "#/components/schemas/CourseOffering" },
+                    },
+                    registrationPeriod: {
+                        $ref: "#/components/schemas/RegistrationPeriodInfo",
+                    },
+                },
+            },
+
+            RegistrationPeriodInfo: {
+                type: "object",
+                properties: {
+                    isOpen: {
+                        type: "boolean",
+                        example: true,
+                    },
+                    semester: {
+                        type: "string",
+                        nullable: true,
+                        example: "Fall",
+                    },
+                    year: {
+                        type: "integer",
+                        nullable: true,
+                        example: 2026,
+                    },
+                    startDate: {
+                        type: "string",
+                        nullable: true,
+                        example: "2026-08-01",
+                    },
+                    endDate: {
+                        type: "string",
+                        nullable: true,
+                        example: "2026-08-15",
+                    },
+                    nextOpenDate: {
+                        type: "string",
+                        nullable: true,
+                        example: null,
                     },
                 },
             },
@@ -1000,6 +1121,19 @@ export default {
                         type: "string",
                         description: "Human-readable error message",
                         example: "Internal server error",
+                    },
+                },
+            },
+
+            RegistrationClosedResponse: {
+                type: "object",
+                properties: {
+                    error: {
+                        type: "string",
+                        example: "Registration is currently closed",
+                    },
+                    registrationPeriod: {
+                        $ref: "#/components/schemas/RegistrationPeriodInfo",
                     },
                 },
             },

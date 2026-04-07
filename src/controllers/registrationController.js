@@ -2,6 +2,10 @@ import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
 import { sendNotification } from "../utils/notificationService.js";
 import { paypalRequest, validatePayPalConfig } from "../config/paypal.js";
+import {
+    getCurrentSemester,
+    getRegistrationPeriod,
+} from "../utils/periodHelpers.js";
 
 /**
  * Helper function to check if two time slots overlap
@@ -42,25 +46,198 @@ const extractCaptureId = (transactionId) => {
         : transactionId;
 };
 
+const parseSemesterQuery = (semesterQuery, yearQuery) => {
+    const cleanedSemester =
+        typeof semesterQuery === "string" ? semesterQuery.trim() : "";
+    const semesterToken = cleanedSemester
+        ? cleanedSemester.split(" ")[0]
+        : null;
+
+    const yearFromSemester = Number.parseInt(cleanedSemester.split(" ")[1], 10);
+    const parsedYearQuery = Number.parseInt(yearQuery, 10);
+
+    return {
+        semester: semesterToken,
+        year: Number.isInteger(parsedYearQuery)
+            ? parsedYearQuery
+            : Number.isInteger(yearFromSemester)
+              ? yearFromSemester
+              : null,
+    };
+};
+
+const MANUAL_REGISTRATION_ALLOWED_ROLES = ["student", "leader"];
+
+const normalizeDayName = (day) => {
+    const dayMap = {
+        sun: "Sunday",
+        mon: "Monday",
+        tue: "Tuesday",
+        wed: "Wednesday",
+        thu: "Thursday",
+        fri: "Friday",
+        sat: "Saturday",
+        sunday: "Sunday",
+        monday: "Monday",
+        tuesday: "Tuesday",
+        wednesday: "Wednesday",
+        thursday: "Thursday",
+        friday: "Friday",
+        saturday: "Saturday",
+    };
+
+    return dayMap[String(day || "").toLowerCase()] || day;
+};
+
+const formatTimeCairo = (dateTime) => {
+    if (!dateTime) return null;
+    return new Intl.DateTimeFormat("en-US", {
+        timeZone: "Africa/Cairo",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).format(new Date(dateTime));
+};
+
+const resolveManualRegistrationTargetStudent = async (studentId) => {
+    if (!studentId || typeof studentId !== "string") {
+        return {
+            ok: false,
+            status: 400,
+            body: { error: "studentId path parameter is required" },
+        };
+    }
+
+    const student = await prisma.users.findUnique({
+        where: { id: studentId },
+        select: {
+            id: true,
+            full_name: true,
+            email: true,
+            role: true,
+        },
+    });
+
+    if (!student) {
+        return {
+            ok: false,
+            status: 404,
+            body: { error: "Student/leader user not found" },
+        };
+    }
+
+    if (!MANUAL_REGISTRATION_ALLOWED_ROLES.includes(student.role)) {
+        return {
+            ok: false,
+            status: 400,
+            body: {
+                error: "Manual course registration is only supported for users with role student or leader",
+            },
+        };
+    }
+
+    return { ok: true, student };
+};
+
+const runWithStudentContext = async ({ req, studentId, runner }) => {
+    const originalUser = req.user;
+    const originalManualRegistrationBypass = req.manualRegistrationBypass;
+
+    req.user = {
+        ...originalUser,
+        id: studentId,
+        userId: studentId,
+    };
+    req.manualRegistrationBypass = true;
+
+    try {
+        return await runner();
+    } finally {
+        req.user = originalUser;
+        req.manualRegistrationBypass = originalManualRegistrationBypass;
+    }
+};
+
+const mapEnrollmentInvoice = (invoice) => {
+    if (!invoice) return null;
+
+    return {
+        id: invoice.id,
+        course_code: invoice.course_code,
+        semester: invoice.semester,
+        year: invoice.year,
+        credit_hours: invoice.credit_hours,
+        credit_price: Number.parseFloat(invoice.credit_price),
+        total_amount: Number.parseFloat(invoice.total_amount),
+        status: invoice.status,
+        payment_date: invoice.payment_date,
+        created_at: invoice.created_at,
+        payments: (invoice.payments || []).map((payment) => ({
+            id: payment.id,
+            gateway: payment.gateway,
+            transaction_id: payment.transaction_id,
+            amount: Number.parseFloat(payment.amount),
+            status: payment.status,
+            created_at: payment.created_at,
+        })),
+    };
+};
+
 // GET /api/registration/available-offerings
 export const getAvailableOfferings = async (req, res) => {
     try {
         const userId = req.user.id;
         const userRole = req.user.role;
 
-        // Resolve semester
-        let currentSemester = req.query.semester;
-        if (!currentSemester) {
-            const latestOffering = await prisma.course_offerings.findFirst({
-                orderBy: { semester: "desc" },
-                select: { semester: true },
-            });
-            currentSemester = latestOffering?.semester || "Fall 2025";
+        // Resolve semester/year from query, then fall back to latest offering.
+        const parsedSemesterQuery = parseSemesterQuery(
+            req.query.semester,
+            req.query.year,
+        );
+
+        let currentSemester = parsedSemesterQuery.semester;
+        let currentYear = parsedSemesterQuery.year;
+
+        if (!currentSemester || !currentYear) {
+            const latestOffering = await getCurrentSemester();
+
+            if (!latestOffering) {
+                return res.status(404).json({
+                    error: "No course offerings found",
+                });
+            }
+
+            currentSemester = currentSemester || latestOffering.semester;
+            currentYear = currentYear || latestOffering.year;
         }
+
+        if (!currentYear) {
+            const latestForSemester = await prisma.course_offerings.findFirst({
+                where: { semester: currentSemester },
+                orderBy: [{ year: "desc" }, { offering_id: "desc" }],
+                select: { year: true },
+            });
+
+            currentYear = latestForSemester?.year || null;
+        }
+
+        if (!currentSemester || !currentYear) {
+            return res.status(400).json({
+                error: "Unable to resolve semester/year for offerings",
+            });
+        }
+
+        const registrationPeriod = await getRegistrationPeriod(
+            currentSemester,
+            currentYear,
+        );
 
         // Fetch all course offerings for the semester (shared base query)
         const courseOfferings = await prisma.course_offerings.findMany({
-            where: { semester: currentSemester },
+            where: {
+                semester: currentSemester,
+                year: currentYear,
+            },
             include: {
                 courses: true,
                 lectures: {
@@ -79,7 +256,7 @@ export const getAvailableOfferings = async (req, res) => {
         // --- Staff / Admin view: return all offerings with no filtering ---
         if (
             ["doctor", "teaching_assistant", "admin", "super_admin"].includes(
-                userRole
+                userRole,
             )
         ) {
             const offerings = courseOfferings.map((offering) => ({
@@ -117,8 +294,10 @@ export const getAvailableOfferings = async (req, res) => {
 
             return res.status(200).json({
                 semester: currentSemester,
+                year: currentYear,
                 total: offerings.length,
                 offerings,
+                registrationPeriod,
             });
         }
 
@@ -133,8 +312,8 @@ export const getAvailableOfferings = async (req, res) => {
         });
         const completedCourseCodes = new Set(
             completedEnrollments.map(
-                (en) => en.lectures.course_offerings.course_code
-            )
+                (en) => en.lectures.course_offerings.course_code,
+            ),
         );
 
         // Current active enrollments to mark as already enrolled
@@ -143,10 +322,10 @@ export const getAvailableOfferings = async (req, res) => {
             select: { lecture_id: true, tutorial_lab_id: true },
         });
         const enrolledLectureIds = new Set(
-            currentEnrollments.map((en) => en.lecture_id)
+            currentEnrollments.map((en) => en.lecture_id),
         );
         const enrolledTutorialLabIds = new Set(
-            currentEnrollments.map((en) => en.tutorial_lab_id)
+            currentEnrollments.map((en) => en.tutorial_lab_id),
         );
 
         // Build prerequisite map: course_code -> [prerequisite_codes]
@@ -172,7 +351,7 @@ export const getAvailableOfferings = async (req, res) => {
             // Skip if prerequisites not met
             const requiredPrereqs = prerequisiteMap.get(courseCode) || [];
             const hasAllPrereqs = requiredPrereqs.every((prereq) =>
-                completedCourseCodes.has(prereq)
+                completedCourseCodes.has(prereq),
             );
             if (!hasAllPrereqs) continue;
 
@@ -218,7 +397,9 @@ export const getAvailableOfferings = async (req, res) => {
 
         res.status(200).json({
             semester: currentSemester,
+            year: currentYear,
             offerings: availableOfferings,
+            registrationPeriod,
         });
     } catch (err) {
         logger.error("Error fetching available offerings:", err);
@@ -245,6 +426,28 @@ export const registerCourses = async (req, res) => {
         if (selectedLectureIds.length === 0 && selectedLabIds.length === 0) {
             return res.status(400).json({
                 error: "Must select at least one lecture or lab",
+            });
+        }
+
+        const activeSemester = await getCurrentSemester();
+
+        if (!activeSemester) {
+            return res.status(404).json({
+                error: "No active semester found for registration",
+            });
+        }
+
+        const registrationPeriod = await getRegistrationPeriod(
+            activeSemester.semester,
+            activeSemester.year,
+        );
+
+        const bypassRegistrationPeriod = req.manualRegistrationBypass === true;
+
+        if (!registrationPeriod.isOpen && !bypassRegistrationPeriod) {
+            return res.status(403).json({
+                error: "Registration is currently closed",
+                registrationPeriod,
             });
         }
 
@@ -276,14 +479,31 @@ export const registerCourses = async (req, res) => {
             },
         });
 
+        const selectedOfferings = [
+            ...lectures.map((lecture) => lecture.course_offerings),
+            ...labs.map((lab) => lab.course_offerings),
+        ];
+
+        const isOutsideActiveRegistrationWindow = selectedOfferings.some(
+            (offering) =>
+                offering.semester !== activeSemester.semester ||
+                offering.year !== activeSemester.year,
+        );
+
+        if (isOutsideActiveRegistrationWindow) {
+            return res.status(400).json({
+                error: `Registration is only allowed for ${activeSemester.semester} ${activeSemester.year} during the active window`,
+            });
+        }
+
         const departmentIds = [
             ...new Set(
                 lectures
                     .map(
                         (lecture) =>
-                            lecture.course_offerings.courses.department_id
+                            lecture.course_offerings.courses.department_id,
                     )
-                    .filter(Boolean)
+                    .filter(Boolean),
             ),
         ];
 
@@ -299,11 +519,11 @@ export const registerCourses = async (req, res) => {
             financialRows.map((row) => [
                 row.department_id,
                 Number.parseFloat(row.credit_price),
-            ])
+            ]),
         );
 
         const missingFinancialDepartments = departmentIds.filter(
-            (departmentId) => !creditPriceByDepartment.has(departmentId)
+            (departmentId) => !creditPriceByDepartment.has(departmentId),
         );
 
         if (missingFinancialDepartments.length > 0) {
@@ -392,7 +612,7 @@ export const registerCourses = async (req, res) => {
                     sessionA.start_time,
                     sessionA.end_time,
                     sessionB.start_time,
-                    sessionB.end_time
+                    sessionB.end_time,
                 )
             ) {
                 throw {
@@ -400,11 +620,11 @@ export const registerCourses = async (req, res) => {
                     message: `Schedule conflict on ${sessionA.day_of_week}: ${
                         sessionA.courseName
                     } (${sessionA.courseCode}) [${formatTime(
-                        sessionA.start_time
+                        sessionA.start_time,
                     )}-${formatTime(sessionA.end_time)}] overlaps with ${
                         sessionB.courseName
                     } (${sessionB.courseCode}) [${formatTime(
-                        sessionB.start_time
+                        sessionB.start_time,
                     )}-${formatTime(sessionB.end_time)}]`,
                 };
             }
@@ -462,18 +682,18 @@ export const registerCourses = async (req, res) => {
 
                     if (freshLecture.enrolled_count >= freshLecture.capacity) {
                         throw new Error(
-                            `Lecture ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) is full`
+                            `Lecture ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code}) is full`,
                         );
                     }
 
                     // Find corresponding lab(s) for this offering
                     const courseLabs = labs.filter(
-                        (lab) => lab.offering_id === lecture.offering_id
+                        (lab) => lab.offering_id === lecture.offering_id,
                     );
 
                     if (courseLabs.length === 0) {
                         throw new Error(
-                            `No lab selected for course ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code})`
+                            `No lab selected for course ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code})`,
                         );
                     }
 
@@ -486,7 +706,7 @@ export const registerCourses = async (req, res) => {
 
                         if (freshLab.enrolled_count >= freshLab.capacity) {
                             throw new Error(
-                                `Lab ${lab.group} for ${lecture.course_offerings.courses.name} is full`
+                                `Lab ${lab.group} for ${lecture.course_offerings.courses.name} is full`,
                             );
                         }
 
@@ -503,7 +723,7 @@ export const registerCourses = async (req, res) => {
 
                         if (existingEnrollment) {
                             throw new Error(
-                                `Already enrolled in ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code})`
+                                `Already enrolled in ${lecture.course_offerings.courses.name} (${lecture.course_offerings.course_code})`,
                             );
                         }
 
@@ -571,9 +791,9 @@ export const registerCourses = async (req, res) => {
             await sendNotification({
                 userId: studentId,
                 message: `You have successfully registered for: ${courseNames.join(
-                    ", "
+                    ", ",
                 )}. A bill of $${result.totalBilled.toFixed(
-                    2
+                    2,
                 )} was added to your account.`,
                 type: "general",
                 io,
@@ -591,7 +811,7 @@ export const registerCourses = async (req, res) => {
                         status: invoice.status,
                     })),
                     totalBilled: Number.parseFloat(
-                        result.totalBilled.toFixed(2)
+                        result.totalBilled.toFixed(2),
                     ),
                     currency: "USD",
                 },
@@ -736,7 +956,7 @@ export const registerLab = async (req, res) => {
                         newLabSession.start_time,
                         newLabSession.end_time,
                         s.start_time,
-                        s.end_time
+                        s.end_time,
                     )
                 ) {
                     return res.status(400).json({
@@ -745,13 +965,13 @@ export const registerLab = async (req, res) => {
                         }: ${newLabSession.courseName} (${
                             newLabSession.courseCode
                         }) [${formatTime(
-                            newLabSession.start_time
+                            newLabSession.start_time,
                         )}-${formatTime(
-                            newLabSession.end_time
+                            newLabSession.end_time,
                         )}] overlaps with ${s.courseName} (${
                             s.courseCode
                         }) [${formatTime(s.start_time)}-${formatTime(
-                            s.end_time
+                            s.end_time,
                         )}]`,
                     });
                 }
@@ -801,6 +1021,28 @@ export const unregisterSession = async (req, res) => {
             });
         }
 
+        const activeSemester = await getCurrentSemester();
+
+        if (!activeSemester) {
+            return res.status(404).json({
+                error: "No active semester found for registration",
+            });
+        }
+
+        const registrationPeriod = await getRegistrationPeriod(
+            activeSemester.semester,
+            activeSemester.year,
+        );
+
+        const bypassRegistrationPeriod = req.manualRegistrationBypass === true;
+
+        if (!registrationPeriod.isOpen && !bypassRegistrationPeriod) {
+            return res.status(403).json({
+                error: "Registration is currently closed. Unregistration and refunds are disabled.",
+                registrationPeriod,
+            });
+        }
+
         // --- Unregister from a lecture (and its associated lab) ---
         if (lectureId) {
             const lecture = await prisma.lectures.findUnique({
@@ -830,12 +1072,12 @@ export const unregisterSession = async (req, res) => {
                 ...new Set(
                     enrollments
                         .map((e) => e.tutorial_lab_id)
-                        .filter((id) => id !== null)
+                        .filter((id) => id !== null),
                 ),
             ];
 
             const enrollmentIds = enrollments.map(
-                (enrollment) => enrollment.id
+                (enrollment) => enrollment.id,
             );
             let deletedPendingInvoices = 0;
             let refundedPaidInvoices = 0;
@@ -856,7 +1098,7 @@ export const unregisterSession = async (req, res) => {
 
                 const unpaidInvoiceIds = relatedInvoices
                     .filter((invoice) =>
-                        ["pending", "failed"].includes(invoice.status)
+                        ["pending", "failed"].includes(invoice.status),
                     )
                     .map((invoice) => invoice.id);
 
@@ -872,7 +1114,7 @@ export const unregisterSession = async (req, res) => {
                 }
 
                 const paidInvoices = relatedInvoices.filter(
-                    (invoice) => invoice.status === "paid"
+                    (invoice) => invoice.status === "paid",
                 );
 
                 for (const invoice of paidInvoices) {
@@ -888,7 +1130,7 @@ export const unregisterSession = async (req, res) => {
 
                     if (
                         isSandboxBypassTransaction(
-                            latestPaidPayment.transaction_id
+                            latestPaidPayment.transaction_id,
                         )
                     ) {
                         refundTransactionId = `sandbox_refund_${Date.now()}:${
@@ -902,7 +1144,7 @@ export const unregisterSession = async (req, res) => {
                         }
 
                         const captureId = extractCaptureId(
-                            latestPaidPayment.transaction_id
+                            latestPaidPayment.transaction_id,
                         );
 
                         if (!captureId) {
@@ -919,17 +1161,17 @@ export const unregisterSession = async (req, res) => {
                                     amount: {
                                         currency_code: "USD",
                                         value: toMoneyString(
-                                            invoice.total_amount
+                                            invoice.total_amount,
                                         ),
                                     },
                                 }),
-                            }
+                            },
                         );
 
                         const refundStatus = refundResponse?.status;
                         if (
                             !["COMPLETED", "PENDING"].includes(
-                                refundStatus || ""
+                                refundStatus || "",
                             )
                         ) {
                             return res.status(400).json({
@@ -1057,5 +1299,351 @@ export const unregisterSession = async (req, res) => {
     } catch (err) {
         logger.error("Error unregistering from course:", err);
         res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// POST /api/registration/manual-course-registration/students/:studentId/register
+export const adminRegisterCoursesForStudent = async (req, res) => {
+    try {
+        const target = await resolveManualRegistrationTargetStudent(
+            req.params.studentId,
+        );
+
+        if (!target.ok) {
+            return res.status(target.status).json(target.body);
+        }
+
+        return runWithStudentContext({
+            req,
+            studentId: target.student.id,
+            runner: () => registerCourses(req, res),
+        });
+    } catch (err) {
+        logger.error("Error in admin manual registration create:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// GET /api/registration/manual-course-registration/students/:studentId/enrollments
+export const getManualCourseRegistrationsForStudent = async (req, res) => {
+    try {
+        const target = await resolveManualRegistrationTargetStudent(
+            req.params.studentId,
+        );
+
+        if (!target.ok) {
+            return res.status(target.status).json(target.body);
+        }
+
+        const { status } = req.query;
+        const allowedStatuses = ["enrolled", "dropped", "completed"];
+
+        if (status && !allowedStatuses.includes(status)) {
+            return res.status(400).json({
+                error: `Invalid status filter. Allowed values: ${allowedStatuses.join(
+                    ", ",
+                )}`,
+            });
+        }
+
+        const enrollments = await prisma.enrollments.findMany({
+            where: {
+                student_user_id: target.student.id,
+                ...(status ? { status } : {}),
+            },
+            include: {
+                lectures: {
+                    include: {
+                        course_offerings: {
+                            include: {
+                                courses: true,
+                            },
+                        },
+                        users: {
+                            select: {
+                                id: true,
+                                full_name: true,
+                            },
+                        },
+                    },
+                },
+                tutorials_labs: {
+                    include: {
+                        course_offerings: {
+                            include: {
+                                courses: true,
+                            },
+                        },
+                        users: {
+                            select: {
+                                id: true,
+                                full_name: true,
+                            },
+                        },
+                    },
+                },
+                invoices: {
+                    include: {
+                        payments: {
+                            orderBy: { created_at: "desc" },
+                            select: {
+                                id: true,
+                                gateway: true,
+                                transaction_id: true,
+                                amount: true,
+                                status: true,
+                                created_at: true,
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: { id: "desc" },
+        });
+
+        const items = enrollments.map((enrollment) => ({
+            id: enrollment.id,
+            status: enrollment.status,
+            lecture: enrollment.lectures
+                ? {
+                      lecture_id: enrollment.lectures.lecture_id,
+                      course_code:
+                          enrollment.lectures.course_offerings.course_code,
+                      course_name:
+                          enrollment.lectures.course_offerings.courses.name,
+                      semester: enrollment.lectures.course_offerings.semester,
+                      year: enrollment.lectures.course_offerings.year,
+                      day_of_week: enrollment.lectures.day_of_week,
+                      start_time: formatTime(enrollment.lectures.start_time),
+                      end_time: formatTime(enrollment.lectures.end_time),
+                      location: enrollment.lectures.location,
+                      instructor: enrollment.lectures.users.full_name,
+                  }
+                : null,
+            tutorialLab: enrollment.tutorials_labs
+                ? {
+                      tutorial_lab_id:
+                          enrollment.tutorials_labs.tutorial_lab_id,
+                      course_code:
+                          enrollment.tutorials_labs.course_offerings
+                              .course_code,
+                      course_name:
+                          enrollment.tutorials_labs.course_offerings.courses
+                              .name,
+                      semester:
+                          enrollment.tutorials_labs.course_offerings.semester,
+                      year: enrollment.tutorials_labs.course_offerings.year,
+                      day_of_week: enrollment.tutorials_labs.day_of_week,
+                      start_time: formatTime(
+                          enrollment.tutorials_labs.start_time,
+                      ),
+                      end_time: formatTime(enrollment.tutorials_labs.end_time),
+                      location: enrollment.tutorials_labs.location,
+                      group: enrollment.tutorials_labs.group,
+                      type: enrollment.tutorials_labs.type,
+                      instructor: enrollment.tutorials_labs.users.full_name,
+                  }
+                : null,
+            invoice: mapEnrollmentInvoice(enrollment.invoices),
+        }));
+
+        return res.status(200).json({
+            student: target.student,
+            total: items.length,
+            registrations: items,
+        });
+    } catch (err) {
+        logger.error("Error getting manual student registrations:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// PATCH /api/registration/manual-course-registration/students/:studentId/register-lab
+export const adminUpdateStudentRegistrationLab = async (req, res) => {
+    try {
+        const target = await resolveManualRegistrationTargetStudent(
+            req.params.studentId,
+        );
+
+        if (!target.ok) {
+            return res.status(target.status).json(target.body);
+        }
+
+        return runWithStudentContext({
+            req,
+            studentId: target.student.id,
+            runner: () => registerLab(req, res),
+        });
+    } catch (err) {
+        logger.error("Error in admin manual registration update:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// DELETE /api/registration/manual-course-registration/students/:studentId/unregister
+export const adminDeleteStudentRegistration = async (req, res) => {
+    try {
+        const target = await resolveManualRegistrationTargetStudent(
+            req.params.studentId,
+        );
+
+        if (!target.ok) {
+            return res.status(target.status).json(target.body);
+        }
+
+        return runWithStudentContext({
+            req,
+            studentId: target.student.id,
+            runner: () => unregisterSession(req, res),
+        });
+    } catch (err) {
+        logger.error("Error in admin manual registration delete:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// GET /api/registration/manual-course-registration/students/:studentId/schedule
+export const getManualRegistrationStudentSchedule = async (req, res) => {
+    try {
+        const target = await resolveManualRegistrationTargetStudent(
+            req.params.studentId,
+        );
+
+        if (!target.ok) {
+            return res.status(target.status).json(target.body);
+        }
+
+        const { week, date } = req.query;
+        const weekOffset = Number.isInteger(Number.parseInt(week, 10))
+            ? Number.parseInt(week, 10)
+            : 0;
+
+        const enrollments = await prisma.enrollments.findMany({
+            where: {
+                student_user_id: target.student.id,
+                status: "enrolled",
+            },
+            include: {
+                lectures: {
+                    include: {
+                        course_offerings: {
+                            include: {
+                                courses: true,
+                            },
+                        },
+                        users: {
+                            select: {
+                                full_name: true,
+                            },
+                        },
+                    },
+                },
+                tutorials_labs: {
+                    include: {
+                        course_offerings: {
+                            include: {
+                                courses: true,
+                            },
+                        },
+                        users: {
+                            select: {
+                                full_name: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        const scheduleMap = new Map();
+
+        enrollments.forEach((enrollment) => {
+            if (enrollment.lectures) {
+                const lecture = enrollment.lectures;
+                const dayOfWeek = normalizeDayName(lecture.day_of_week);
+
+                if (!scheduleMap.has(dayOfWeek)) {
+                    scheduleMap.set(dayOfWeek, []);
+                }
+
+                scheduleMap.get(dayOfWeek).push({
+                    courseId: lecture.course_offerings.course_code,
+                    courseCode: lecture.course_offerings.course_code,
+                    courseName: lecture.course_offerings.courses.name,
+                    startTime: formatTimeCairo(lecture.start_time),
+                    endTime: formatTimeCairo(lecture.end_time),
+                    location: lecture.location || "TBA",
+                    instructor: lecture.users.full_name,
+                    type: "lecture",
+                });
+            }
+
+            if (enrollment.tutorials_labs) {
+                const tutorialLab = enrollment.tutorials_labs;
+                const dayOfWeek = normalizeDayName(tutorialLab.day_of_week);
+
+                if (!scheduleMap.has(dayOfWeek)) {
+                    scheduleMap.set(dayOfWeek, []);
+                }
+
+                scheduleMap.get(dayOfWeek).push({
+                    courseId: tutorialLab.course_offerings.course_code,
+                    courseCode: tutorialLab.course_offerings.course_code,
+                    courseName: tutorialLab.course_offerings.courses.name,
+                    startTime: formatTimeCairo(tutorialLab.start_time),
+                    endTime: formatTimeCairo(tutorialLab.end_time),
+                    location: tutorialLab.location || "TBA",
+                    instructor: tutorialLab.users.full_name,
+                    type: tutorialLab.type.toLowerCase(),
+                });
+            }
+        });
+
+        const daysOrder = [
+            "Sunday",
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+        ];
+
+        let baseDate = new Date();
+        if (date) {
+            const parsedDate = new Date(date);
+            if (Number.isNaN(parsedDate.getTime())) {
+                return res.status(400).json({
+                    error: "Invalid date query parameter format. Use YYYY-MM-DD",
+                });
+            }
+            baseDate = parsedDate;
+        }
+
+        const startOfWeek = new Date(baseDate);
+        startOfWeek.setDate(
+            startOfWeek.getDate() - startOfWeek.getDay() + weekOffset * 7,
+        );
+
+        const schedule = daysOrder.map((day, index) => {
+            const currentDate = new Date(startOfWeek);
+            currentDate.setDate(startOfWeek.getDate() + index);
+
+            return {
+                day,
+                date: currentDate.toISOString().split("T")[0],
+                classes: (scheduleMap.get(day) || []).sort((a, b) =>
+                    a.startTime.localeCompare(b.startTime),
+                ),
+            };
+        });
+
+        return res.status(200).json({
+            student: target.student,
+            schedule,
+        });
+    } catch (err) {
+        logger.error("Error getting manual student schedule:", err);
+        return res.status(500).json({ error: "Internal server error" });
     }
 };

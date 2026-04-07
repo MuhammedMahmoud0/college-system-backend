@@ -105,5 +105,87 @@ export default {
                 },
             },
         },
+        "/student/digital-id/front": {
+            get: {
+                tags: ["StudentProfile"],
+                summary: "Get Digital Student ID front side",
+                description:
+                    "Returns Digital Student ID front-side data for authenticated student or leader including name, student_id, department, level, issue date, and expiry date.",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "Digital Student ID front-side payload",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/DigitalStudentIdFrontResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Not authenticated",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Student/leader profile not found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/student/digital-id/back": {
+            get: {
+                tags: ["StudentProfile"],
+                summary: "Get Digital Student ID back side",
+                description:
+                    "Returns Digital Student ID back-side data including QR payload (student_id and national_id), barcode access flag, and fixed access privileges.",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "Digital Student ID back-side payload",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/DigitalStudentIdBackResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: "Not authenticated",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                    404: {
+                        description: "Student/leader profile not found",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/ErrorResponse",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
 };

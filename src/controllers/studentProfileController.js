@@ -4,6 +4,109 @@ import logger from "../utils/logger.js";
 import path from "path";
 import { userPublicSelect } from "../prisma/selectors/user.selectors.js";
 import { studentProfileSelect } from "../prisma/selectors/studentProfile.selectors.js";
+import { getCurrentSemester } from "../utils/periodHelpers.js";
+
+const DIGITAL_STUDENT_ID_SYSTEM_NAME = "Academia College";
+const DIGITAL_STUDENT_ID_IDENTITY_LABEL = "STUDENT IDENTITY";
+const DIGITAL_STUDENT_ID_PRIVILEGES = [
+    "Library Access",
+    "CS & Engineering Labs",
+    "Gym & Sports Facilities",
+];
+
+const formatOrdinal = (numberValue) => {
+    const value = Number.parseInt(numberValue, 10);
+
+    if (!Number.isInteger(value) || value <= 0) {
+        return "1st";
+    }
+
+    const mod10 = value % 10;
+    const mod100 = value % 100;
+
+    if (mod10 === 1 && mod100 !== 11) return `${value}st`;
+    if (mod10 === 2 && mod100 !== 12) return `${value}nd`;
+    if (mod10 === 3 && mod100 !== 13) return `${value}rd`;
+    return `${value}th`;
+};
+
+const normalizeSemesterToken = (semester) => {
+    if (!semester || typeof semester !== "string") return null;
+    return semester.trim().split(" ")[0] || null;
+};
+
+const resolveAcademicContext = async () => {
+    const currentSemester = await getCurrentSemester();
+
+    if (currentSemester) {
+        return {
+            semester: normalizeSemesterToken(currentSemester.semester),
+            year: currentSemester.year,
+        };
+    }
+
+    const now = new Date();
+    const month = now.getUTCMonth() + 1;
+
+    return {
+        semester:
+            month >= 9
+                ? "Fall"
+                : month >= 2 && month <= 6
+                  ? "Spring"
+                  : "Summer",
+        year: now.getUTCFullYear(),
+    };
+};
+
+const getDigitalIdDates = ({ yearLevel, semester, year }) => {
+    const safeYearLevel =
+        Number.isInteger(Number.parseInt(yearLevel, 10)) &&
+        Number.parseInt(yearLevel, 10) > 0
+            ? Number.parseInt(yearLevel, 10)
+            : 1;
+
+    const academicYearStart = semester === "Fall" ? year : year - 1;
+    const entryYear = academicYearStart - (safeYearLevel - 1);
+    const issuedDate = `${entryYear}-09-01`;
+    const expiresDate = `${entryYear + 4}-07-31`;
+
+    return {
+        yearLevel: safeYearLevel,
+        issuedDate,
+        expiresDate,
+    };
+};
+
+const getStudentOrLeaderIdentity = async (userId) => {
+    const identity = await prisma.users.findUnique({
+        where: { id: userId },
+        select: {
+            id: true,
+            full_name: true,
+            role: true,
+            national_id: true,
+            student_profiles: {
+                select: {
+                    student_id: true,
+                    year_level: true,
+                    departments: {
+                        select: {
+                            department_id: true,
+                            name: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    if (!identity || !identity.student_profiles) {
+        return null;
+    }
+
+    return identity;
+};
 
 export const getStudentProfile = async (req, res) => {
     try {
@@ -116,5 +219,81 @@ export const updateStudentProfile = async (req, res) => {
     } catch (err) {
         logger.error("Error updating profile:", err);
         res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getDigitalStudentIdFront = async (req, res) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({ error: "Not authenticated" });
+        }
+
+        const identity = await getStudentOrLeaderIdentity(user.userId);
+
+        if (!identity) {
+            return res
+                .status(404)
+                .json({ error: "Student/leader profile not found" });
+        }
+
+        const academicContext = await resolveAcademicContext();
+        const digitalIdDates = getDigitalIdDates({
+            yearLevel: identity.student_profiles.year_level,
+            semester: academicContext.semester,
+            year: academicContext.year,
+        });
+
+        return res.status(200).json({
+            system_name: DIGITAL_STUDENT_ID_SYSTEM_NAME,
+            identity_label: DIGITAL_STUDENT_ID_IDENTITY_LABEL,
+            holder: {
+                full_name: identity.full_name,
+                role: identity.role,
+                student_id: identity.student_profiles.student_id,
+                department: identity.student_profiles.departments?.name || null,
+                level: `${formatOrdinal(digitalIdDates.yearLevel)} Year`,
+                year_level: digitalIdDates.yearLevel,
+            },
+            card_validity: {
+                issued_date: digitalIdDates.issuedDate,
+                expires_date: digitalIdDates.expiresDate,
+            },
+        });
+    } catch (err) {
+        logger.error("Error getting digital student ID front:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getDigitalStudentIdBack = async (req, res) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({ error: "Not authenticated" });
+        }
+
+        const identity = await getStudentOrLeaderIdentity(user.userId);
+
+        if (!identity) {
+            return res
+                .status(404)
+                .json({ error: "Student/leader profile not found" });
+        }
+
+        return res.status(200).json({
+            system_name: DIGITAL_STUDENT_ID_SYSTEM_NAME,
+            qr_code: {
+                student_id: identity.student_profiles.student_id,
+                national_id: identity.national_id,
+            },
+            barcode: {
+                access: true,
+            },
+            access_privileges: DIGITAL_STUDENT_ID_PRIVILEGES,
+        });
+    } catch (err) {
+        logger.error("Error getting digital student ID back:", err);
+        return res.status(500).json({ error: "Internal server error" });
     }
 };

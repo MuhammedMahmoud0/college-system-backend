@@ -20,15 +20,18 @@ export default {
                         in: "query",
                         name: "academic_year",
                         schema: { type: "string" },
-                        description: 'Filter by academic year (e.g., "2026-2027")',
+                        description:
+                            'Filter by academic year (e.g., "2026-2027")',
                         required: false,
                     },
                     {
                         in: "query",
                         name: "event_type",
-                        schema: { type: "string" },
+                        schema: {
+                            $ref: "#/components/schemas/AcademicCalendarEventType",
+                        },
                         description:
-                            'Filter by event type (e.g., "semester_start", "exam_week", "holiday")',
+                            'Filter by event type (e.g., "registration_start", "registration_end", "payment_start", "payment_end", "semester_start", "exam_week", "holiday")',
                         required: false,
                     },
                 ],
@@ -79,7 +82,7 @@ export default {
                 tags: ["System Configuration"],
                 summary: "Create a new academic calendar event",
                 description:
-                    "Add a new event to the academic calendar. Requires Admin or Super Admin role.",
+                    "Add a new event to the academic calendar. For registration/payment window control, use event_type values registration_start, registration_end, payment_start, and payment_end with semester and academic_year populated. Requires Admin or Super Admin role.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
@@ -103,7 +106,8 @@ export default {
                         },
                     },
                     400: {
-                        description: "Missing required fields or invalid date format.",
+                        description:
+                            "Missing required fields or invalid date format.",
                         content: {
                             "application/json": {
                                 schema: {
@@ -382,7 +386,8 @@ export default {
                 security: [{ bearerAuth: [] }],
                 responses: {
                     200: {
-                        description: "List of active announcements visible to the user.",
+                        description:
+                            "List of active announcements visible to the user.",
                         content: {
                             "application/json": {
                                 schema: {
@@ -666,6 +671,25 @@ export default {
                 error: { type: "string", example: "Error message" },
             },
         },
+        AcademicCalendarEventType: {
+            type: "string",
+            enum: [
+                "semester_start",
+                "semester_end",
+                "registration_start",
+                "registration_end",
+                "payment_start",
+                "payment_end",
+                "registration_deadline",
+                "exam_week",
+                "midterm",
+                "final_exam",
+                "holiday",
+                "orientation",
+                "other",
+            ],
+            example: "registration_start",
+        },
         AcademicCalendarEventObject: {
             type: "object",
             properties: {
@@ -675,10 +699,13 @@ export default {
                     example: "Fall Semester Start",
                 },
                 event_type: {
-                    type: "string",
-                    example: "semester_start",
+                    allOf: [
+                        {
+                            $ref: "#/components/schemas/AcademicCalendarEventType",
+                        },
+                    ],
                     description:
-                        'Event type (e.g., semester_start, registration_deadline, exam_week, holiday, midterm, etc.)',
+                        "Event type. Payment/registration windows expect: registration_start, registration_end, payment_start, payment_end. Other event types are also allowed.",
                 },
                 event_date: {
                     type: "string",
@@ -700,7 +727,7 @@ export default {
                 semester: {
                     type: "string",
                     nullable: true,
-                    example: "Fall 2026",
+                    example: "Fall",
                 },
                 academic_year: {
                     type: "string",
@@ -773,10 +800,13 @@ export default {
                     example: "Fall Semester Start",
                 },
                 event_type: {
-                    type: "string",
-                    example: "semester_start",
+                    allOf: [
+                        {
+                            $ref: "#/components/schemas/AcademicCalendarEventType",
+                        },
+                    ],
                     description:
-                        'Event type: semester_start, semester_end, registration_deadline, exam_week, midterm, holiday, etc.',
+                        "Event type. Use registration_start/registration_end for registration windows and payment_start/payment_end for payment windows.",
                 },
                 event_date: {
                     type: "string",
@@ -798,7 +828,7 @@ export default {
                 semester: {
                     type: "string",
                     nullable: true,
-                    example: "Fall 2026",
+                    example: "Fall",
                 },
                 academic_year: {
                     type: "string",
@@ -811,7 +841,15 @@ export default {
             type: "object",
             properties: {
                 event_name: { type: "string", example: "Updated Event Name" },
-                event_type: { type: "string", example: "holiday" },
+                event_type: {
+                    allOf: [
+                        {
+                            $ref: "#/components/schemas/AcademicCalendarEventType",
+                        },
+                    ],
+                    description:
+                        "Examples: registration_start, registration_end, payment_start, payment_end, holiday.",
+                },
                 event_date: {
                     type: "string",
                     format: "date",
@@ -828,7 +866,7 @@ export default {
                     nullable: true,
                     example: "Updated description",
                 },
-                semester: { type: "string", nullable: true, example: "Fall 2026" },
+                semester: { type: "string", nullable: true, example: "Fall" },
                 academic_year: {
                     type: "string",
                     nullable: true,

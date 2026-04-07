@@ -17,7 +17,8 @@ export default {
                     "- Returns **all** offerings for the semester with no eligibility filtering.",
                     "- `enrolled` flag is not included.",
                     "",
-                    "Use the `semester` query parameter to switch between semesters. Defaults to the most recent semester in the database.",
+                    "Use `semester` and optional `year` query parameters to select a target term. Defaults to the most recent offering in the database.",
+                    "Response includes `registrationPeriod` metadata so clients can show whether registration is currently open.",
                 ].join("\n"),
                 security: [{ bearerAuth: [] }],
                 parameters: [
@@ -27,10 +28,21 @@ export default {
                         required: false,
                         schema: {
                             type: "string",
-                            example: "Fall 2025",
+                            example: "Fall",
                         },
                         description:
-                            "Semester to fetch offerings for (e.g. `Fall 2025`, `Spring 2026`). Omit to use the latest available semester.",
+                            "Semester to fetch offerings for (e.g. `Fall`, `Spring`). Omit to use latest available semester.",
+                    },
+                    {
+                        name: "year",
+                        in: "query",
+                        required: false,
+                        schema: {
+                            type: "integer",
+                            example: 2026,
+                        },
+                        description:
+                            "Academic year for the selected semester. Omit to use latest available year for that semester.",
                     },
                 ],
                 responses: {
@@ -43,7 +55,8 @@ export default {
                                     $ref: "#/components/schemas/AvailableOfferingsResponse",
                                 },
                                 example: {
-                                    semester: "Spring 2026",
+                                    semester: "Spring",
+                                    year: 2026,
                                     offerings: [
                                         {
                                             offeringId: 3,
@@ -101,6 +114,14 @@ export default {
                                             ],
                                         },
                                     ],
+                                    registrationPeriod: {
+                                        isOpen: true,
+                                        semester: "Spring",
+                                        year: 2026,
+                                        startDate: "2026-01-10",
+                                        endDate: "2026-01-24",
+                                        nextOpenDate: null,
+                                    },
                                 },
                             },
                         },
@@ -147,6 +168,7 @@ export default {
                     "  - Each new session against the student's **already-enrolled** sessions.",
                     "- If any lecture or lab is **at full capacity**, the entire registration is rejected.",
                     "- If the student is **already enrolled** in a lecture, the registration is rejected.",
+                    "- Registration must be within an open registration period for the active semester.",
                     "- Each successful enrollment generates a **pending invoice**: `credit_price × credit_hours`.",
                     "",
                     "### Important",
@@ -268,13 +290,40 @@ export default {
                     },
                     403: {
                         description:
-                            "Forbidden — only students and leaders can register",
+                            "Forbidden (role) or registration period is closed",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/ErrorResponse",
+                                    oneOf: [
+                                        {
+                                            $ref: "#/components/schemas/ErrorResponse",
+                                        },
+                                        {
+                                            $ref: "#/components/schemas/RegistrationClosedResponse",
+                                        },
+                                    ],
                                 },
-                                example: { error: "Forbidden" },
+                                examples: {
+                                    forbidden: {
+                                        summary:
+                                            "Forbidden — only students and leaders can register",
+                                        value: { error: "Forbidden" },
+                                    },
+                                    registrationClosed: {
+                                        summary: "Registration period closed",
+                                        value: {
+                                            error: "Registration is currently closed",
+                                            registrationPeriod: {
+                                                isOpen: false,
+                                                semester: "Fall",
+                                                year: 2026,
+                                                startDate: "2026-08-01",
+                                                endDate: "2026-08-15",
+                                                nextOpenDate: null,
+                                            },
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
@@ -493,7 +542,7 @@ export default {
                     "- Both the lecture and the associated lab are fully removed.",
                     "- Billing behavior:",
                     "  - Unpaid invoice (`pending`/`failed`) for that enrollment is deleted.",
-                    "  - Paid invoice is refunded via PayPal and marked as `refunded`.",
+                    "  - Paid invoice is refunded via PayPal and marked as `refunded` (only while registration period is open).",
                     "- Use this to completely drop a course.",
                     "",
                     "### Unregister from a lab only — provide `tutorialLabId`",
@@ -501,6 +550,8 @@ export default {
                     "- The **lecture enrollment is kept** — the student remains registered for the course.",
                     "- No refund is performed for lab-only unregister.",
                     "- Use `POST /registration/register-lab` afterwards to pick a different lab.",
+                    "",
+                    "If registration period is closed, unregistration and refunds are blocked.",
                     "",
                     "**Only one of `lectureId` or `tutorialLabId` should be provided per request.**",
                 ].join("\n"),
@@ -625,13 +676,40 @@ export default {
                     },
                     403: {
                         description:
-                            "Forbidden — only students and leaders can unregister",
+                            "Forbidden (role) or registration period is closed",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/ErrorResponse",
+                                    oneOf: [
+                                        {
+                                            $ref: "#/components/schemas/ErrorResponse",
+                                        },
+                                        {
+                                            $ref: "#/components/schemas/RegistrationClosedResponse",
+                                        },
+                                    ],
                                 },
-                                example: { error: "Forbidden" },
+                                examples: {
+                                    forbidden: {
+                                        summary:
+                                            "Forbidden — only students and leaders can unregister",
+                                        value: { error: "Forbidden" },
+                                    },
+                                    registrationClosed: {
+                                        summary: "Registration period closed",
+                                        value: {
+                                            error: "Registration is currently closed. Unregistration and refunds are disabled.",
+                                            registrationPeriod: {
+                                                isOpen: false,
+                                                semester: "Fall",
+                                                year: 2026,
+                                                startDate: "2026-08-01",
+                                                endDate: "2026-08-15",
+                                                nextOpenDate: null,
+                                            },
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
@@ -649,6 +727,267 @@ export default {
                 },
             },
         },
+
+        "/registration/manual-course-registration/students/{studentId}/register":
+            {
+                post: {
+                    tags: ["Manual Course Registration"],
+                    summary: "Admin manual course registration (create)",
+                    description:
+                        "Allows admin/super_admin to register a student or leader for courses using the same enrollment, conflict, capacity, and invoice creation logic used by student self-registration. This manual endpoint bypasses registration-period window checks.",
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            in: "path",
+                            name: "studentId",
+                            required: true,
+                            schema: { type: "string", format: "uuid" },
+                            description:
+                                "Target student/leader user id to register courses for",
+                        },
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/RegisterCoursesRequest",
+                                },
+                            },
+                        },
+                    },
+                    responses: {
+                        201: {
+                            description:
+                                "Manual registration created successfully",
+                            content: {
+                                "application/json": {
+                                    schema: {
+                                        $ref: "#/components/schemas/RegisterCoursesResponse",
+                                    },
+                                },
+                            },
+                        },
+                        400: { description: "Validation error" },
+                        401: { description: "Not authenticated" },
+                        403: {
+                            description: "Forbidden — admin/super_admin only",
+                        },
+                        404: { description: "Student/leader target not found" },
+                        500: { description: "Internal server error" },
+                    },
+                },
+            },
+
+        "/registration/manual-course-registration/students/{studentId}/enrollments":
+            {
+                get: {
+                    tags: ["Manual Course Registration"],
+                    summary: "Get student manual registrations (read)",
+                    description:
+                        "Returns a specific student/leader's enrollments with lecture/lab details and related invoice/payment data for admin manual registration operations.",
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            in: "path",
+                            name: "studentId",
+                            required: true,
+                            schema: { type: "string", format: "uuid" },
+                            description: "Target student/leader user id",
+                        },
+                        {
+                            in: "query",
+                            name: "status",
+                            required: false,
+                            schema: {
+                                type: "string",
+                                enum: ["enrolled", "dropped", "completed"],
+                            },
+                            description: "Optional enrollment status filter",
+                        },
+                    ],
+                    responses: {
+                        200: {
+                            description: "Student registrations retrieved",
+                            content: {
+                                "application/json": {
+                                    schema: {
+                                        $ref: "#/components/schemas/ManualStudentRegistrationsResponse",
+                                    },
+                                },
+                            },
+                        },
+                        400: { description: "Invalid query params" },
+                        401: { description: "Not authenticated" },
+                        403: {
+                            description: "Forbidden — admin/super_admin only",
+                        },
+                        404: { description: "Student/leader target not found" },
+                        500: { description: "Internal server error" },
+                    },
+                },
+            },
+
+        "/registration/manual-course-registration/students/{studentId}/register-lab":
+            {
+                patch: {
+                    tags: ["Manual Course Registration"],
+                    summary: "Update student registration lab (update)",
+                    description:
+                        "Allows admin/super_admin to update a student's registration by assigning a replacement lab to an enrolled lecture.",
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            in: "path",
+                            name: "studentId",
+                            required: true,
+                            schema: { type: "string", format: "uuid" },
+                            description: "Target student/leader user id",
+                        },
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/RegisterLabRequest",
+                                },
+                            },
+                        },
+                    },
+                    responses: {
+                        201: {
+                            description:
+                                "Student registration updated successfully",
+                            content: {
+                                "application/json": {
+                                    schema: {
+                                        $ref: "#/components/schemas/RegisterLabResponse",
+                                    },
+                                },
+                            },
+                        },
+                        400: { description: "Validation error" },
+                        401: { description: "Not authenticated" },
+                        403: {
+                            description: "Forbidden — admin/super_admin only",
+                        },
+                        404: {
+                            description:
+                                "Student/leader target, lecture, or lab not found",
+                        },
+                        500: { description: "Internal server error" },
+                    },
+                },
+            },
+
+        "/registration/manual-course-registration/students/{studentId}/unregister":
+            {
+                delete: {
+                    tags: ["Manual Course Registration"],
+                    summary: "Delete student registration (delete)",
+                    description:
+                        "Allows admin/super_admin to unregister a student from lecture/lab sessions using the same billing and refund logic used by student unregister operations. This manual endpoint bypasses registration-period window checks.",
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            in: "path",
+                            name: "studentId",
+                            required: true,
+                            schema: { type: "string", format: "uuid" },
+                            description: "Target student/leader user id",
+                        },
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/UnregisterRequest",
+                                },
+                            },
+                        },
+                    },
+                    responses: {
+                        200: {
+                            description:
+                                "Student registration deleted successfully",
+                            content: {
+                                "application/json": {
+                                    schema: {
+                                        $ref: "#/components/schemas/UnregisterResponse",
+                                    },
+                                },
+                            },
+                        },
+                        400: { description: "Validation error" },
+                        401: { description: "Not authenticated" },
+                        403: {
+                            description: "Forbidden — admin/super_admin only",
+                        },
+                        404: {
+                            description:
+                                "Student/leader target or enrollment not found",
+                        },
+                        500: { description: "Internal server error" },
+                    },
+                },
+            },
+
+        "/registration/manual-course-registration/students/{studentId}/schedule":
+            {
+                get: {
+                    tags: ["Manual Course Registration"],
+                    summary: "Get specific student schedule",
+                    description:
+                        "Allows admin/super_admin to view a specific student or leader weekly schedule based on enrolled lecture/lab sessions.",
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            in: "path",
+                            name: "studentId",
+                            required: true,
+                            schema: { type: "string", format: "uuid" },
+                            description: "Target student/leader user id",
+                        },
+                        {
+                            in: "query",
+                            name: "week",
+                            required: false,
+                            schema: { type: "integer" },
+                            description:
+                                "Week offset (0 = current week, 1 = next week, -1 = previous week)",
+                        },
+                        {
+                            in: "query",
+                            name: "date",
+                            required: false,
+                            schema: { type: "string", format: "date" },
+                            description:
+                                "Specific date (YYYY-MM-DD) to resolve the week",
+                        },
+                    ],
+                    responses: {
+                        200: {
+                            description: "Student schedule retrieved",
+                            content: {
+                                "application/json": {
+                                    schema: {
+                                        $ref: "#/components/schemas/ManualStudentScheduleResponse",
+                                    },
+                                },
+                            },
+                        },
+                        400: { description: "Invalid date query format" },
+                        401: { description: "Not authenticated" },
+                        403: {
+                            description: "Forbidden — admin/super_admin only",
+                        },
+                        404: { description: "Student/leader target not found" },
+                        500: { description: "Internal server error" },
+                    },
+                },
+            },
     },
 
     components: {
@@ -775,12 +1114,59 @@ export default {
                     semester: {
                         type: "string",
                         description: "The semester these offerings belong to",
-                        example: "Spring 2026",
+                        example: "Spring",
+                    },
+                    year: {
+                        type: "integer",
+                        description: "Academic year for the selected semester",
+                        example: 2026,
                     },
                     offerings: {
                         type: "array",
                         description: "List of available course offerings",
                         items: { $ref: "#/components/schemas/CourseOffering" },
+                    },
+                    registrationPeriod: {
+                        $ref: "#/components/schemas/RegistrationPeriodInfo",
+                    },
+                },
+            },
+
+            RegistrationPeriodInfo: {
+                type: "object",
+                properties: {
+                    isOpen: {
+                        type: "boolean",
+                        example: true,
+                    },
+                    semester: {
+                        type: "string",
+                        nullable: true,
+                        example: "Fall",
+                    },
+                    year: {
+                        type: "integer",
+                        nullable: true,
+                        example: 2026,
+                    },
+                    startDate: {
+                        type: "string",
+                        nullable: true,
+                        description:
+                            "Start date from registration_start event_date.",
+                        example: "2026-08-01",
+                    },
+                    endDate: {
+                        type: "string",
+                        nullable: true,
+                        description:
+                            "End date from registration_end event_date, or fallback to registration_start.end_date when no registration_end event exists.",
+                        example: "2026-08-15",
+                    },
+                    nextOpenDate: {
+                        type: "string",
+                        nullable: true,
+                        example: null,
                     },
                 },
             },
@@ -1000,6 +1386,230 @@ export default {
                         type: "string",
                         description: "Human-readable error message",
                         example: "Internal server error",
+                    },
+                },
+            },
+
+            RegistrationClosedResponse: {
+                type: "object",
+                properties: {
+                    error: {
+                        type: "string",
+                        example: "Registration is currently closed",
+                    },
+                    registrationPeriod: {
+                        $ref: "#/components/schemas/RegistrationPeriodInfo",
+                    },
+                },
+            },
+
+            ManualRegistrationStudent: {
+                type: "object",
+                properties: {
+                    id: { type: "string", format: "uuid" },
+                    full_name: { type: "string", example: "Sara Mohamed" },
+                    email: {
+                        type: "string",
+                        format: "email",
+                        example: "sara.mohamed@example.edu",
+                    },
+                    role: {
+                        type: "string",
+                        enum: ["student", "leader"],
+                        example: "student",
+                    },
+                },
+            },
+
+            ManualRegistrationInvoicePayment: {
+                type: "object",
+                properties: {
+                    id: { type: "integer", example: 73 },
+                    gateway: {
+                        type: "string",
+                        enum: ["paypal", "paymob"],
+                    },
+                    transaction_id: { type: "string" },
+                    amount: { type: "number", example: 900 },
+                    status: {
+                        type: "string",
+                        enum: ["pending", "paid", "failed", "refunded"],
+                    },
+                    created_at: { type: "string", format: "date-time" },
+                },
+            },
+
+            ManualRegistrationInvoice: {
+                type: "object",
+                nullable: true,
+                properties: {
+                    id: { type: "integer", example: 21 },
+                    course_code: { type: "string", example: "CS201" },
+                    semester: { type: "string", example: "Fall" },
+                    year: { type: "integer", example: 2026 },
+                    credit_hours: { type: "integer", example: 3 },
+                    credit_price: { type: "number", example: 300 },
+                    total_amount: { type: "number", example: 900 },
+                    status: {
+                        type: "string",
+                        enum: ["pending", "paid", "failed", "refunded"],
+                    },
+                    payment_date: {
+                        type: "string",
+                        format: "date-time",
+                        nullable: true,
+                    },
+                    created_at: {
+                        type: "string",
+                        format: "date-time",
+                        nullable: true,
+                    },
+                    payments: {
+                        type: "array",
+                        items: {
+                            $ref: "#/components/schemas/ManualRegistrationInvoicePayment",
+                        },
+                    },
+                },
+            },
+
+            ManualRegistrationLecture: {
+                type: "object",
+                nullable: true,
+                properties: {
+                    lecture_id: { type: "integer", example: 5 },
+                    course_code: { type: "string", example: "CS201" },
+                    course_name: {
+                        type: "string",
+                        example: "Data Structures",
+                    },
+                    semester: { type: "string", example: "Fall" },
+                    year: { type: "integer", example: 2026 },
+                    day_of_week: { type: "string", example: "Monday" },
+                    start_time: { type: "string", example: "09:00" },
+                    end_time: { type: "string", example: "10:30" },
+                    location: {
+                        type: "string",
+                        nullable: true,
+                        example: "Hall A",
+                    },
+                    instructor: {
+                        type: "string",
+                        example: "Dr. Ahmed Hassan",
+                    },
+                },
+            },
+
+            ManualRegistrationTutorialLab: {
+                type: "object",
+                nullable: true,
+                properties: {
+                    tutorial_lab_id: { type: "integer", example: 12 },
+                    course_code: { type: "string", example: "CS201" },
+                    course_name: {
+                        type: "string",
+                        example: "Data Structures",
+                    },
+                    semester: { type: "string", example: "Fall" },
+                    year: { type: "integer", example: 2026 },
+                    day_of_week: { type: "string", example: "Wednesday" },
+                    start_time: { type: "string", example: "11:00" },
+                    end_time: { type: "string", example: "12:30" },
+                    location: {
+                        type: "string",
+                        nullable: true,
+                        example: "Lab 3",
+                    },
+                    group: { type: "string", example: "G1" },
+                    type: { type: "string", example: "lab" },
+                    instructor: {
+                        type: "string",
+                        example: "Eng. Sara Khaled",
+                    },
+                },
+            },
+
+            ManualRegistrationItem: {
+                type: "object",
+                properties: {
+                    id: { type: "integer", example: 44 },
+                    status: {
+                        type: "string",
+                        enum: ["enrolled", "dropped", "completed"],
+                    },
+                    lecture: {
+                        $ref: "#/components/schemas/ManualRegistrationLecture",
+                    },
+                    tutorialLab: {
+                        $ref: "#/components/schemas/ManualRegistrationTutorialLab",
+                    },
+                    invoice: {
+                        $ref: "#/components/schemas/ManualRegistrationInvoice",
+                    },
+                },
+            },
+
+            ManualStudentRegistrationsResponse: {
+                type: "object",
+                properties: {
+                    student: {
+                        $ref: "#/components/schemas/ManualRegistrationStudent",
+                    },
+                    total: { type: "integer", example: 3 },
+                    registrations: {
+                        type: "array",
+                        items: {
+                            $ref: "#/components/schemas/ManualRegistrationItem",
+                        },
+                    },
+                },
+            },
+
+            ManualStudentScheduleClass: {
+                type: "object",
+                properties: {
+                    courseId: { type: "string", example: "CS201" },
+                    courseCode: { type: "string", example: "CS201" },
+                    courseName: {
+                        type: "string",
+                        example: "Data Structures",
+                    },
+                    startTime: { type: "string", example: "09:00" },
+                    endTime: { type: "string", example: "10:30" },
+                    location: { type: "string", example: "Hall A" },
+                    instructor: {
+                        type: "string",
+                        example: "Dr. Ahmed Hassan",
+                    },
+                    type: { type: "string", example: "lecture" },
+                },
+            },
+
+            ManualStudentScheduleDay: {
+                type: "object",
+                properties: {
+                    day: { type: "string", example: "Monday" },
+                    date: { type: "string", format: "date" },
+                    classes: {
+                        type: "array",
+                        items: {
+                            $ref: "#/components/schemas/ManualStudentScheduleClass",
+                        },
+                    },
+                },
+            },
+
+            ManualStudentScheduleResponse: {
+                type: "object",
+                properties: {
+                    student: {
+                        $ref: "#/components/schemas/ManualRegistrationStudent",
+                    },
+                    schedule: {
+                        type: "array",
+                        items: {
+                            $ref: "#/components/schemas/ManualStudentScheduleDay",
+                        },
                     },
                 },
             },

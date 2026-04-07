@@ -31,7 +31,7 @@ model announcements {
 model academic_calendar {
   id                     Int       @id @default(autoincrement())
   event_name             String
-  event_type             String    // e.g., "semester_start", "registration_deadline", "exam_week", "holiday", etc.
+  event_type             academic_calendar_event_type
   event_date             DateTime  @db.Date
   end_date               DateTime? @db.Date
   description            String?
@@ -269,6 +269,25 @@ model payments {
   @@index([status])
 }
 
+model student_payments {
+  id             Int             @id @default(autoincrement())
+  student_user_id String         @db.Uuid
+  semester       semester_type
+  year           Int
+  total_amount   Decimal         @db.Decimal
+  invoice_count  Int
+  gateway        payment_gateway
+  transaction_id String
+  paid_at        DateTime        @db.Timestamptz(6)
+  created_at     DateTime?       @default(now()) @db.Timestamptz(6)
+  users          users           @relation(fields: [student_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([student_user_id, semester, year])
+  @@unique([gateway, transaction_id])
+  @@index([student_user_id])
+  @@index([semester, year])
+}
+
 model grade_distributions {
   id         Int      @id @default(autoincrement())
   lecture_id Int      @unique
@@ -438,6 +457,7 @@ model users {
   notification_preferences     notification_preferences?
   post_comments                post_comments[]
   post_likes                   post_likes[]
+  student_payments             student_payments[]
   student_profiles             student_profiles?
   advised_students             student_profiles[] @relation("FacultyAdvisor")
   task_submissions             task_submissions[]
@@ -452,6 +472,22 @@ enum audience_type {
   All
   Students
   Faculty
+}
+
+enum academic_calendar_event_type {
+  semester_start
+  semester_end
+  registration_start
+  registration_end
+  payment_start
+  payment_end
+  registration_deadline
+  exam_week
+  midterm
+  final_exam
+  holiday
+  orientation
+  other
 }
 
 enum semester_type {

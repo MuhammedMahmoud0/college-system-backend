@@ -2,6 +2,25 @@ import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
 import { sendBulkNotification } from "../utils/notificationService.js";
 
+const ACADEMIC_CALENDAR_EVENT_TYPES = [
+    "semester_start",
+    "semester_end",
+    "registration_start",
+    "registration_end",
+    "payment_start",
+    "payment_end",
+    "registration_deadline",
+    "exam_week",
+    "midterm",
+    "final_exam",
+    "holiday",
+    "orientation",
+    "other",
+];
+
+const isValidAcademicCalendarEventType = (value) =>
+    ACADEMIC_CALENDAR_EVENT_TYPES.includes(value);
+
 // Helper: format a Date object to "HH:mm"
 const formatHHmm = (date) => {
     const d = new Date(date);
@@ -34,6 +53,14 @@ const formatAnnouncement = (announcement) => ({
 export const getAcademicCalendar = async (req, res) => {
     try {
         const { semester, academic_year, event_type } = req.query;
+
+        if (event_type && !isValidAcademicCalendarEventType(event_type)) {
+            return res.status(400).json({
+                error: `Invalid event_type. Allowed values: ${ACADEMIC_CALENDAR_EVENT_TYPES.join(
+                    ", ",
+                )}`,
+            });
+        }
 
         const where = {};
         if (semester) where.semester = semester;
@@ -86,17 +113,29 @@ export const createAcademicCalendarEvent = async (req, res) => {
             });
         }
 
+        if (!isValidAcademicCalendarEventType(event_type)) {
+            return res.status(400).json({
+                error: `Invalid event_type. Allowed values: ${ACADEMIC_CALENDAR_EVENT_TYPES.join(
+                    ", ",
+                )}`,
+            });
+        }
+
         // Validate date format
         const parsedEventDate = new Date(event_date);
         if (isNaN(parsedEventDate.getTime())) {
-            return res.status(400).json({ error: "Invalid event_date format." });
+            return res
+                .status(400)
+                .json({ error: "Invalid event_date format." });
         }
 
         let parsedEndDate = null;
         if (end_date) {
             parsedEndDate = new Date(end_date);
             if (isNaN(parsedEndDate.getTime())) {
-                return res.status(400).json({ error: "Invalid end_date format." });
+                return res
+                    .status(400)
+                    .json({ error: "Invalid end_date format." });
             }
         }
 
@@ -151,12 +190,25 @@ export const updateAcademicCalendarEvent = async (req, res) => {
         const updateData = {};
 
         if (event_name) updateData.event_name = event_name;
-        if (event_type) updateData.event_type = event_type;
+
+        if (event_type !== undefined) {
+            if (!isValidAcademicCalendarEventType(event_type)) {
+                return res.status(400).json({
+                    error: `Invalid event_type. Allowed values: ${ACADEMIC_CALENDAR_EVENT_TYPES.join(
+                        ", ",
+                    )}`,
+                });
+            }
+
+            updateData.event_type = event_type;
+        }
 
         if (event_date) {
             const parsedEventDate = new Date(event_date);
             if (isNaN(parsedEventDate.getTime())) {
-                return res.status(400).json({ error: "Invalid event_date format." });
+                return res
+                    .status(400)
+                    .json({ error: "Invalid event_date format." });
             }
             updateData.event_date = parsedEventDate;
         }
@@ -167,7 +219,9 @@ export const updateAcademicCalendarEvent = async (req, res) => {
             } else {
                 const parsedEndDate = new Date(end_date);
                 if (isNaN(parsedEndDate.getTime())) {
-                    return res.status(400).json({ error: "Invalid end_date format." });
+                    return res
+                        .status(400)
+                        .json({ error: "Invalid end_date format." });
                 }
                 updateData.end_date = parsedEndDate;
             }
@@ -175,10 +229,13 @@ export const updateAcademicCalendarEvent = async (req, res) => {
 
         if (description !== undefined) updateData.description = description;
         if (semester !== undefined) updateData.semester = semester;
-        if (academic_year !== undefined) updateData.academic_year = academic_year;
+        if (academic_year !== undefined)
+            updateData.academic_year = academic_year;
 
         if (Object.keys(updateData).length === 0) {
-            return res.status(400).json({ error: "No updatable fields provided." });
+            return res
+                .status(400)
+                .json({ error: "No updatable fields provided." });
         }
 
         const existing = await prisma.academic_calendar.findUnique({
@@ -304,8 +361,8 @@ export const createAnnouncement = async (req, res) => {
             effectiveAudience === "Students"
                 ? ["student", "leader"]
                 : effectiveAudience === "Faculty"
-                ? ["admin", "super_admin", "doctor", "teaching_assistant"]
-                : null; // null = All
+                  ? ["admin", "super_admin", "doctor", "teaching_assistant"]
+                  : null; // null = All
 
         const whereClause = audienceRoles
             ? { role: { in: audienceRoles } }
@@ -323,7 +380,7 @@ export const createAnnouncement = async (req, res) => {
                 type: "campus_announcement",
                 io,
             }).catch((err) =>
-                logger.error("Error sending announcement notifications:", err)
+                logger.error("Error sending announcement notifications:", err),
             );
         }
 
@@ -362,8 +419,8 @@ export const openRegistration = async (req, res) => {
             }).catch((err) =>
                 logger.error(
                     "Error sending registration-open notifications:",
-                    err
-                )
+                    err,
+                ),
             );
         }
 
@@ -378,12 +435,12 @@ export const openRegistration = async (req, res) => {
 
 // Maps each user role to the announcement audiences they are allowed to see
 const ROLE_AUDIENCE_MAP = {
-    admin:                ["All", "Faculty"],
-    super_admin:          ["All", "Faculty"],
-    doctor:               ["All", "Faculty"],
-    teaching_assistant:   ["All", "Faculty"],
-    student:              ["All", "Students"],
-    leader:               ["All", "Students"],
+    admin: ["All", "Faculty"],
+    super_admin: ["All", "Faculty"],
+    doctor: ["All", "Faculty"],
+    teaching_assistant: ["All", "Faculty"],
+    student: ["All", "Students"],
+    leader: ["All", "Students"],
 };
 
 /**

@@ -11,63 +11,42 @@ router.get(
     "/invoices/me",
     authMiddleware,
     authorizationMiddleware("student", "leader"),
-    paymentController.getMyInvoices
+    paymentController.getMyInvoices,
+);
+
+router.get(
+    "/me",
+    authMiddleware,
+    authorizationMiddleware("student", "leader"),
+    paymentController.getMyPayments,
 );
 
 router.post(
-    "/invoices/:invoiceId/paypal-order",
+    "/invoices/paypal-order",
     authMiddleware,
     authorizationMiddleware("student", "leader"),
-    paymentController.createPayPalOrder
+    paymentController.createPayPalOrder,
 );
 
 router.post(
-    "/invoices/:invoiceId/paymob-order",
+    "/invoices/paymob-order",
     authMiddleware,
     authorizationMiddleware("student", "leader"),
-    paymentController.createPaymobOrder
+    paymentController.createPaymobOrder,
 );
 
 router.post(
-    "/invoices/paypal-order/bulk",
+    "/invoices/capture",
     authMiddleware,
     authorizationMiddleware("student", "leader"),
-    paymentController.createPayPalOrderBulk
+    paymentController.capturePayPalOrder,
 );
 
 router.post(
-    "/invoices/paymob-order/bulk",
+    "/invoices/paymob-verify",
     authMiddleware,
     authorizationMiddleware("student", "leader"),
-    paymentController.createPaymobOrderBulk
-);
-
-router.post(
-    "/invoices/:invoiceId/capture",
-    authMiddleware,
-    authorizationMiddleware("student", "leader"),
-    paymentController.capturePayPalOrder
-);
-
-router.post(
-    "/invoices/:invoiceId/paymob-verify",
-    authMiddleware,
-    authorizationMiddleware("student", "leader"),
-    paymentController.verifyPaymobPayment
-);
-
-router.post(
-    "/invoices/paymob-verify/bulk",
-    authMiddleware,
-    authorizationMiddleware("student", "leader"),
-    paymentController.verifyPaymobPaymentBulk
-);
-
-router.post(
-    "/invoices/capture/bulk",
-    authMiddleware,
-    authorizationMiddleware("student", "leader"),
-    paymentController.capturePayPalOrderBulk
+    paymentController.verifyPaymobPayment,
 );
 
 export default router;

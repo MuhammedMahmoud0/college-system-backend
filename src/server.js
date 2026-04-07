@@ -56,16 +56,16 @@ app.use(express.json());
 
 // Convert BigInt values to strings to prevent JSON serialization errors
 BigInt.prototype.toJSON = function () {
-  return this.toString();
+    return this.toString();
 };
 
 // Sample route
 app.get("/", (req, res) => {
-  res.json({
-    status: "OK",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
+    res.json({
+        status: "OK",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+    });
 });
 
 // mount auth routes
@@ -145,32 +145,32 @@ app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));
 
 // Start the server
 let server = httpServer.listen(port, () => {
-  logger.info(`Server is running at http://localhost:${port}`);
-  logger.info(`API documentation available at http://localhost:${port}/docs`);
-  logger.info(`WebSocket server is ready on ws://localhost:${port}`);
+    logger.info(`Server is running at http://localhost:${port}`);
+    logger.info(`API documentation available at http://localhost:${port}/docs`);
+    logger.info(`WebSocket server is ready on ws://localhost:${port}`);
 });
 
 // Handle unhandled promise rejections (e.g., database connection errors)
 process.on("unhandledRejection", (err) => {
-  logger.error("Unhandled Rejection:", err);
-  server.close(async () => {
-    await disconnectDB();
-    process.exit(1);
-  });
+    logger.error("Unhandled Rejection:", err);
+    server.close(async () => {
+        await disconnectDB();
+        process.exit(1);
+    });
 });
 
 // Handle uncaught exceptions
 process.on("uncaughtException", async (err) => {
-  logger.error("Uncaught Exception:", err);
-  await disconnectDB();
-  process.exit(1);
+    logger.error("Uncaught Exception:", err);
+    await disconnectDB();
+    process.exit(1);
 });
 
 // Graceful shutdown on SIGTERM
 process.on("SIGTERM", async () => {
-  logger.info("SIGTERM received. Shutting down gracefully...");
-  server.close(async () => {
-    await disconnectDB();
-    process.exit(0);
-  });
+    logger.info("SIGTERM received. Shutting down gracefully...");
+    server.close(async () => {
+        await disconnectDB();
+        process.exit(0);
+    });
 });

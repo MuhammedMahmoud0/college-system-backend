@@ -5,7 +5,7 @@ export default {
                 tags: ["Payments"],
                 summary: "Get my invoices",
                 description:
-                    "Returns current user's invoices and payment summary. Only for student and leader roles.",
+                    "Returns current user's invoices, grouped-by-semester view, summary totals, and current registration/payment period status.",
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     {
@@ -29,321 +29,191 @@ export default {
                             },
                         },
                     },
+                    400: { description: "Invalid status filter" },
                     401: { description: "Unauthorized" },
                     403: { description: "Forbidden" },
                     500: { description: "Internal server error" },
                 },
             },
         },
-        "/payments/invoices/{invoiceId}/paypal-order": {
+        "/payments/me": {
+            get: {
+                tags: ["Payments"],
+                summary: "Get my semester payment history",
+                description:
+                    "Returns semester-level payment records from student_payments for the authenticated student/leader.",
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: {
+                        description: "Payment history retrieved",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/MyPaymentsResponse",
+                                },
+                            },
+                        },
+                    },
+                    401: { description: "Unauthorized" },
+                    403: { description: "Forbidden" },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
+        "/payments/invoices/paypal-order": {
             post: {
                 tags: ["Payments"],
-                summary: "Create PayPal order for invoice",
+                summary:
+                    "Create PayPal order for all pending semester invoices",
                 description:
-                    "Creates a PayPal checkout order for a pending invoice owned by the authenticated student/leader.",
+                    "Creates one PayPal order that covers ALL pending invoices in the active semester payment period. Partial or per-invoice payments are not supported.",
                 security: [{ bearerAuth: [] }],
-                parameters: [
-                    {
-                        in: "path",
-                        name: "invoiceId",
-                        required: true,
-                        schema: { type: "integer" },
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/PayAllRequest",
+                            },
+                        },
                     },
-                ],
+                },
                 responses: {
                     201: {
                         description: "PayPal order created",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/CreatePayPalOrderResponse",
+                                    $ref: "#/components/schemas/CreateSemesterPayPalOrderResponse",
                                 },
                             },
                         },
                     },
-                    400: { description: "Invalid request" },
+                    400: { description: "Invalid request body" },
                     401: { description: "Unauthorized" },
-                    403: { description: "Forbidden" },
-                    404: { description: "Invoice not found" },
+                    403: {
+                        description: "Payment period is closed",
+                    },
+                    404: { description: "No pending invoices found" },
                     500: { description: "Internal server error" },
                 },
             },
         },
-        "/payments/invoices/{invoiceId}/paymob-order": {
+        "/payments/invoices/paymob-order": {
             post: {
                 tags: ["Payments"],
-                summary: "Create Paymob checkout for invoice",
+                summary:
+                    "Create Paymob checkout for all pending semester invoices",
                 description:
-                    "Creates a Paymob checkout session for a pending invoice owned by the authenticated student/leader.",
+                    "Creates one Paymob checkout session that covers ALL pending invoices in the active semester payment period. Partial or per-invoice payments are not supported.",
                 security: [{ bearerAuth: [] }],
-                parameters: [
-                    {
-                        in: "path",
-                        name: "invoiceId",
-                        required: true,
-                        schema: { type: "integer" },
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/PayAllRequest",
+                            },
+                        },
                     },
-                ],
+                },
                 responses: {
                     201: {
                         description: "Paymob checkout created",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/CreatePaymobOrderResponse",
+                                    $ref: "#/components/schemas/CreateSemesterPaymobOrderResponse",
                                 },
                             },
                         },
                     },
-                    400: { description: "Invalid request" },
+                    400: { description: "Invalid request body" },
                     401: { description: "Unauthorized" },
-                    403: { description: "Forbidden" },
-                    404: { description: "Invoice not found" },
+                    403: {
+                        description: "Payment period is closed",
+                    },
+                    404: { description: "No pending invoices found" },
                     500: { description: "Internal server error" },
                 },
             },
         },
-        "/payments/invoices/paypal-order/bulk": {
+        "/payments/invoices/capture": {
             post: {
                 tags: ["Payments"],
-                summary: "Create PayPal order for multiple invoices",
+                summary: "Capture PayPal semester payment",
                 description:
-                    "Creates one PayPal order for either selected pending invoices or all pending invoices for the authenticated user.",
+                    "Captures a previously created PayPal order and marks all pending invoices in the active semester payment period as paid. Also creates/updates a student_payments record.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
                     content: {
                         "application/json": {
                             schema: {
-                                $ref: "#/components/schemas/BulkInvoiceSelectionRequest",
-                            },
-                        },
-                    },
-                },
-                responses: {
-                    201: {
-                        description: "Bulk PayPal order created",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/BulkPayPalOrderResponse",
-                                },
-                            },
-                        },
-                    },
-                    400: { description: "Invalid selection" },
-                    401: { description: "Unauthorized" },
-                    403: { description: "Forbidden" },
-                    404: { description: "No matching pending invoices" },
-                    500: { description: "Internal server error" },
-                },
-            },
-        },
-        "/payments/invoices/paymob-order/bulk": {
-            post: {
-                tags: ["Payments"],
-                summary: "Create Paymob checkout for multiple invoices",
-                description:
-                    "Creates one Paymob checkout session for selected pending invoices or all pending invoices for the authenticated user.",
-                security: [{ bearerAuth: [] }],
-                requestBody: {
-                    required: true,
-                    content: {
-                        "application/json": {
-                            schema: {
-                                $ref: "#/components/schemas/BulkInvoiceSelectionRequest",
-                            },
-                        },
-                    },
-                },
-                responses: {
-                    201: {
-                        description: "Bulk Paymob checkout created",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/BulkPaymobOrderResponse",
-                                },
-                            },
-                        },
-                    },
-                    400: { description: "Invalid selection" },
-                    401: { description: "Unauthorized" },
-                    403: { description: "Forbidden" },
-                    404: { description: "No matching pending invoices" },
-                    500: { description: "Internal server error" },
-                },
-            },
-        },
-        "/payments/invoices/{invoiceId}/capture": {
-            post: {
-                tags: ["Payments"],
-                summary: "Capture PayPal order",
-                description:
-                    "Captures a previously created PayPal order and marks invoice as paid on success.",
-                security: [{ bearerAuth: [] }],
-                parameters: [
-                    {
-                        in: "path",
-                        name: "invoiceId",
-                        required: true,
-                        schema: { type: "integer" },
-                    },
-                ],
-                requestBody: {
-                    required: false,
-                    content: {
-                        "application/json": {
-                            schema: {
-                                $ref: "#/components/schemas/CapturePayPalRequest",
+                                $ref: "#/components/schemas/CaptureSemesterPayPalRequest",
                             },
                         },
                     },
                 },
                 responses: {
                     200: {
-                        description: "Payment captured",
+                        description: "Semester payment captured",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/CapturePayPalResponse",
+                                    $ref: "#/components/schemas/CaptureSemesterPayPalResponse",
                                 },
                             },
                         },
                     },
                     400: {
                         description:
-                            "Capture failed, invalid request, or order not approved yet",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/CapturePayPalNotApprovedResponse",
-                                },
-                            },
-                        },
+                            "Capture failed, invalid order, or order not approved",
                     },
                     401: { description: "Unauthorized" },
-                    403: { description: "Forbidden" },
-                    404: { description: "Invoice not found" },
-                    500: { description: "Internal server error" },
-                },
-            },
-        },
-        "/payments/invoices/{invoiceId}/paymob-verify": {
-            post: {
-                tags: ["Payments"],
-                summary: "Verify Paymob transaction",
-                description:
-                    "Verifies a Paymob transaction for the invoice and marks it as paid when the transaction is successful.",
-                security: [{ bearerAuth: [] }],
-                parameters: [
-                    {
-                        in: "path",
-                        name: "invoiceId",
-                        required: true,
-                        schema: { type: "integer" },
+                    403: {
+                        description: "Payment period is closed",
                     },
-                ],
-                requestBody: {
-                    required: true,
-                    content: {
-                        "application/json": {
-                            schema: {
-                                $ref: "#/components/schemas/VerifyPaymobPaymentRequest",
-                            },
-                        },
-                    },
-                },
-                responses: {
-                    200: {
-                        description: "Paymob payment verified",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/VerifyPaymobPaymentResponse",
-                                },
-                            },
-                        },
-                    },
-                    400: {
-                        description: "Verification failed or invalid request",
-                    },
-                    401: { description: "Unauthorized" },
-                    403: { description: "Forbidden" },
-                    404: { description: "Invoice not found" },
-                    500: { description: "Internal server error" },
-                },
-            },
-        },
-        "/payments/invoices/paymob-verify/bulk": {
-            post: {
-                tags: ["Payments"],
-                summary: "Verify Paymob transaction for multiple invoices",
-                description:
-                    "Verifies a Paymob transaction for selected pending invoices or all pending invoices, then marks them paid on success.",
-                security: [{ bearerAuth: [] }],
-                requestBody: {
-                    required: true,
-                    content: {
-                        "application/json": {
-                            schema: {
-                                $ref: "#/components/schemas/BulkVerifyPaymobRequest",
-                            },
-                        },
-                    },
-                },
-                responses: {
-                    200: {
-                        description: "Bulk Paymob payment verified",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/BulkVerifyPaymobResponse",
-                                },
-                            },
-                        },
-                    },
-                    400: {
-                        description: "Verification failed or invalid request",
-                    },
-                    401: { description: "Unauthorized" },
-                    403: { description: "Forbidden" },
                     404: { description: "No pending invoices found" },
                     500: { description: "Internal server error" },
                 },
             },
         },
-        "/payments/invoices/capture/bulk": {
+        "/payments/invoices/paymob-verify": {
             post: {
                 tags: ["Payments"],
-                summary: "Capture PayPal order for multiple invoices",
+                summary: "Verify Paymob semester payment",
                 description:
-                    "Captures a previously created bulk order and marks all selected pending invoices as paid.",
+                    "Verifies a Paymob transaction for all pending invoices in the active semester payment period, then marks them as paid and creates/updates a student_payments record.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
                     content: {
                         "application/json": {
                             schema: {
-                                $ref: "#/components/schemas/BulkCaptureRequest",
+                                $ref: "#/components/schemas/VerifySemesterPaymobRequest",
                             },
                         },
                     },
                 },
                 responses: {
                     200: {
-                        description: "Bulk payment captured",
+                        description: "Semester payment verified",
                         content: {
                             "application/json": {
                                 schema: {
-                                    $ref: "#/components/schemas/BulkCaptureResponse",
+                                    $ref: "#/components/schemas/VerifySemesterPaymobResponse",
                                 },
                             },
                         },
                     },
-                    400: { description: "Capture failed or invalid request" },
+                    400: {
+                        description: "Verification failed or invalid request",
+                    },
                     401: { description: "Unauthorized" },
-                    403: { description: "Forbidden" },
+                    403: {
+                        description: "Payment period is closed",
+                    },
                     404: { description: "No pending invoices found" },
                     500: { description: "Internal server error" },
                 },
@@ -351,6 +221,32 @@ export default {
         },
     },
     schemas: {
+        PeriodInfo: {
+            type: "object",
+            properties: {
+                isOpen: { type: "boolean", example: true },
+                semester: { type: "string", nullable: true, example: "Fall" },
+                year: { type: "integer", nullable: true, example: 2026 },
+                startDate: {
+                    type: "string",
+                    nullable: true,
+                    description: "Start date from *_start event_date.",
+                    example: "2026-08-16",
+                },
+                endDate: {
+                    type: "string",
+                    nullable: true,
+                    description:
+                        "End date from *_end event_date, or fallback to *_start.end_date when no explicit *_end event exists.",
+                    example: "2026-09-01",
+                },
+                nextOpenDate: {
+                    type: "string",
+                    nullable: true,
+                    example: null,
+                },
+            },
+        },
         PaymentItem: {
             type: "object",
             properties: {
@@ -358,7 +254,6 @@ export default {
                 gateway: {
                     type: "string",
                     enum: ["paypal", "paymob"],
-                    example: "paypal",
                 },
                 transaction_id: { type: "string" },
                 amount: { type: "number", example: 900 },
@@ -404,6 +299,28 @@ export default {
                 },
             },
         },
+        GroupedInvoiceSummary: {
+            type: "object",
+            properties: {
+                totalInvoices: { type: "integer", example: 3 },
+                pendingInvoices: { type: "integer", example: 2 },
+                totalDue: { type: "number", example: 1800 },
+            },
+        },
+        GroupedInvoiceItem: {
+            type: "object",
+            properties: {
+                semester: { type: "string", example: "Fall" },
+                year: { type: "integer", example: 2026 },
+                invoices: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/InvoiceItem" },
+                },
+                summary: {
+                    $ref: "#/components/schemas/GroupedInvoiceSummary",
+                },
+            },
+        },
         MyInvoicesResponse: {
             type: "object",
             properties: {
@@ -411,175 +328,63 @@ export default {
                     type: "array",
                     items: { $ref: "#/components/schemas/InvoiceItem" },
                 },
-                summary: {
-                    type: "object",
-                    properties: {
-                        totalInvoices: { type: "integer", example: 3 },
-                        pendingInvoices: { type: "integer", example: 1 },
-                        totalDue: { type: "number", example: 900 },
+                groupedInvoices: {
+                    type: "array",
+                    items: {
+                        $ref: "#/components/schemas/GroupedInvoiceItem",
                     },
+                },
+                summary: {
+                    $ref: "#/components/schemas/GroupedInvoiceSummary",
+                },
+                registrationPeriod: {
+                    $ref: "#/components/schemas/PeriodInfo",
+                },
+                paymentPeriod: {
+                    $ref: "#/components/schemas/PeriodInfo",
                 },
             },
         },
-        CreatePayPalOrderResponse: {
+        PayAllRequest: {
+            type: "object",
+            required: ["payAll"],
+            properties: {
+                payAll: {
+                    type: "boolean",
+                    enum: [true],
+                    description:
+                        "Must be true. Paying individual invoices is no longer supported.",
+                    example: true,
+                },
+            },
+        },
+        CreateSemesterPayPalOrderResponse: {
             type: "object",
             properties: {
-                message: { type: "string", example: "PayPal order created" },
-                invoiceId: { type: "integer", example: 14 },
+                message: { type: "string" },
+                payAll: { type: "boolean", example: true },
                 orderId: { type: "string", example: "8RU61172RB300401A" },
                 approveUrl: {
                     type: "string",
                     nullable: true,
-                    example:
-                        "https://www.sandbox.paypal.com/checkoutnow?token=8RU61172RB300401A",
-                },
-            },
-        },
-        CreatePaymobOrderResponse: {
-            type: "object",
-            properties: {
-                message: {
-                    type: "string",
-                    example: "Paymob checkout created",
-                },
-                invoiceId: { type: "integer", example: 14 },
-                orderId: { type: "integer", example: 9944332 },
-                merchantOrderId: {
-                    type: "string",
-                    example: "invoice_14_1774089894200",
-                },
-                iframeUrl: {
-                    type: "string",
-                    example:
-                        "https://accept.paymobsolutions.com/api/acceptance/iframes/123456?payment_token=TOKEN",
-                },
-                paymentToken: { type: "string" },
-                currency: { type: "string", example: "EGP" },
-                amountCents: { type: "integer", example: 90000 },
-            },
-        },
-        VerifyPaymobPaymentRequest: {
-            type: "object",
-            required: ["transactionId"],
-            properties: {
-                transactionId: {
-                    type: "string",
-                    description: "Paymob transaction id returned after payment",
-                    example: "1122334455",
-                },
-            },
-        },
-        VerifyPaymobPaymentResponse: {
-            type: "object",
-            properties: {
-                message: {
-                    type: "string",
-                    example: "Paymob payment verified successfully",
-                },
-                invoiceId: { type: "integer", example: 14 },
-                transactionId: { type: "string", example: "1122334455" },
-                orderId: { type: "integer", nullable: true, example: 9944332 },
-                status: { type: "string", example: "paid" },
-            },
-        },
-        CapturePayPalRequest: {
-            type: "object",
-            properties: {
-                orderId: {
-                    type: "string",
-                    description:
-                        "Optional. If omitted, server uses invoice.paypal_order_id",
-                },
-            },
-        },
-        CapturePayPalResponse: {
-            type: "object",
-            properties: {
-                message: {
-                    type: "string",
-                    example: "Payment captured successfully",
-                },
-                invoiceId: { type: "integer", example: 14 },
-                transactionId: { type: "string", example: "2D723339RG245992X" },
-                status: { type: "string", example: "paid" },
-            },
-        },
-        CapturePayPalNotApprovedResponse: {
-            type: "object",
-            properties: {
-                error: {
-                    type: "string",
-                    example:
-                        "Payer has not approved this order yet. Redirect the payer to approveUrl first.",
-                },
-                paypalStatus: {
-                    type: "string",
-                    example: "CREATED",
-                },
-                paypalIssue: {
-                    type: "string",
-                    nullable: true,
-                    example: "COMPLIANCE_VIOLATION",
-                },
-                paypalDebugId: {
-                    type: "string",
-                    nullable: true,
-                    example: "f2a1d8f164f9a",
-                },
-                approveUrl: {
-                    type: "string",
-                    nullable: true,
-                    example:
-                        "https://www.sandbox.paypal.com/checkoutnow?token=8RU61172RB300401A",
-                },
-                orderId: {
-                    type: "string",
-                    example: "8RU61172RB300401A",
-                },
-            },
-        },
-        BulkInvoiceSelectionRequest: {
-            type: "object",
-            properties: {
-                payAll: {
-                    type: "boolean",
-                    description:
-                        "When true, includes all pending invoices for the user",
-                    example: true,
                 },
                 invoiceIds: {
                     type: "array",
                     items: { type: "integer" },
-                    description:
-                        "Used when payAll is false. Contains selected pending invoice IDs.",
-                    example: [4, 7, 11],
                 },
-            },
-        },
-        BulkPayPalOrderResponse: {
-            type: "object",
-            properties: {
-                message: {
-                    type: "string",
-                    example: "PayPal order created for selected invoices",
-                },
-                orderId: { type: "string" },
-                approveUrl: { type: "string", nullable: true },
-                invoiceIds: {
-                    type: "array",
-                    items: { type: "integer" },
-                },
-                totalAmount: { type: "number", example: 1800 },
+                invoiceCount: { type: "integer", example: 3 },
+                totalAmount: { type: "number", example: 2700 },
                 currency: { type: "string", example: "USD" },
+                paymentPeriod: {
+                    $ref: "#/components/schemas/PeriodInfo",
+                },
             },
         },
-        BulkPaymobOrderResponse: {
+        CreateSemesterPaymobOrderResponse: {
             type: "object",
             properties: {
-                message: {
-                    type: "string",
-                    example: "Paymob checkout created for selected invoices",
-                },
+                message: { type: "string" },
+                payAll: { type: "boolean", example: true },
                 orderId: { type: "integer", example: 9944332 },
                 merchantOrderId: {
                     type: "string",
@@ -588,72 +393,32 @@ export default {
                 },
                 iframeUrl: {
                     type: "string",
-                    example:
-                        "https://accept.paymobsolutions.com/api/acceptance/iframes/123456?payment_token=TOKEN",
                 },
                 paymentToken: { type: "string" },
                 invoiceIds: {
                     type: "array",
                     items: { type: "integer" },
                 },
-                totalAmount: { type: "number", example: 1800 },
-                amountCents: { type: "integer", example: 180000 },
+                invoiceCount: { type: "integer", example: 3 },
+                totalAmount: { type: "number", example: 2700 },
+                amountCents: { type: "integer", example: 270000 },
                 currency: { type: "string", example: "EGP" },
-            },
-        },
-        BulkVerifyPaymobRequest: {
-            type: "object",
-            required: ["transactionId", "orderId"],
-            properties: {
-                transactionId: {
-                    type: "string",
-                    example: "1122334455",
-                },
-                orderId: {
-                    type: "integer",
-                    example: 9944332,
-                },
-                payAll: {
-                    type: "boolean",
-                    example: true,
-                },
-                invoiceIds: {
-                    type: "array",
-                    items: { type: "integer" },
-                    example: [4, 7, 11],
+                paymentPeriod: {
+                    $ref: "#/components/schemas/PeriodInfo",
                 },
             },
         },
-        BulkVerifyPaymobResponse: {
-            type: "object",
-            properties: {
-                message: {
-                    type: "string",
-                    example: "Paymob bulk payment verified successfully",
-                },
-                invoiceIds: {
-                    type: "array",
-                    items: { type: "integer" },
-                },
-                transactionId: { type: "string", example: "1122334455" },
-                orderId: { type: "integer", nullable: true, example: 9944332 },
-                status: { type: "string", example: "paid" },
-            },
-        },
-        BulkCaptureRequest: {
+        CaptureSemesterPayPalRequest: {
             type: "object",
             required: ["orderId"],
             properties: {
-                orderId: { type: "string" },
-                payAll: { type: "boolean", example: true },
-                invoiceIds: {
-                    type: "array",
-                    items: { type: "integer" },
-                    example: [4, 7, 11],
+                orderId: {
+                    type: "string",
+                    description: "PayPal order id from create-order response",
                 },
             },
         },
-        BulkCaptureResponse: {
+        CaptureSemesterPayPalResponse: {
             type: "object",
             properties: {
                 message: {
@@ -664,8 +429,87 @@ export default {
                     type: "array",
                     items: { type: "integer" },
                 },
-                transactionId: { type: "string" },
+                transactionId: {
+                    type: "string",
+                    example: "2D723339RG245992X",
+                },
                 status: { type: "string", example: "paid" },
+                semester: { type: "string", example: "Fall" },
+                year: { type: "integer", example: 2026 },
+            },
+        },
+        VerifySemesterPaymobRequest: {
+            type: "object",
+            required: ["transactionId", "orderId"],
+            properties: {
+                transactionId: {
+                    type: "string",
+                    description: "Paymob transaction id",
+                    example: "1122334455",
+                },
+                orderId: {
+                    type: "integer",
+                    description: "Paymob order id created by this API",
+                    example: 9944332,
+                },
+            },
+        },
+        VerifySemesterPaymobResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Paymob payment verified successfully",
+                },
+                invoiceIds: {
+                    type: "array",
+                    items: { type: "integer" },
+                },
+                transactionId: { type: "string", example: "1122334455" },
+                orderId: { type: "integer", nullable: true, example: 9944332 },
+                status: { type: "string", example: "paid" },
+                semester: { type: "string", example: "Fall" },
+                year: { type: "integer", example: 2026 },
+            },
+        },
+        StudentPaymentItem: {
+            type: "object",
+            properties: {
+                id: { type: "integer" },
+                student_user_id: { type: "string", format: "uuid" },
+                semester: { type: "string", example: "Fall" },
+                year: { type: "integer", example: 2026 },
+                total_amount: { type: "number", example: 2700 },
+                invoice_count: { type: "integer", example: 3 },
+                gateway: {
+                    type: "string",
+                    enum: ["paypal", "paymob"],
+                },
+                transaction_id: { type: "string" },
+                paid_at: { type: "string", format: "date-time" },
+                created_at: {
+                    type: "string",
+                    format: "date-time",
+                    nullable: true,
+                },
+            },
+        },
+        MyPaymentsResponse: {
+            type: "object",
+            properties: {
+                payments: {
+                    type: "array",
+                    items: {
+                        $ref: "#/components/schemas/StudentPaymentItem",
+                    },
+                },
+                summary: {
+                    type: "object",
+                    properties: {
+                        totalPayments: { type: "integer", example: 4 },
+                        totalAmountPaid: { type: "number", example: 9900 },
+                    },
+                },
             },
         },
     },

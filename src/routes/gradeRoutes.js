@@ -10,6 +10,7 @@ import {
   getGradesByTutorialLab,
   setGradeDistribution,
   getGradeDistribution,
+  getTutorialLabGradeDistribution,
   getMySemesterGpa,
   getMyCgpaTrend,
   getMyGradeDistribution,
@@ -42,6 +43,17 @@ router.get(
 );
 
 /**
+ * GET /api/v1/grades/tutorial-lab/:tutorialLabId/distribution
+ * Get linked lecture distribution(s) for a tutorial/lab.
+ * Accessible by the tutorial/lab's TA, admin, or super_admin.
+ */
+router.get(
+  "/tutorial-lab/:tutorialLabId/distribution",
+  authorizationMiddleware("teaching_assistant", "admin", "super_admin"),
+  getTutorialLabGradeDistribution,
+);
+
+/**
  * PUT /api/v1/grades/lecture/:lectureId/student/:studentId
  * Update a specific student's grades within a lecture.
  * Accessible by the lecture's instructor (doctor), admin, or super_admin.
@@ -55,11 +67,16 @@ router.put(
 /**
  * PUT /api/v1/grades/tutorial-lab/:tutorialLabId/student/:studentId
  * Update a specific student's grades within a tutorial/lab.
- * Accessible by the tutorial/lab's TA, admin, or super_admin.
+ * Accessible by doctor, the tutorial/lab's TA, admin, or super_admin.
  */
 router.put(
   "/tutorial-lab/:tutorialLabId/student/:studentId",
-  authorizationMiddleware("teaching_assistant", "admin", "super_admin"),
+  authorizationMiddleware(
+    "doctor",
+    "teaching_assistant",
+    "admin",
+    "super_admin",
+  ),
   updateGradeByTutorialLab,
 );
 

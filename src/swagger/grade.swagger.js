@@ -515,12 +515,53 @@ export default {
       },
     },
 
+    "/grades/tutorial-lab/{tutorialLabId}/distribution": {
+      get: {
+        tags: ["Grades"],
+        summary: "Get linked lecture distributions for a tutorial/lab",
+        description:
+          "Returns grade distribution rows (work/mid/final max) for lecture(s) linked to enrollments in the given tutorial/lab.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "tutorialLabId",
+            in: "path",
+            required: true,
+            schema: { type: "integer" },
+            description: "The tutorial/lab ID",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Distribution rows retrieved successfully.",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/TutorialLabDistributionResponse",
+                },
+              },
+            },
+          },
+          403: {
+            description:
+              "Forbidden - caller is not the TA for this tutorial/lab.",
+          },
+          404: {
+            description:
+              "Tutorial/Lab not found or no linked distribution exists.",
+          },
+          401: { description: "Unauthorized." },
+          500: { description: "Internal server error." },
+        },
+      },
+    },
+
     "/grades/lecture/{lectureId}/student/{studentId}": {
       put: {
         tags: ["Grades"],
         summary: "Update a student's grades in a lecture",
         description:
-          "Provide mid_score, work_score, and/or final_score. When all three scores are present the letter grade and course GPA points are computed automatically from the total (out of 100) — no manual grade input required. Triggers a student notification and recalculates their CGPA. Accessible to the lecture's instructor (Doctor), Admin, and Super Admin. **If a grade distribution has been set for this lecture**, each score is individually validated against its maximum (work_score ≤ work_max, mid_score ≤ mid_max, final_score ≤ final_max).",
+          "Provide any of: mid_score, work_score, and/or final_score. When all three scores are present overall, the letter grade and course GPA points are computed automatically from the total (out of 100) - no manual grade input required. Triggers a student notification and recalculates their CGPA. Accessible to the lecture's instructor (Doctor), Admin, and Super Admin.",
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -543,7 +584,7 @@ export default {
           content: {
             "application/json": {
               schema: {
-                $ref: "#/components/schemas/UpdateGradeRequest",
+                $ref: "#/components/schemas/LectureUpdateGradeRequest",
               },
             },
           },
@@ -579,7 +620,7 @@ export default {
         tags: ["Grades"],
         summary: "Update a student's grades in a tutorial/lab",
         description:
-          "Provide mid_score, work_score, and/or final_score. When all three scores are present the letter grade and course GPA points are computed automatically from the total (out of 100) — no manual grade input required. Triggers a student notification and recalculates their CGPA. Accessible to the tutorial/lab's TA, Admin, and Super Admin. **If a grade distribution has been set for the lecture linked to this enrollment**, each score is individually validated against its maximum (work_score ≤ work_max, mid_score ≤ mid_max, final_score ≤ final_max).",
+          "Provide at least one score field. Teaching assistants can update only work_score; doctors, admins, and super admins can update mid_score, work_score, and final_score. When all three scores are present the letter grade and course GPA points are computed automatically from the total (out of 100) - no manual grade input required. Triggers a student notification and recalculates their CGPA. **If a grade distribution has been set for the lecture linked to this enrollment**, each score is individually validated against its maximum (work_score <= work_max, mid_score <= mid_max, final_score <= final_max).",
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -602,7 +643,7 @@ export default {
           content: {
             "application/json": {
               schema: {
-                $ref: "#/components/schemas/UpdateGradeRequest",
+                $ref: "#/components/schemas/TutorialLabUpdateGradeRequest",
               },
             },
           },
@@ -637,10 +678,36 @@ export default {
   },
 
   schemas: {
-    UpdateGradeRequest: {
+    LectureUpdateGradeRequest: {
       type: "object",
       description:
-        "Provide at least one score field. The letter grade is computed automatically from the total (mid + work + final out of 100) — do NOT send a grade field.",
+        "Provide at least one score field for lecture grading. Doctors, admins, and super admins can submit mid_score, work_score, and/or final_score.",
+      properties: {
+        mid_score: {
+          type: "number",
+          format: "float",
+          example: 18.5,
+          description: "Midterm score (partial of 100 total)",
+        },
+        work_score: {
+          type: "number",
+          format: "float",
+          example: 9.0,
+          description: "Coursework / assignment score (partial of 100 total)",
+        },
+        final_score: {
+          type: "number",
+          format: "float",
+          example: 55.0,
+          description: "Final exam score (partial of 100 total)",
+        },
+      },
+    },
+
+    TutorialLabUpdateGradeRequest: {
+      type: "object",
+      description:
+        "Provide at least one score field. Teaching assistants can update only work_score; doctors/admins/super admins can update all score fields. The letter grade is computed automatically from the total (mid + work + final out of 100) - do NOT send a grade field.",
       properties: {
         mid_score: {
           type: "number",
@@ -775,6 +842,26 @@ export default {
                 },
               },
             ],
+          },
+        },
+      },
+    },
+
+    TutorialLabDistributionResponse: {
+      type: "object",
+      properties: {
+        tutorial_lab_id: { type: "integer", example: 7 },
+        linked_lectures_count: { type: "integer", example: 1 },
+        distributions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              lecture_id: { type: "integer", example: 3 },
+              work_max: { type: "number", example: 20 },
+              mid_max: { type: "number", example: 30 },
+              final_max: { type: "number", example: 50 },
+            },
           },
         },
       },

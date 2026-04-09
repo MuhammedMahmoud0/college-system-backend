@@ -375,6 +375,75 @@ export const getGradeDistribution = async (req, res) => {
 };
 
 /**
+ * GET /api/v1/grades/tutorial-lab/:tutorialLabId/distribution
+ * Get the linked lecture grade distribution(s) for a tutorial/lab.
+ * Accessible to: tutorial/lab TA, admin, super_admin.
+ */
+export const getTutorialLabGradeDistribution = async (req, res) => {
+  try {
+    const { tutorialLabId } = req.params;
+    const callerId = req.user.id;
+    const callerRole = req.user.role;
+
+    const tutorialLab = await prisma.tutorials_labs.findUnique({
+      where: { tutorial_lab_id: parseInt(tutorialLabId) },
+    });
+
+    if (!tutorialLab) {
+      return res.status(404).json({ error: "Tutorial/Lab not found." });
+    }
+
+    if (callerRole === "teaching_assistant" && tutorialLab.ta_id !== callerId) {
+      return res.status(403).json({
+        error: "You are not the TA for this tutorial/lab.",
+      });
+    }
+
+    const enrollments = await prisma.enrollments.findMany({
+      where: { tutorial_lab_id: parseInt(tutorialLabId) },
+      select: { lecture_id: true },
+      distinct: ["lecture_id"],
+    });
+
+    const lectureIds = enrollments
+      .map((e) => e.lecture_id)
+      .filter((id) => id !== null && id !== undefined);
+
+    if (lectureIds.length === 0) {
+      return res.status(404).json({
+        error: "No linked lecture distributions found for this tutorial/lab.",
+      });
+    }
+
+    const distributions = await prisma.grade_distributions.findMany({
+      where: { lecture_id: { in: lectureIds } },
+      select: {
+        lecture_id: true,
+        work_max: true,
+        mid_max: true,
+        final_max: true,
+      },
+      orderBy: { lecture_id: "asc" },
+    });
+
+    if (distributions.length === 0) {
+      return res.status(404).json({
+        error: "No grade distribution set for linked lecture(s) yet.",
+      });
+    }
+
+    return res.status(200).json({
+      tutorial_lab_id: parseInt(tutorialLabId),
+      linked_lectures_count: distributions.length,
+      distributions,
+    });
+  } catch (err) {
+    logger.error("Error fetching tutorial/lab grade distributions:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+/**
  * PUT /api/v1/grades/lecture/:lectureId/student/:studentId
  * Update a specific student's grades within a lecture.
  * Accessible to: the lecture's instructor (doctor), admin, super_admin
@@ -468,7 +537,7 @@ export const updateGradeByLecture = async (req, res) => {
 /**
  * PUT /api/v1/grades/tutorial-lab/:tutorialLabId/student/:studentId
  * Update a specific student's grades within a tutorial/lab.
- * Accessible to: the tutorial/lab's TA, admin, super_admin
+ * Accessible to: doctor, the tutorial/lab's TA, admin, super_admin
  */
 export const updateGradeByTutorialLab = async (req, res) => {
   try {
@@ -510,6 +579,34 @@ export const updateGradeByTutorialLab = async (req, res) => {
         error:
           "No enrollment found for this student in the given tutorial/lab.",
       });
+    }
+
+    // TA can only update work_score from tutorial/lab endpoint.
+    if (
+      callerRole === "teaching_assistant" &&
+      (req.body.mid_score !== undefined || req.body.final_score !== undefined)
+    ) {
+      return res.status(403).json({
+        error:
+          "Teaching assistants can only modify work_score in this endpoint.",
+      });
+    }
+
+    // Doctor can update all scores, but only for students in lectures they teach.
+    if (callerRole === "doctor") {
+      const lecture = enrollment.lecture_id
+        ? await prisma.lectures.findUnique({
+            where: { lecture_id: enrollment.lecture_id },
+            select: { instructor_id: true },
+          })
+        : null;
+
+      if (!lecture || lecture.instructor_id !== callerId) {
+        return res.status(403).json({
+          error:
+            "You are not the instructor for this student's linked lecture.",
+        });
+      }
     }
 
     // Fetch grade distribution via the enrollment's lecture (if set)

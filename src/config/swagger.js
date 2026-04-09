@@ -23,6 +23,7 @@ import task from "../swagger/task.swagger.js";
 import adminDashboard from "../swagger/adminDashboard.swagger.js";
 import department from "../swagger/department.swagger.js";
 import doctorDashboard from "../swagger/doctorDashboard.swagger.js";
+import teachingAssistantDashboard from "../swagger/teachingAssistantDashboard.swagger.js";
 import financial from "../swagger/financial.swagger.js";
 import payment from "../swagger/payment.swagger.js";
 import faq from "../swagger/faq.swagger.js";
@@ -44,6 +45,7 @@ export const swaggerSpec = {
       ...adminDashboard.schemas,
       ...department.schemas,
       ...doctorDashboard.schemas,
+      ...teachingAssistantDashboard.schemas,
       ...financial.schemas,
       ...payment.schemas,
     },
@@ -73,6 +75,7 @@ export const swaggerSpec = {
     ...task.paths,
     ...adminDashboard.paths,
     ...doctorDashboard.paths,
+    ...teachingAssistantDashboard.paths,
   },
 };
 

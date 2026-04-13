@@ -120,6 +120,39 @@
                     }
                 },
                 {
+                    "name": "Update My Profile (Non-student)",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "phone",
+                                    "value": "+201111111111",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "address",
+                                    "value": "Cairo, Egypt",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "avatar",
+                                    "type": "file",
+                                    "src": []
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/profile",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "users", "profile"]
+                        },
+                        "description": "Update authenticated non-student user profile (phone, address, avatar)"
+                    }
+                },
+                {
                     "name": "Add User",
                     "request": {
                         "method": "POST",

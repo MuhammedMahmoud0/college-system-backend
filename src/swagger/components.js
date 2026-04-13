@@ -329,6 +329,53 @@ export default {
                 },
             },
         },
+        UpdateOwnProfileRequest: {
+            type: "object",
+            properties: {
+                phone: {
+                    type: "string",
+                    nullable: true,
+                    description: "User phone number",
+                },
+                address: {
+                    type: "string",
+                    nullable: true,
+                    description: "User address",
+                },
+                avatar: {
+                    type: "string",
+                    format: "binary",
+                    nullable: true,
+                    description: "Avatar image file",
+                },
+            },
+        },
+        UpdateOwnProfileResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Profile updated successfully",
+                },
+                user: {
+                    type: "object",
+                    properties: {
+                        id: { type: "string", format: "uuid" },
+                        full_name: { type: "string" },
+                        email: { type: "string", format: "email" },
+                        role: { type: "string" },
+                        avatar_url: { type: "string", nullable: true },
+                        phone: { type: "string", nullable: true },
+                        address: { type: "string", nullable: true },
+                        updated_at: {
+                            type: "string",
+                            format: "date-time",
+                            nullable: true,
+                        },
+                    },
+                },
+            },
+        },
         DeleteUserResponse: {
             type: "object",
             properties: {

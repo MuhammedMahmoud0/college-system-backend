@@ -17,7 +17,7 @@ const router = express.Router();
 router.get(
     "/profile",
     authMiddleware,
-    authorizationMiddleware("student"),
+    authorizationMiddleware("student", "leader"),
     getStudentProfile,
 );
 
@@ -25,7 +25,7 @@ router.get(
 router.put(
     "/profile",
     authMiddleware,
-    authorizationMiddleware("student"),
+    authorizationMiddleware("student", "leader"),
     upload.single("avatar"), // Accept avatar file
     updateStudentProfile,
 );

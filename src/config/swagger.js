@@ -6,7 +6,7 @@ import leaderboard from "../swagger/leaderboard.swagger.js";
 import auth from "../swagger/auth.swagger.js";
 import users from "../swagger/users.swagger.js";
 import studentProfile from "../swagger/studentProfile.swagger.js";
-import studentSettings from "../swagger/studentSettings.swagger.js";
+import settings from "../swagger/settings.swagger.js";
 import schedule from "../swagger/schedule.swagger.js";
 import teacher from "../swagger/teacher.swagger.js";
 import notification from "../swagger/notification.swagger.js";
@@ -29,54 +29,54 @@ import payment from "../swagger/payment.swagger.js";
 import faq from "../swagger/faq.swagger.js";
 
 export const swaggerSpec = {
-  ...base,
-  components: {
-    ...components,
-    schemas: {
-      ...components.schemas,
-      ...notification.schemas,
-      ...materials.schemas,
-      ...course.schemas,
-      ...courseOffering.schemas,
-      ...registration.components.schemas,
-      ...systemConfig.schemas,
-      ...grade.schemas,
-      ...task.schemas,
-      ...adminDashboard.schemas,
-      ...department.schemas,
-      ...doctorDashboard.schemas,
-      ...teachingAssistantDashboard.schemas,
-      ...financial.schemas,
-      ...payment.schemas,
+    ...base,
+    components: {
+        ...components,
+        schemas: {
+            ...components.schemas,
+            ...notification.schemas,
+            ...materials.schemas,
+            ...course.schemas,
+            ...courseOffering.schemas,
+            ...registration.components.schemas,
+            ...systemConfig.schemas,
+            ...grade.schemas,
+            ...task.schemas,
+            ...adminDashboard.schemas,
+            ...department.schemas,
+            ...doctorDashboard.schemas,
+            ...teachingAssistantDashboard.schemas,
+            ...financial.schemas,
+            ...payment.schemas,
+        },
     },
-  },
-  paths: {
-    ...auth.paths,
-    ...users.paths,
-    ...studentProfile.paths,
-    ...studentSettings.paths,
-    ...department.paths,
-    ...leaderboard.paths,
-    ...financial.paths,
-    ...payment.paths,
-    ...faq.paths,
-    ...schedule.paths,
-    ...teacher.paths,
-    ...notification.paths,
-    ...materials.paths,
-    ...course.paths,
-    ...courseOffering.paths,
-    ...exam.paths,
-    ...registration.paths,
-    ...community.paths,
-    ...attendance.paths,
-    ...systemConfig.paths,
-    ...grade.paths,
-    ...task.paths,
-    ...adminDashboard.paths,
-    ...doctorDashboard.paths,
-    ...teachingAssistantDashboard.paths,
-  },
+    paths: {
+        ...auth.paths,
+        ...users.paths,
+        ...studentProfile.paths,
+        ...settings.paths,
+        ...department.paths,
+        ...leaderboard.paths,
+        ...financial.paths,
+        ...payment.paths,
+        ...faq.paths,
+        ...schedule.paths,
+        ...teacher.paths,
+        ...notification.paths,
+        ...materials.paths,
+        ...course.paths,
+        ...courseOffering.paths,
+        ...exam.paths,
+        ...registration.paths,
+        ...community.paths,
+        ...attendance.paths,
+        ...systemConfig.paths,
+        ...grade.paths,
+        ...task.paths,
+        ...adminDashboard.paths,
+        ...doctorDashboard.paths,
+        ...teachingAssistantDashboard.paths,
+    },
 };
 
 export const swaggerUiHandler = swaggerUi;

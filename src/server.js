@@ -15,7 +15,7 @@ import teacherRoutes from "./routes/teacherRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import examRoutes from "./routes/examRoutes.js";
 import registrationRoutes from "./routes/registrationRoutes.js";
-import studentSettingsRoutes from "./routes/studentSettingsRoutes.js";
+import settingsRoutes from "./routes/settingsRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import systemConfigRoutes from "./routes/systemConfigRoutes.js";
 import gradeRoutes from "./routes/gradeRoutes.js";
@@ -57,16 +57,16 @@ app.use(express.json());
 
 // Convert BigInt values to strings to prevent JSON serialization errors
 BigInt.prototype.toJSON = function () {
-  return this.toString();
+    return this.toString();
 };
 
 // Sample route
 app.get("/", (req, res) => {
-  res.json({
-    status: "OK",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
+    res.json({
+        status: "OK",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+    });
 });
 
 // mount auth routes
@@ -108,8 +108,8 @@ app.use("/api/v1/exams", examRoutes);
 // mount registration routes
 app.use("/api/v1/registration", registrationRoutes);
 
-// mount student settings routes
-app.use("/api/v1/student-settings", studentSettingsRoutes);
+// mount settings routes
+app.use("/api/v1/settings", settingsRoutes);
 
 // mount attendance routes (WebSocket-enabled)
 app.use("/api/v1/attendance", attendanceRoutes);
@@ -149,32 +149,32 @@ app.use("/docs", swaggerUiHandler.serve, swaggerUiHandler.setup(swaggerSpec));
 
 // Start the server
 let server = httpServer.listen(port, () => {
-  logger.info(`Server is running at http://localhost:${port}`);
-  logger.info(`API documentation available at http://localhost:${port}/docs`);
-  logger.info(`WebSocket server is ready on ws://localhost:${port}`);
+    logger.info(`Server is running at http://localhost:${port}`);
+    logger.info(`API documentation available at http://localhost:${port}/docs`);
+    logger.info(`WebSocket server is ready on ws://localhost:${port}`);
 });
 
 // Handle unhandled promise rejections (e.g., database connection errors)
 process.on("unhandledRejection", (err) => {
-  logger.error("Unhandled Rejection:", err);
-  server.close(async () => {
-    await disconnectDB();
-    process.exit(1);
-  });
+    logger.error("Unhandled Rejection:", err);
+    server.close(async () => {
+        await disconnectDB();
+        process.exit(1);
+    });
 });
 
 // Handle uncaught exceptions
 process.on("uncaughtException", async (err) => {
-  logger.error("Uncaught Exception:", err);
-  await disconnectDB();
-  process.exit(1);
+    logger.error("Uncaught Exception:", err);
+    await disconnectDB();
+    process.exit(1);
 });
 
 // Graceful shutdown on SIGTERM
 process.on("SIGTERM", async () => {
-  logger.info("SIGTERM received. Shutting down gracefully...");
-  server.close(async () => {
-    await disconnectDB();
-    process.exit(0);
-  });
+    logger.info("SIGTERM received. Shutting down gracefully...");
+    server.close(async () => {
+        await disconnectDB();
+        process.exit(0);
+    });
 });

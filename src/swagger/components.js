@@ -614,7 +614,7 @@ export default {
                 },
             },
         },
-        // Student Settings
+        // User Settings
         UpdatePasswordRequest: {
             type: "object",
             required: ["currentPassword", "newPassword", "confirmNewPassword"],

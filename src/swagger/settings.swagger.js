@@ -1,11 +1,11 @@
 export default {
     paths: {
-        "/student-settings/password": {
+        "/settings/password": {
             put: {
-                tags: ["Student Settings"],
-                summary: "Update student password",
+                tags: ["Settings"],
+                summary: "Update user password",
                 description:
-                    "Allows authenticated students to update their password. Requires current password verification.",
+                    "Allows any authenticated user to update their password. Requires current password verification.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
@@ -82,17 +82,6 @@ export default {
                                             error: "Not authenticated",
                                         },
                                     },
-                                },
-                            },
-                        },
-                    },
-                    403: {
-                        description:
-                            "Access denied - only students can update password via this endpoint",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    $ref: "#/components/schemas/ErrorResponse",
                                 },
                             },
                         },

@@ -218,7 +218,7 @@
             ]
         },
         {
-            "name": "Student Settings",
+            "name": "Settings",
             "item": [
                 {
                     "name": "Update Password",
@@ -232,19 +232,14 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"currentPassword\": \"oldpassword123\",\n  \"newPassword\": \"newpassword123\"\n}"
+                            "raw": "{\n  \"currentPassword\": \"oldpassword123\",\n  \"newPassword\": \"newpassword123\",\n  \"confirmNewPassword\": \"newpassword123\"\n}"
                         },
                         "url": {
-                            "raw": "{{base_url}}/api/v1/student-settings/password",
+                            "raw": "{{base_url}}/api/v1/settings/password",
                             "host": ["{{base_url}}"],
-                            "path": [
-                                "api",
-                                "v1",
-                                "student-settings",
-                                "password"
-                            ]
+                            "path": ["api", "v1", "settings", "password"]
                         },
-                        "description": "Update student password (Student only)"
+                        "description": "Update authenticated user's password"
                     }
                 }
             ]

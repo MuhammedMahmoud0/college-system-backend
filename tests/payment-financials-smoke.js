@@ -4,8 +4,7 @@ const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000/api/v1";
 const STUDENT_TOKEN = process.env.STUDENT_TOKEN;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 const PAYMOB_TRANSACTION_ID = process.env.PAYMOB_TRANSACTION_ID;
-const PAYMOB_WEBHOOK_TRANSACTION_ID =
-    process.env.PAYMOB_WEBHOOK_TRANSACTION_ID;
+const PAYMOB_WEBHOOK_TRANSACTION_ID = process.env.PAYMOB_WEBHOOK_TRANSACTION_ID;
 const EXPECT_PAYMENT_CLOSED = process.env.EXPECT_PAYMENT_CLOSED === "true";
 
 const callApi = async (path, method, token, body) => {
@@ -101,22 +100,47 @@ const run = async () => {
     console.log(paymobOrder);
 
     if (PAYMOB_WEBHOOK_TRANSACTION_ID && paymobOrder?.json?.orderId) {
-        console.log("7) Verify Paymob pay-all transaction via webhook endpoint");
         console.log(
-            await callApi(
-                "/payments/invoices/paymob-webhook",
-                "POST",
-                null,
-                {
-                    obj: {
-                        id: PAYMOB_WEBHOOK_TRANSACTION_ID,
-                        order: {
-                            id: paymobOrder.json.orderId,
-                        },
+            "7) Verify Paymob pay-all transaction via webhook endpoint",
+        );
+        const webhookVerification = await callApi(
+            "/payments/invoices/paymob-webhook",
+            "POST",
+            null,
+            {
+                obj: {
+                    id: PAYMOB_WEBHOOK_TRANSACTION_ID,
+                    order: {
+                        id: paymobOrder.json.orderId,
                     },
                 },
-            ),
+            },
         );
+        console.log(webhookVerification);
+
+        if (webhookVerification.status !== 200) {
+            console.error(
+                `Expected 200 from /payments/invoices/paymob-webhook, got ${webhookVerification.status}`,
+            );
+            process.exit(1);
+        }
+
+        if (!webhookVerification?.json?.transactionId) {
+            console.error(
+                "Expected transactionId in webhook verification response",
+            );
+            process.exit(1);
+        }
+
+        if (
+            String(webhookVerification.json.transactionId) !==
+            String(PAYMOB_WEBHOOK_TRANSACTION_ID)
+        ) {
+            console.error(
+                "Webhook transactionId does not match PAYMOB_WEBHOOK_TRANSACTION_ID",
+            );
+            process.exit(1);
+        }
     } else if (PAYMOB_TRANSACTION_ID && paymobOrder?.json?.orderId) {
         console.log("7) Verify Paymob pay-all transaction");
         console.log(

@@ -219,6 +219,41 @@ export default {
                 },
             },
         },
+        "/payments/invoices/paymob-webhook": {
+            post: {
+                tags: ["Payments"],
+                summary: "Handle Paymob payment webhook",
+                description:
+                    "Receives a Paymob webhook payload, resolves the transaction id (typically from obj.id), verifies the transaction with Paymob, then marks all matching pending semester invoices as paid.",
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/PaymobWebhookRequest",
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: "Webhook processed successfully",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    $ref: "#/components/schemas/PaymobWebhookResponse",
+                                },
+                            },
+                        },
+                    },
+                    400: {
+                        description:
+                            "Invalid webhook payload or verification failure",
+                    },
+                    500: { description: "Internal server error" },
+                },
+            },
+        },
     },
     schemas: {
         PeriodInfo: {
@@ -470,6 +505,76 @@ export default {
                 status: { type: "string", example: "paid" },
                 semester: { type: "string", example: "Fall" },
                 year: { type: "integer", example: 2026 },
+            },
+        },
+        PaymobWebhookRequest: {
+            type: "object",
+            description:
+                "Raw payload sent by Paymob webhook. Transaction id is usually available at obj.id.",
+            properties: {
+                obj: {
+                    type: "object",
+                    properties: {
+                        id: {
+                            oneOf: [{ type: "integer" }, { type: "string" }],
+                            example: 1122334455,
+                        },
+                        order: {
+                            type: "object",
+                            properties: {
+                                id: { type: "integer", example: 9944332 },
+                                merchant_order_id: {
+                                    type: "string",
+                                    example:
+                                        "bulk_8f66a5e1-62b4-45be-b80f-927ecf8e8fb0_1774089894200",
+                                },
+                            },
+                        },
+                    },
+                },
+                hmac: {
+                    type: "string",
+                    nullable: true,
+                    description:
+                        "Optional HMAC field provided by Paymob, if configured.",
+                },
+            },
+        },
+        PaymobWebhookResponse: {
+            type: "object",
+            properties: {
+                message: {
+                    type: "string",
+                    example: "Paymob payment verified successfully",
+                },
+                invoiceIds: {
+                    type: "array",
+                    items: { type: "integer" },
+                },
+                transactionId: {
+                    type: "string",
+                    example: "1122334455",
+                },
+                orderId: { type: "integer", nullable: true, example: 9944332 },
+                status: { type: "string", example: "paid" },
+                semester: { type: "string", example: "Fall" },
+                year: { type: "integer", example: 2026 },
+                source: { type: "string", example: "paymob_webhook" },
+                merchantOrderId: {
+                    type: "string",
+                    nullable: true,
+                    example:
+                        "bulk_8f66a5e1-62b4-45be-b80f-927ecf8e8fb0_1774089894200",
+                },
+                studentId: {
+                    type: "string",
+                    nullable: true,
+                    format: "uuid",
+                },
+                error: {
+                    type: "string",
+                    nullable: true,
+                },
             },
         },
         StudentPaymentItem: {

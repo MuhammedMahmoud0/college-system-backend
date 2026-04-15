@@ -922,6 +922,261 @@ export const getMyPayments = async (req, res) => {
     }
 };
 
+export const recordManualPayment = async (req, res) => {
+    try {
+        const {
+            student_name: studentName,
+            student_id: studentId,
+            amount,
+            date,
+            semester,
+            year,
+        } = req.body || {};
+
+        if (!studentName || typeof studentName !== "string") {
+            return res.status(400).json({
+                error: "student_name is required",
+            });
+        }
+
+        if (!studentId || typeof studentId !== "string") {
+            return res.status(400).json({
+                error: "student_id is required",
+            });
+        }
+
+        const amountNumber = Number.parseFloat(amount);
+        if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+            return res.status(400).json({
+                error: "amount must be a positive number",
+            });
+        }
+
+        const paidAt = new Date(date);
+        if (Number.isNaN(paidAt.getTime())) {
+            return res.status(400).json({
+                error: "date must be a valid ISO date-time",
+            });
+        }
+
+        const hasSemester =
+            typeof semester === "string" && semester.trim().length > 0;
+        const hasYear = year !== undefined && year !== null && year !== "";
+
+        if (hasSemester !== hasYear) {
+            return res.status(400).json({
+                error: "Provide both semester and year together when disambiguating manual payment",
+            });
+        }
+
+        const targetSemester = hasSemester ? semester.trim() : null;
+        const targetYear = hasYear ? Number.parseInt(year, 10) : null;
+
+        if (hasYear && !Number.isInteger(targetYear)) {
+            return res.status(400).json({
+                error: "year must be an integer",
+            });
+        }
+
+        const studentProfile = await prisma.student_profiles.findUnique({
+            where: {
+                student_id: studentId.trim(),
+            },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                    },
+                },
+            },
+        });
+
+        if (!studentProfile?.users) {
+            return res.status(404).json({
+                error: "Student not found",
+            });
+        }
+
+        const normalizedProvidedName = studentName.trim().toLowerCase();
+        const normalizedStoredName = studentProfile.users.full_name
+            .trim()
+            .toLowerCase();
+        if (normalizedProvidedName !== normalizedStoredName) {
+            return res.status(400).json({
+                error: "student_name does not match the provided student_id",
+            });
+        }
+
+        const pendingInvoices = await prisma.invoices.findMany({
+            where: {
+                student_user_id: studentProfile.user_id,
+                status: "pending",
+                ...(hasSemester
+                    ? {
+                          semester: targetSemester,
+                          year: targetYear,
+                      }
+                    : {}),
+            },
+            orderBy: {
+                id: "asc",
+            },
+        });
+
+        if (pendingInvoices.length === 0) {
+            return res.status(404).json({
+                error: "No pending invoices found for this student",
+            });
+        }
+
+        const groupedPendingInvoices = new Map();
+
+        for (const invoice of pendingInvoices) {
+            const groupKey = `${invoice.semester}-${invoice.year}`;
+
+            if (!groupedPendingInvoices.has(groupKey)) {
+                groupedPendingInvoices.set(groupKey, {
+                    semester: invoice.semester,
+                    year: invoice.year,
+                    invoices: [],
+                    totalAmount: 0,
+                    totalAmountCents: 0,
+                });
+            }
+
+            const group = groupedPendingInvoices.get(groupKey);
+            const invoiceAmount = Number.parseFloat(invoice.total_amount || 0);
+            group.invoices.push(invoice);
+            group.totalAmount += invoiceAmount;
+            group.totalAmountCents += Number.parseInt(
+                toCents(invoiceAmount),
+                10,
+            );
+        }
+
+        const pendingSemesters = Array.from(
+            groupedPendingInvoices.values(),
+        ).map((group) => ({
+            semester: group.semester,
+            year: group.year,
+            invoiceCount: group.invoices.length,
+            totalDue: Number.parseFloat(group.totalAmount.toFixed(2)),
+        }));
+
+        const requestedAmountCents = Number.parseInt(toCents(amountNumber), 10);
+        const groupedValues = Array.from(groupedPendingInvoices.values());
+
+        const matchingGroups = groupedValues.filter(
+            (group) => group.totalAmountCents === requestedAmountCents,
+        );
+
+        if (matchingGroups.length === 0) {
+            return res.status(400).json({
+                error: "Provided amount does not match any pending semester total",
+                pendingSemesters,
+            });
+        }
+
+        if (!hasSemester && matchingGroups.length > 1) {
+            return res.status(409).json({
+                error: "Multiple semesters match this amount. Provide semester and year.",
+                pendingSemesters,
+            });
+        }
+
+        let selectedGroup = null;
+
+        if (hasSemester) {
+            selectedGroup = groupedPendingInvoices.get(
+                `${targetSemester}-${targetYear}`,
+            );
+
+            if (!selectedGroup) {
+                return res.status(404).json({
+                    error: `No pending invoices found for ${targetSemester} ${targetYear}`,
+                    pendingSemesters,
+                });
+            }
+
+            if (selectedGroup.totalAmountCents !== requestedAmountCents) {
+                return res.status(400).json({
+                    error: "Provided amount does not match selected semester total",
+                    pendingSemesters,
+                });
+            }
+        } else {
+            selectedGroup = matchingGroups[0];
+        }
+
+        const invoiceContext = getInvoiceSemesterContext(
+            selectedGroup.invoices,
+        );
+        const invoiceIds = selectedGroup.invoices.map((invoice) => invoice.id);
+        const manualTransactionId = `manual_${studentProfile.user_id}_${Date.now()}`;
+
+        await prisma.$transaction(async (tx) => {
+            await tx.invoices.updateMany({
+                where: {
+                    student_user_id: studentProfile.user_id,
+                    status: "pending",
+                    id: {
+                        in: invoiceIds,
+                    },
+                },
+                data: {
+                    status: "paid",
+                    payment_date: paidAt,
+                },
+            });
+
+            for (const invoice of selectedGroup.invoices) {
+                await tx.payments.create({
+                    data: {
+                        invoice_id: invoice.id,
+                        gateway: "manual",
+                        transaction_id: `${manualTransactionId}:${invoice.id}`,
+                        amount: toMoneyString(invoice.total_amount),
+                        status: "paid",
+                    },
+                });
+            }
+
+            await createOrUpdateStudentPaymentRecord({
+                tx,
+                studentId: studentProfile.user_id,
+                semester: invoiceContext.semester,
+                year: invoiceContext.year,
+                gateway: "manual",
+                transactionId: manualTransactionId,
+                paidAt,
+            });
+        });
+
+        return res.status(201).json({
+            message: "Manual payment recorded successfully",
+            student: {
+                student_id: studentProfile.student_id,
+                student_user_id: studentProfile.user_id,
+                full_name: studentProfile.users.full_name,
+            },
+            semester: invoiceContext.semester,
+            year: invoiceContext.year,
+            invoiceIds,
+            invoiceCount: invoiceIds.length,
+            totalAmount: Number.parseFloat(
+                selectedGroup.totalAmount.toFixed(2),
+            ),
+            gateway: "manual",
+            transactionId: manualTransactionId,
+            paidAt: paidAt.toISOString(),
+        });
+    } catch (err) {
+        logger.error("Error recording manual payment:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const createPayPalOrder = async (req, res) => {
     try {
         const studentId = req.user.id;

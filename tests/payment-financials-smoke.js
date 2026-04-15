@@ -7,6 +7,12 @@ const PAYMOB_TRANSACTION_ID = process.env.PAYMOB_TRANSACTION_ID;
 const PAYMOB_WEBHOOK_TRANSACTION_ID = process.env.PAYMOB_WEBHOOK_TRANSACTION_ID;
 const PAYMOB_VERIFY_WITH_ORDER_ONLY =
     process.env.PAYMOB_VERIFY_WITH_ORDER_ONLY === "true";
+const MANUAL_PAYMENT_STUDENT_ID = process.env.MANUAL_PAYMENT_STUDENT_ID;
+const MANUAL_PAYMENT_STUDENT_NAME = process.env.MANUAL_PAYMENT_STUDENT_NAME;
+const MANUAL_PAYMENT_AMOUNT = process.env.MANUAL_PAYMENT_AMOUNT;
+const MANUAL_PAYMENT_DATE = process.env.MANUAL_PAYMENT_DATE;
+const MANUAL_PAYMENT_SEMESTER = process.env.MANUAL_PAYMENT_SEMESTER;
+const MANUAL_PAYMENT_YEAR = process.env.MANUAL_PAYMENT_YEAR;
 const EXPECT_PAYMENT_CLOSED = process.env.EXPECT_PAYMENT_CLOSED === "true";
 
 const callApi = async (path, method, token, body) => {
@@ -173,7 +179,30 @@ const run = async () => {
         );
     }
 
-    console.log("8) Get student semester payment history");
+    if (
+        MANUAL_PAYMENT_STUDENT_ID &&
+        MANUAL_PAYMENT_STUDENT_NAME &&
+        MANUAL_PAYMENT_AMOUNT &&
+        MANUAL_PAYMENT_DATE
+    ) {
+        console.log("8) Record admin manual payment");
+        console.log(
+            await callApi("/payments/manual", "POST", ADMIN_TOKEN, {
+                student_id: MANUAL_PAYMENT_STUDENT_ID,
+                student_name: MANUAL_PAYMENT_STUDENT_NAME,
+                amount: Number(MANUAL_PAYMENT_AMOUNT),
+                date: MANUAL_PAYMENT_DATE,
+                ...(MANUAL_PAYMENT_SEMESTER
+                    ? { semester: MANUAL_PAYMENT_SEMESTER }
+                    : {}),
+                ...(MANUAL_PAYMENT_YEAR
+                    ? { year: Number(MANUAL_PAYMENT_YEAR) }
+                    : {}),
+            }),
+        );
+    }
+
+    console.log("9) Get student semester payment history");
     const paymentHistory = await callApi("/payments/me", "GET", STUDENT_TOKEN);
     console.log(paymentHistory);
 

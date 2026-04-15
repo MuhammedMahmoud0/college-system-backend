@@ -35,6 +35,8 @@ router.post(
   paymentController.createPayPalOrder,
 );
 
+router.post("/invoices/paymob-webhook", paymentController.handlePaymobWebhook);
+
 router.post(
   "/invoices/paymob-order",
   authMiddleware,

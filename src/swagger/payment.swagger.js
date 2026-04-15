@@ -184,7 +184,7 @@ export default {
                 tags: ["Payments"],
                 summary: "Verify Paymob semester payment",
                 description:
-                    "Verifies a Paymob transaction for all pending invoices in the active semester payment period, then marks them as paid and creates/updates a student_payments record.",
+                    "Verifies a Paymob transaction for all pending invoices in the active semester payment period, then marks them as paid and creates/updates a student_payments record. Provide transactionId directly, or provide orderId/merchantOrderId so the backend resolves the latest transaction using Paymob transaction inquiry.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
@@ -475,17 +475,30 @@ export default {
         },
         VerifySemesterPaymobRequest: {
             type: "object",
-            required: ["transactionId", "orderId"],
+            oneOf: [
+                { required: ["transactionId"] },
+                { required: ["orderId"] },
+                { required: ["merchantOrderId"] },
+            ],
             properties: {
                 transactionId: {
                     type: "string",
-                    description: "Paymob transaction id",
+                    description:
+                        "Paymob transaction id. Optional when orderId or merchantOrderId is provided.",
                     example: "1122334455",
                 },
                 orderId: {
                     type: "integer",
-                    description: "Paymob order id created by this API",
+                    description:
+                        "Paymob order id created by this API. If transactionId is omitted, backend uses it to inquire latest transaction.",
                     example: 9944332,
+                },
+                merchantOrderId: {
+                    type: "string",
+                    description:
+                        "Merchant order id created by this API (bulk_<studentId>_<timestamp>). If transactionId is omitted, backend uses it to inquire latest transaction.",
+                    example:
+                        "bulk_8f66a5e1-62b4-45be-b80f-927ecf8e8fb0_1774089894200",
                 },
             },
         },

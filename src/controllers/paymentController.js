@@ -5,6 +5,7 @@ import {
     createPaymobPaymentKey,
     getPaymobAuthToken,
     getPaymobTransaction,
+    inquirePaymobOrderTransaction,
     registerPaymobOrder,
     validatePaymobConfig,
 } from "../config/paymob.js";
@@ -529,7 +530,113 @@ const normalizePaymobWebhookPayload = (payload = {}) => {
             : null,
         orderId: toOptionalNumber(orderIdCandidate),
         merchantOrderId,
+        transaction:
+            source && typeof source === "object"
+                ? {
+                      ...source,
+                      ...(transactionIdCandidate !== null &&
+                      transactionIdCandidate !== undefined
+                          ? { id: transactionIdCandidate }
+                          : {}),
+                  }
+                : null,
     };
+};
+
+const hasPaymobTransactionSnapshot = (transaction) => {
+    if (!transaction || typeof transaction !== "object") {
+        return false;
+    }
+
+    const hasId = transaction.id !== undefined && transaction.id !== null;
+    const hasStatusFlags =
+        transaction.success !== undefined && transaction.pending !== undefined;
+    const hasOrderId = toOptionalNumber(transaction?.order?.id) !== null;
+    const hasAmountCents = Number.isFinite(Number(transaction?.amount_cents));
+
+    return hasId && hasStatusFlags && hasOrderId && hasAmountCents;
+};
+
+const normalizePaymobTransactionSnapshot = (candidate) => {
+    if (!candidate || typeof candidate !== "object") {
+        return null;
+    }
+
+    const normalizedTransactionId =
+        candidate?.id ?? candidate?.transaction_id ?? null;
+    const normalizedOrderId =
+        candidate?.order?.id ?? candidate?.order_id ?? null;
+    const normalizedMerchantOrderId =
+        candidate?.order?.merchant_order_id ?? candidate?.merchant_order_id;
+
+    return {
+        ...candidate,
+        ...(normalizedTransactionId !== null &&
+        normalizedTransactionId !== undefined
+            ? { id: normalizedTransactionId }
+            : {}),
+        ...(normalizedOrderId !== null || normalizedMerchantOrderId
+            ? {
+                  order: {
+                      ...(candidate?.order || {}),
+                      ...(normalizedOrderId !== null
+                          ? { id: normalizedOrderId }
+                          : {}),
+                      ...(normalizedMerchantOrderId
+                          ? { merchant_order_id: normalizedMerchantOrderId }
+                          : {}),
+                  },
+              }
+            : {}),
+    };
+};
+
+const pickPaymobTransactionFromInquiryResponse = (inquiryResponse) => {
+    if (!inquiryResponse || typeof inquiryResponse !== "object") {
+        return null;
+    }
+
+    const candidates = [
+        inquiryResponse,
+        inquiryResponse?.obj,
+        inquiryResponse?.transaction,
+        inquiryResponse?.data?.obj,
+        inquiryResponse?.data?.transaction,
+        ...(Array.isArray(inquiryResponse?.transactions)
+            ? inquiryResponse.transactions
+            : []),
+    ]
+        .map(normalizePaymobTransactionSnapshot)
+        .filter(Boolean);
+
+    if (candidates.length === 0) {
+        return null;
+    }
+
+    return (
+        candidates.find(
+            (transaction) =>
+                transaction?.success === true && transaction?.pending !== true,
+        ) || candidates[0]
+    );
+};
+
+const resolvePaymobTransactionByInquiry = async ({
+    authToken,
+    orderId,
+    merchantOrderId,
+}) => {
+    if (!orderId && !merchantOrderId) {
+        return null;
+    }
+
+    const inquiryResponse = await inquirePaymobOrderTransaction({
+        authToken,
+        orderId,
+        merchantOrderId,
+    });
+
+    return pickPaymobTransactionFromInquiryResponse(inquiryResponse);
 };
 
 const verifyAndMarkPaymobSemesterPayment = async ({
@@ -982,24 +1089,59 @@ export const createPaymobOrder = async (req, res) => {
 export const verifyPaymobPayment = async (req, res) => {
     try {
         const studentId = req.user.id;
-        const { transactionId, orderId } = req.body || {};
+        const { transactionId, orderId, merchantOrderId } = req.body || {};
 
-        if (!transactionId) {
-            return res.status(400).json({ error: "transactionId is required" });
+        if (!transactionId && !orderId && !merchantOrderId) {
+            return res.status(400).json({
+                error: "Provide at least one of transactionId, orderId, or merchantOrderId",
+            });
         }
 
-        if (!orderId) {
-            return res.status(400).json({ error: "orderId is required" });
+        let resolvedTransactionId = transactionId
+            ? String(transactionId)
+            : null;
+        let preloadedTransaction = null;
+
+        if (!resolvedTransactionId) {
+            if (!validatePaymobConfig()) {
+                return res.status(500).json({
+                    error: "Paymob is not configured on the server",
+                });
+            }
+
+            const authToken = await getPaymobAuthToken();
+            preloadedTransaction = await resolvePaymobTransactionByInquiry({
+                authToken,
+                orderId: toOptionalNumber(orderId),
+                merchantOrderId,
+            });
+
+            if (!hasPaymobTransactionSnapshot(preloadedTransaction)) {
+                return res.status(400).json({
+                    error: "Unable to resolve transaction from Paymob using orderId/merchantOrderId",
+                });
+            }
+
+            resolvedTransactionId = String(preloadedTransaction.id);
         }
+
         const result = await verifyAndMarkPaymobSemesterPayment({
             studentId,
-            transactionId: String(transactionId),
-            orderId,
+            transactionId: resolvedTransactionId,
+            orderId: toOptionalNumber(orderId),
+            preloadedTransaction,
         });
 
         return res.status(result.status).json(result.body);
     } catch (err) {
         logger.error("Error verifying Paymob payment:", err);
+
+        if (err.statusCode === 404) {
+            return res.status(400).json({
+                error: "Paymob transaction was not found. Verify transactionId is correct and that PAYMOB_API_KEY matches the same environment (test/live) as the transaction.",
+                paymobError: err.paymobResponse || null,
+            });
+        }
 
         if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
             return res.status(400).json({
@@ -1019,9 +1161,13 @@ export const handlePaymobWebhook = async (req, res) => {
     try {
         const normalizedPayload = normalizePaymobWebhookPayload(req.body || {});
 
-        if (!normalizedPayload.transactionId) {
+        if (
+            !normalizedPayload.transactionId &&
+            !normalizedPayload.orderId &&
+            !normalizedPayload.merchantOrderId
+        ) {
             return res.status(400).json({
-                error: "Unable to resolve transactionId from Paymob webhook payload",
+                error: "Unable to resolve transaction identifiers from Paymob webhook payload",
             });
         }
 
@@ -1031,16 +1177,88 @@ export const handlePaymobWebhook = async (req, res) => {
             });
         }
 
-        const authToken = await getPaymobAuthToken();
-        const transaction = await getPaymobTransaction({
-            authToken,
-            transactionId: normalizedPayload.transactionId,
-        });
+        let transaction = normalizedPayload.transaction;
+
+        if (!hasPaymobTransactionSnapshot(transaction)) {
+            const authToken = await getPaymobAuthToken();
+            let transactionLookupError = null;
+
+            if (normalizedPayload.transactionId) {
+                try {
+                    transaction = await getPaymobTransaction({
+                        authToken,
+                        transactionId: normalizedPayload.transactionId,
+                    });
+                } catch (err) {
+                    if (err.statusCode !== 404) {
+                        throw err;
+                    }
+
+                    transactionLookupError = err;
+                }
+            }
+
+            if (!hasPaymobTransactionSnapshot(transaction)) {
+                const inquiryOrderId =
+                    normalizedPayload.orderId ??
+                    toOptionalNumber(normalizedPayload.transactionId);
+
+                const inquiryTransaction =
+                    await resolvePaymobTransactionByInquiry({
+                        authToken,
+                        orderId: inquiryOrderId,
+                        merchantOrderId: normalizedPayload.merchantOrderId,
+                    });
+
+                if (hasPaymobTransactionSnapshot(inquiryTransaction)) {
+                    transaction = inquiryTransaction;
+                }
+            }
+
+            if (!hasPaymobTransactionSnapshot(transaction)) {
+                if (
+                    hasPaymobTransactionSnapshot(normalizedPayload.transaction)
+                ) {
+                    logger.warn(
+                        "Paymob transaction lookup returned 404 for webhook payload. Falling back to webhook transaction snapshot.",
+                    );
+                    transaction = normalizedPayload.transaction;
+                } else if (transactionLookupError) {
+                    throw transactionLookupError;
+                } else {
+                    return res.status(400).json({
+                        error: "Unable to resolve Paymob transaction details from webhook payload",
+                    });
+                }
+            }
+        }
+
+        const resolvedTransactionId =
+            normalizedPayload.transactionId ||
+            (transaction?.id !== undefined && transaction?.id !== null
+                ? String(transaction.id)
+                : null);
+
+        if (!resolvedTransactionId) {
+            return res.status(400).json({
+                error: "Unable to resolve transactionId from Paymob webhook payload",
+            });
+        }
 
         const merchantOrderId =
             transaction?.order?.merchant_order_id ||
             normalizedPayload.merchantOrderId ||
             null;
+
+        if (merchantOrderId) {
+            transaction = {
+                ...transaction,
+                order: {
+                    ...(transaction?.order || {}),
+                    merchant_order_id: merchantOrderId,
+                },
+            };
+        }
 
         const studentId = extractStudentIdFromMerchantOrderId(merchantOrderId);
         if (!studentId) {
@@ -1052,7 +1270,7 @@ export const handlePaymobWebhook = async (req, res) => {
 
         const result = await verifyAndMarkPaymobSemesterPayment({
             studentId,
-            transactionId: normalizedPayload.transactionId,
+            transactionId: resolvedTransactionId,
             orderId: normalizedPayload.orderId ?? transaction?.order?.id,
             preloadedTransaction: transaction,
         });
@@ -1065,6 +1283,13 @@ export const handlePaymobWebhook = async (req, res) => {
         });
     } catch (err) {
         logger.error("Error handling Paymob webhook:", err);
+
+        if (err.statusCode === 404) {
+            return res.status(400).json({
+                error: "Paymob transaction was not found while processing webhook. Ensure webhook obj.id is the transaction id and that PAYMOB_API_KEY uses the same environment (test/live).",
+                paymobError: err.paymobResponse || null,
+            });
+        }
 
         if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
             return res.status(400).json({

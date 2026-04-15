@@ -36,7 +36,7 @@ const validatePaymobConfig = () => {
         !process.env.PAYMOB_IFRAME_ID
     ) {
         logger.error(
-            "Missing PAYMOB_API_KEY, PAYMOB_INTEGRATION_ID, or PAYMOB_IFRAME_ID in environment"
+            "Missing PAYMOB_API_KEY, PAYMOB_INTEGRATION_ID, or PAYMOB_IFRAME_ID in environment",
         );
         return false;
     }
@@ -97,12 +97,60 @@ const createPaymobPaymentKey = async ({
 };
 
 const getPaymobTransaction = async ({ authToken, transactionId }) => {
+    const encodedTransactionId = encodeURIComponent(String(transactionId));
+    const encodedAuthToken = encodeURIComponent(String(authToken));
+
     return paymobRequest(
-        `/api/acceptance/transactions/${transactionId}?token=${authToken}`,
+        `/api/acceptance/transactions/${encodedTransactionId}?token=${encodedAuthToken}`,
         {
             method: "GET",
-        }
+        },
     );
+};
+
+const inquirePaymobOrderTransaction = async ({
+    authToken,
+    orderId,
+    merchantOrderId,
+}) => {
+    if (!orderId && !merchantOrderId) {
+        throw new Error("orderId or merchantOrderId is required");
+    }
+
+    const inquiryBody = {
+        ...(orderId ? { order_id: String(orderId) } : {}),
+        ...(merchantOrderId
+            ? { merchant_order_id: String(merchantOrderId) }
+            : {}),
+    };
+
+    try {
+        return await paymobRequest(
+            "/api/ecommerce/orders/transaction_inquiry",
+            {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${authToken}`,
+                },
+                body: JSON.stringify(inquiryBody),
+            },
+        );
+    } catch (err) {
+        const shouldRetryWithBodyToken =
+            err.statusCode === 401 || err.statusCode === 403;
+
+        if (!shouldRetryWithBodyToken) {
+            throw err;
+        }
+
+        return paymobRequest("/api/ecommerce/orders/transaction_inquiry", {
+            method: "POST",
+            body: JSON.stringify({
+                ...inquiryBody,
+                auth_token: authToken,
+            }),
+        });
+    }
 };
 
 const buildPaymobIframeUrl = (paymentToken) => {
@@ -115,5 +163,6 @@ export {
     registerPaymobOrder,
     createPaymobPaymentKey,
     getPaymobTransaction,
+    inquirePaymobOrderTransaction,
     buildPaymobIframeUrl,
 };

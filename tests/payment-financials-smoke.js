@@ -5,6 +5,8 @@ const STUDENT_TOKEN = process.env.STUDENT_TOKEN;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 const PAYMOB_TRANSACTION_ID = process.env.PAYMOB_TRANSACTION_ID;
 const PAYMOB_WEBHOOK_TRANSACTION_ID = process.env.PAYMOB_WEBHOOK_TRANSACTION_ID;
+const PAYMOB_VERIFY_WITH_ORDER_ONLY =
+    process.env.PAYMOB_VERIFY_WITH_ORDER_ONLY === "true";
 const EXPECT_PAYMENT_CLOSED = process.env.EXPECT_PAYMENT_CLOSED === "true";
 
 const callApi = async (path, method, token, body) => {
@@ -151,6 +153,21 @@ const run = async () => {
                 {
                     transactionId: PAYMOB_TRANSACTION_ID,
                     orderId: paymobOrder.json.orderId,
+                },
+            ),
+        );
+    } else if (PAYMOB_VERIFY_WITH_ORDER_ONLY && paymobOrder?.json?.orderId) {
+        console.log(
+            "7) Verify Paymob pay-all transaction using order inquiry fallback",
+        );
+        console.log(
+            await callApi(
+                "/payments/invoices/paymob-verify",
+                "POST",
+                STUDENT_TOKEN,
+                {
+                    orderId: paymobOrder.json.orderId,
+                    merchantOrderId: paymobOrder.json.merchantOrderId,
                 },
             ),
         );

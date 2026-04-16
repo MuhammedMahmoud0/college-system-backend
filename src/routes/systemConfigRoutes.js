@@ -24,7 +24,7 @@ router.use(authMiddleware);
 router.get("/announcements", getAnnouncements);
 
 // ── Below: Admin / Super Admin only ────────────────────────────────────────
-router.use(authorizationMiddleware("admin", "super_admin"));
+router.use(authorizationMiddleware("super_admin"));
 
 // ── Academic Calendar ──────────────────────────────────────────────────────
 router.get("/calendar", getAcademicCalendar);

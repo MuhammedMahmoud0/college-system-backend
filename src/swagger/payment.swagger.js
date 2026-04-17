@@ -60,6 +60,101 @@ export default {
         },
       },
     },
+    "/payments/admin/cards": {
+      get: {
+        tags: ["Payments"],
+        summary: "Get payment management cards",
+        description:
+          "Returns realtime payment card metrics for admin dashboard: outstanding balance, collected this semester, and overdue payments percentage.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: "Payment cards retrieved",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/AdminPaymentCardsResponse",
+                },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden" },
+          500: { description: "Internal server error" },
+        },
+      },
+    },
+    "/payments/admin/student-payments": {
+      get: {
+        tags: ["Payments"],
+        summary: "Get student_payments table rows",
+        description:
+          "Returns realtime rows from student_payments table, includes student_name from users relation, and derives status from linked payments records. Supports filtering by paid date, payment method, and status.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: "query",
+            name: "date",
+            required: false,
+            schema: {
+              type: "string",
+              format: "date",
+              example: "2026-04-17",
+            },
+            description:
+              "Filter by student payment date (paid_at) in YYYY-MM-DD.",
+          },
+          {
+            in: "query",
+            name: "payMethod",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["paypal", "paymob", "manual"],
+            },
+            description: "Filter by payment method/gateway.",
+          },
+          {
+            in: "query",
+            name: "status",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["pending", "paid", "failed", "refunded"],
+            },
+            description: "Filter by payment status.",
+          },
+          {
+            in: "query",
+            name: "limit",
+            required: false,
+            schema: {
+              type: "integer",
+              default: 20,
+              minimum: 1,
+              maximum: 100,
+            },
+            description: "Max rows returned (default 20, max 100).",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Student payments retrieved",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/AdminStudentPaymentsResponse",
+                },
+              },
+            },
+          },
+          400: { description: "Invalid query filters" },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden" },
+          500: { description: "Internal server error" },
+        },
+      },
+    },
     "/payments/manual": {
       post: {
         tags: ["Payments"],
@@ -330,6 +425,114 @@ export default {
         amount: { type: "number", example: 900 },
         status: { type: "string", example: "paid" },
         created_at: { type: "string", format: "date-time" },
+      },
+    },
+    AdminPaymentCardsResponse: {
+      type: "object",
+      properties: {
+        cards: {
+          type: "object",
+          properties: {
+            outstandingBalance: { type: "number", example: 125400.5 },
+            collectedThisSemester: { type: "number", example: 750200 },
+            overduePaymentsPercentage: { type: "number", example: 12 },
+          },
+        },
+        meta: {
+          type: "object",
+          properties: {
+            unpaidInvoices: { type: "integer", example: 45 },
+            overdueInvoices: { type: "integer", example: 6 },
+            overdueThresholdDays: { type: "integer", example: 30 },
+            semester: { type: "string", nullable: true, example: "Spring" },
+            year: { type: "integer", nullable: true, example: 2026 },
+            refreshedAt: { type: "string", format: "date-time" },
+          },
+        },
+      },
+    },
+    AdminStudentPaymentRow: {
+      type: "object",
+      properties: {
+        id: { type: "integer" },
+        invoice_id: { type: "integer" },
+        student_user_id: { type: "string", format: "uuid", nullable: true },
+        student_id: { type: "string", nullable: true, example: "202400123" },
+        student_name: {
+          type: "string",
+          nullable: true,
+          example: "Sarah Johnson",
+        },
+        semester: { type: "string", nullable: true, example: "Fall" },
+        year: { type: "integer", nullable: true, example: 2026 },
+        course_code: { type: "string", nullable: true, example: "CS201" },
+        payment_method: {
+          type: "string",
+          enum: ["paypal", "paymob", "manual"],
+        },
+        gateway: {
+          type: "string",
+          enum: ["paypal", "paymob", "manual"],
+        },
+        transaction_id: { type: "string" },
+        invoice_transaction_id: {
+          type: "string",
+          nullable: true,
+          description:
+            "Raw transaction_id stored in payments table (can include invoice suffix).",
+        },
+        amount: { type: "number", example: 2500 },
+        status: {
+          type: "string",
+          enum: ["pending", "paid", "failed", "refunded"],
+        },
+        date: { type: "string", format: "date-time", nullable: true },
+        created_at: { type: "string", format: "date-time", nullable: true },
+      },
+    },
+    AdminStudentPaymentsTableResponse: {
+      type: "object",
+      properties: {
+        transaction_id: {
+          type: "string",
+          example: "manual_8f66a5e1-62b4-45be-b80f-927ecf8e8fb0_1774089894200",
+        },
+        total: { type: "integer", example: 120 },
+        count: { type: "integer", example: 20 },
+        payments: {
+          type: "array",
+          items: { $ref: "#/components/schemas/AdminStudentPaymentRow" },
+        },
+        refreshedAt: { type: "string", format: "date-time" },
+      },
+    },
+    AdminStudentPaymentsResponse: {
+      type: "object",
+      properties: {
+        total: { type: "integer", example: 120 },
+        count: { type: "integer", example: 20 },
+        filters: {
+          type: "object",
+          properties: {
+            date: { type: "string", nullable: true, example: "2026-04-17" },
+            payMethod: {
+              type: "string",
+              nullable: true,
+              enum: ["paypal", "paymob", "manual"],
+            },
+            status: {
+              type: "string",
+              nullable: true,
+              enum: ["pending", "paid", "failed", "refunded"],
+            },
+            limit: { type: "integer", example: 20 },
+          },
+        },
+        payments: {
+          type: "array",
+          items: { $ref: "#/components/schemas/StudentPaymentItem" },
+        },
+        refreshedAt: { type: "string", format: "date-time" },
       },
     },
     ManualPaymentRequest: {
@@ -627,8 +830,7 @@ export default {
           type: "string",
           description:
             "Merchant order id created by this API (bulk_<studentId>_<timestamp>). If transactionId is omitted, backend uses it to inquire latest transaction.",
-          example:
-            "bulk_8f66a5e1-62b4-45be-b80f-927ecf8e8fb0_1774089894200",
+          example: "bulk_8f66a5e1-62b4-45be-b80f-927ecf8e8fb0_1774089894200",
         },
       },
     },
@@ -723,6 +925,11 @@ export default {
       properties: {
         id: { type: "integer" },
         student_user_id: { type: "string", format: "uuid" },
+        student_name: {
+          type: "string",
+          nullable: true,
+          example: "Sarah Johnson",
+        },
         semester: { type: "string", example: "Fall" },
         year: { type: "integer", example: 2026 },
         total_amount: { type: "number", example: 2700 },
@@ -732,6 +939,11 @@ export default {
           enum: ["paypal", "paymob", "manual"],
         },
         transaction_id: { type: "string" },
+        status: {
+          type: "string",
+          nullable: true,
+          enum: ["pending", "paid", "failed", "refunded"],
+        },
         paid_at: { type: "string", format: "date-time" },
         created_at: {
           type: "string",

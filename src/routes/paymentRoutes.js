@@ -21,6 +21,20 @@ router.get(
   paymentController.getMyPayments,
 );
 
+router.get(
+  "/admin/cards",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  paymentController.getAdminPaymentCards,
+);
+
+router.get(
+  "/admin/student-payments",
+  authMiddleware,
+  authorizationMiddleware("admin", "super_admin"),
+  paymentController.getAdminStudentPaymentsTable,
+);
+
 router.post(
   "/manual",
   authMiddleware,

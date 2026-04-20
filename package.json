@@ -15,6 +15,7 @@
         "test:manual-course-registration": "node tests/manual-course-registration-smoke.js",
         "test:registration-period": "node tests/registration-period-smoke.js",
         "test:digital-student-id": "node tests/digital-student-id-smoke.js",
+        "test:profile-access": "node tests/profile-access-smoke.js",
         "test:grade-ta-updates": "node tests/grade-ta-updates-smoke.js",
         "test:payment-financials": "node tests/payment-financials-smoke.js"
     },

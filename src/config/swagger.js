@@ -5,6 +5,7 @@ import components from "../swagger/components.js";
 import leaderboard from "../swagger/leaderboard.swagger.js";
 import auth from "../swagger/auth.swagger.js";
 import users from "../swagger/users.swagger.js";
+import staffProfile from "../swagger/staffProfile.swagger.js";
 import studentProfile from "../swagger/studentProfile.swagger.js";
 import settings from "../swagger/settings.swagger.js";
 import schedule from "../swagger/schedule.swagger.js";
@@ -55,6 +56,7 @@ export const swaggerSpec = {
   paths: {
     ...auth.paths,
     ...users.paths,
+    ...staffProfile.paths,
     ...studentProfile.paths,
     ...settings.paths,
     ...department.paths,

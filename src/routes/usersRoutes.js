@@ -12,6 +12,10 @@ import {
   getStaffForManagement,
   getLeaders,
   setStudentRole,
+  getStudentProfileByStudentId,
+  getStudentGradesHistoryByStudentId,
+  getDoctorProfileByUserId,
+  getDoctorCoursesByUserId,
   getOwnProfile,
   updateOwnProfile,
 } from "../controllers/usersController.js";
@@ -46,6 +50,30 @@ router.patch(
   authMiddleware,
   authorizationMiddleware("super_admin", "admin"),
   setStudentRole,
+);
+router.get(
+  "/users/management/students/:studentId/profile",
+  authMiddleware,
+  authorizationMiddleware("super_admin", "admin"),
+  getStudentProfileByStudentId,
+);
+router.get(
+  "/users/management/students/:studentId/grades-history",
+  authMiddleware,
+  authorizationMiddleware("super_admin", "admin"),
+  getStudentGradesHistoryByStudentId,
+);
+router.get(
+  "/users/management/doctors/:userId/profile",
+  authMiddleware,
+  authorizationMiddleware("super_admin", "admin"),
+  getDoctorProfileByUserId,
+);
+router.get(
+  "/users/management/doctors/:userId/courses",
+  authMiddleware,
+  authorizationMiddleware("super_admin", "admin"),
+  getDoctorCoursesByUserId,
 );
 router.get("/users", authMiddleware, getUsers);
 

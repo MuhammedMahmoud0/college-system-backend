@@ -312,6 +312,193 @@ export default {
         },
       },
     },
+    "/users/management/students/{studentId}/profile": {
+      get: {
+        tags: ["Users"],
+        summary: "Get student profile by student_id",
+        description:
+          "Returns a student or leader profile by student_id with basic profile fields and academic summary. Accessible by admin and super_admin only.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "studentId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Academic student ID",
+            example: "2024001234",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Student profile retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    student: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        student_id: { type: "string" },
+                        avatar_url: { type: "string", nullable: true },
+                        email: { type: "string", format: "email" },
+                        phone: { type: "string", nullable: true },
+                        address: { type: "string", nullable: true },
+                        department: { type: "string", nullable: true },
+                        year: { type: "integer", nullable: true },
+                        cgpa: { type: "number", nullable: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden – admin or super_admin only" },
+          404: { description: "Student profile not found" },
+          500: { description: "Internal server error" },
+        },
+      },
+    },
+    "/users/management/students/{studentId}/grades-history": {
+      get: {
+        tags: ["Users"],
+        summary: "Get student grades history by student_id",
+        description:
+          "Returns student grade history across courses including semester, year, and grade. Accessible by admin and super_admin only.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "studentId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Academic student ID",
+            example: "2024001234",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Student grades history retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    student_id: { type: "string" },
+                    grades_history: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          course_code: { type: "string" },
+                          course_name: { type: "string", nullable: true },
+                          semester: {
+                            type: "string",
+                            enum: ["Spring", "Fall", "Summer", "Winter"],
+                          },
+                          year: { type: "integer" },
+                          grade: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden – admin or super_admin only" },
+          404: { description: "Student profile not found" },
+          500: { description: "Internal server error" },
+        },
+      },
+    },
+    "/users/management/doctors/{userId}/profile": {
+      get: {
+        tags: ["Users"],
+        summary: "Get doctor profile by user_id",
+        description:
+          "Returns doctor profile details by user_id. Accessible by admin and super_admin only.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "userId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+            description: "Doctor user UUID",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Doctor profile retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    doctor: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        id: { type: "string", format: "uuid" },
+                        avatar_url: { type: "string", nullable: true },
+                        email: { type: "string", format: "email" },
+                        phone: { type: "string", nullable: true },
+                        address: { type: "string", nullable: true },
+                        department: { type: "string", nullable: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden – admin or super_admin only" },
+          404: { description: "Doctor not found" },
+          500: { description: "Internal server error" },
+        },
+      },
+    },
+    "/users/management/doctors/{userId}/courses": {
+      get: {
+        tags: ["Users"],
+        summary: "Get doctor courses by user_id (schedule format)",
+        description:
+          "Returns the doctor's courses/schedule using the same structure as the teacher schedule endpoint. Accessible by admin and super_admin only.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "userId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+            description: "Doctor user UUID",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Doctor courses retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/TeacherScheduleResponse",
+                },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden – admin or super_admin only" },
+          404: { description: "Doctor not found" },
+          500: { description: "Internal server error" },
+        },
+      },
+    },
     "/users/management/leaders": {
       get: {
         tags: ["Users"],

@@ -19,6 +19,56 @@ const EXCEL_IMPORT_ASYNC_THRESHOLD = process.env.EXCEL_IMPORT_ASYNC_THRESHOLD
   : 200;
 
 const GENERAL_GROUP_NAME = "General";
+const DAYS_ORDER = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+const SEMESTER_ORDER = { Spring: 1, Summer: 2, Fall: 3, Winter: 4 };
+
+const normalizeDayName = (day) => {
+  const dayMap = {
+    sun: "Sunday",
+    mon: "Monday",
+    tue: "Tuesday",
+    wed: "Wednesday",
+    thu: "Thursday",
+    fri: "Friday",
+    sat: "Saturday",
+    sunday: "Sunday",
+    monday: "Monday",
+    tuesday: "Tuesday",
+    wednesday: "Wednesday",
+    thursday: "Thursday",
+    friday: "Friday",
+    saturday: "Saturday",
+  };
+
+  return dayMap[String(day || "").toLowerCase()] || day;
+};
+
+const formatTeacherSlotTime = (time) => {
+  if (!time) return null;
+
+  if (typeof time === "string" && time.match(/^\d{2}:\d{2}/)) {
+    const [hours, minutes] = time.split(":");
+    const hour = parseInt(hours, 10);
+    const period = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${period}`;
+  }
+
+  return new Date(time).toLocaleTimeString("en-US", {
+    timeZone: "Africa/Cairo",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
 
 const ensureUserInGeneralGroup = async (userId) => {
   let generalGroup = await prisma.community_groups.findFirst({
@@ -254,6 +304,297 @@ export const getStaffForManagement = async (req, res) => {
   } catch (err) {
     logger.error(err);
     res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// ── GET /users/management/students/:studentId/profile ──────────────────────
+export const getStudentProfileByStudentId = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const student = await prisma.users.findFirst({
+      where: {
+        role: { in: ["student", "leader"] },
+        student_profiles: {
+          is: {
+            student_id: studentId,
+          },
+        },
+      },
+      select: {
+        full_name: true,
+        email: true,
+        phone: true,
+        address: true,
+        avatar_url: true,
+        student_profiles: {
+          select: {
+            student_id: true,
+            year_level: true,
+            cgpa: true,
+            departments: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!student || !student.student_profiles) {
+      return res.status(404).json({ error: "Student profile not found" });
+    }
+
+    return res.status(200).json({
+      student: {
+        name: student.full_name,
+        student_id: student.student_profiles.student_id,
+        avatar_url: student.avatar_url,
+        email: student.email,
+        phone: student.phone,
+        address: student.address,
+        department: student.student_profiles.departments?.name ?? null,
+        year: student.student_profiles.year_level,
+        cgpa: student.student_profiles.cgpa,
+      },
+    });
+  } catch (err) {
+    logger.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// ── GET /users/management/students/:studentId/grades-history ───────────────
+export const getStudentGradesHistoryByStudentId = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const studentProfile = await prisma.student_profiles.findUnique({
+      where: { student_id: studentId },
+      select: {
+        student_id: true,
+        user_id: true,
+        users: {
+          select: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (
+      !studentProfile ||
+      !studentProfile.users ||
+      !["student", "leader"].includes(studentProfile.users.role)
+    ) {
+      return res.status(404).json({ error: "Student profile not found" });
+    }
+
+    const enrollments = await prisma.enrollments.findMany({
+      where: {
+        student_user_id: studentProfile.user_id,
+        grade: { not: null },
+      },
+      select: {
+        grade: true,
+        lectures: {
+          select: {
+            course_offerings: {
+              select: {
+                course_code: true,
+                semester: true,
+                year: true,
+                courses: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const grades_history = enrollments
+      .map((enrollment) => {
+        const offering = enrollment.lectures?.course_offerings;
+
+        if (!offering) {
+          return null;
+        }
+
+        return {
+          course_code: offering.course_code,
+          course_name: offering.courses?.name ?? null,
+          semester: offering.semester,
+          year: offering.year,
+          grade: enrollment.grade,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        return (
+          (SEMESTER_ORDER[b.semester] ?? 0) - (SEMESTER_ORDER[a.semester] ?? 0)
+        );
+      });
+
+    return res.status(200).json({
+      student_id: studentProfile.student_id,
+      grades_history,
+    });
+  } catch (err) {
+    logger.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// ── GET /users/management/doctors/:userId/profile ──────────────────────────
+export const getDoctorProfileByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const doctor = await prisma.users.findFirst({
+      where: {
+        id: userId,
+        role: "doctor",
+      },
+      select: {
+        id: true,
+        full_name: true,
+        email: true,
+        phone: true,
+        address: true,
+        avatar_url: true,
+        lectures: {
+          take: 1,
+          select: {
+            course_offerings: {
+              select: {
+                courses: {
+                  select: {
+                    departments: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!doctor) {
+      return res.status(404).json({ error: "Doctor not found" });
+    }
+
+    return res.status(200).json({
+      doctor: {
+        name: doctor.full_name,
+        id: doctor.id,
+        avatar_url: doctor.avatar_url,
+        email: doctor.email,
+        phone: doctor.phone,
+        address: doctor.address,
+        department:
+          doctor.lectures[0]?.course_offerings?.courses?.departments?.name ??
+          null,
+      },
+    });
+  } catch (err) {
+    logger.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// ── GET /users/management/doctors/:userId/courses ──────────────────────────
+export const getDoctorCoursesByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const doctor = await prisma.users.findFirst({
+      where: {
+        id: userId,
+        role: "doctor",
+      },
+      select: {
+        id: true,
+        full_name: true,
+      },
+    });
+
+    if (!doctor) {
+      return res.status(404).json({ error: "Doctor not found" });
+    }
+
+    const lectures = await prisma.lectures.findMany({
+      where: {
+        instructor_id: userId,
+      },
+      select: {
+        lecture_id: true,
+        day_of_week: true,
+        start_time: true,
+        end_time: true,
+        location: true,
+        course_offerings: {
+          select: {
+            course_code: true,
+            courses: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const scheduleMap = new Map();
+
+    lectures.forEach((lecture) => {
+      const day = normalizeDayName(lecture.day_of_week);
+
+      if (!scheduleMap.has(day)) {
+        scheduleMap.set(day, []);
+      }
+
+      scheduleMap.get(day).push({
+        lectureId: lecture.lecture_id,
+        startTime: formatTeacherSlotTime(lecture.start_time),
+        endTime: formatTeacherSlotTime(lecture.end_time),
+        courseCode: lecture.course_offerings.course_code,
+        courseName: lecture.course_offerings.courses.name,
+        location: lecture.location || "TBA",
+        type: "lecture",
+        _sortValue: lecture.start_time,
+      });
+    });
+
+    const schedule = DAYS_ORDER.map((day) => {
+      const slots = (scheduleMap.get(day) || [])
+        .sort((a, b) => new Date(a._sortValue) - new Date(b._sortValue))
+        .map(({ _sortValue, ...slot }) => slot);
+
+      return {
+        day,
+        slots,
+      };
+    });
+
+    return res.status(200).json({
+      teacherId: doctor.id,
+      teacherName: doctor.full_name,
+      schedule,
+    });
+  } catch (err) {
+    logger.error(err);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 

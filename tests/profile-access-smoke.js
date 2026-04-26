@@ -8,6 +8,10 @@ const STAFF_TOKEN =
   process.env.TA_TOKEN ||
   process.env.SUPER_ADMIN_TOKEN;
 const STUDENT_TOKEN = process.env.STUDENT_TOKEN;
+const ADMIN_MANAGEMENT_TOKEN =
+  process.env.ADMIN_MANAGEMENT_TOKEN ||
+  process.env.ADMIN_TOKEN ||
+  process.env.SUPER_ADMIN_TOKEN;
 
 const callApi = async ({ path, method, token, body }) => {
   const headers = {
@@ -132,6 +136,141 @@ const run = async () => {
   } else {
     console.warn(
       "STUDENT_TOKEN not set, skipping student-specific profile access checks",
+    );
+  }
+
+  if (ADMIN_MANAGEMENT_TOKEN) {
+    console.log("6) List students for admin management");
+    const studentsManagement = await callApi({
+      path: "/users/management/students?limit=1",
+      method: "GET",
+      token: ADMIN_MANAGEMENT_TOKEN,
+    });
+    console.log(studentsManagement);
+
+    if (studentsManagement.status !== 200) {
+      console.error(
+        `Expected 200 from GET /users/management/students, got ${studentsManagement.status}`,
+      );
+      process.exit(1);
+    }
+
+    const managedStudentId =
+      studentsManagement.json?.data?.[0]?.student_profiles?.student_id;
+
+    if (managedStudentId) {
+      console.log("7) Get student profile by student_id");
+      const studentProfileByStudentId = await callApi({
+        path: `/users/management/students/${encodeURIComponent(managedStudentId)}/profile`,
+        method: "GET",
+        token: ADMIN_MANAGEMENT_TOKEN,
+      });
+      console.log(studentProfileByStudentId);
+
+      if (studentProfileByStudentId.status !== 200) {
+        console.error(
+          `Expected 200 from GET /users/management/students/:studentId/profile, got ${studentProfileByStudentId.status}`,
+        );
+        process.exit(1);
+      }
+
+      if (!studentProfileByStudentId.json?.student?.student_id) {
+        console.error("Expected student profile payload to include student_id");
+        process.exit(1);
+      }
+
+      console.log("8) Get student grades history by student_id");
+      const studentGradesHistory = await callApi({
+        path: `/users/management/students/${encodeURIComponent(managedStudentId)}/grades-history`,
+        method: "GET",
+        token: ADMIN_MANAGEMENT_TOKEN,
+      });
+      console.log(studentGradesHistory);
+
+      if (studentGradesHistory.status !== 200) {
+        console.error(
+          `Expected 200 from GET /users/management/students/:studentId/grades-history, got ${studentGradesHistory.status}`,
+        );
+        process.exit(1);
+      }
+
+      if (!Array.isArray(studentGradesHistory.json?.grades_history)) {
+        console.error("Expected grades_history to be an array");
+        process.exit(1);
+      }
+    } else {
+      console.warn(
+        "No student profile found from management list, skipping student-id management endpoint checks",
+      );
+    }
+
+    console.log("9) List doctors for admin management");
+    const doctorsManagement = await callApi({
+      path: "/users/management/staff?role=doctor&limit=1",
+      method: "GET",
+      token: ADMIN_MANAGEMENT_TOKEN,
+    });
+    console.log(doctorsManagement);
+
+    if (doctorsManagement.status !== 200) {
+      console.error(
+        `Expected 200 from GET /users/management/staff?role=doctor, got ${doctorsManagement.status}`,
+      );
+      process.exit(1);
+    }
+
+    const managedDoctorUserId = doctorsManagement.json?.data?.[0]?.id;
+
+    if (managedDoctorUserId) {
+      console.log("10) Get doctor profile by user_id");
+      const doctorProfileByUserId = await callApi({
+        path: `/users/management/doctors/${managedDoctorUserId}/profile`,
+        method: "GET",
+        token: ADMIN_MANAGEMENT_TOKEN,
+      });
+      console.log(doctorProfileByUserId);
+
+      if (doctorProfileByUserId.status !== 200) {
+        console.error(
+          `Expected 200 from GET /users/management/doctors/:userId/profile, got ${doctorProfileByUserId.status}`,
+        );
+        process.exit(1);
+      }
+
+      if (!doctorProfileByUserId.json?.doctor?.id) {
+        console.error("Expected doctor profile payload to include doctor.id");
+        process.exit(1);
+      }
+
+      console.log("11) Get doctor courses by user_id");
+      const doctorCoursesByUserId = await callApi({
+        path: `/users/management/doctors/${managedDoctorUserId}/courses`,
+        method: "GET",
+        token: ADMIN_MANAGEMENT_TOKEN,
+      });
+      console.log(doctorCoursesByUserId);
+
+      if (doctorCoursesByUserId.status !== 200) {
+        console.error(
+          `Expected 200 from GET /users/management/doctors/:userId/courses, got ${doctorCoursesByUserId.status}`,
+        );
+        process.exit(1);
+      }
+
+      if (!Array.isArray(doctorCoursesByUserId.json?.schedule)) {
+        console.error(
+          "Expected doctor courses payload to include schedule array",
+        );
+        process.exit(1);
+      }
+    } else {
+      console.warn(
+        "No doctor found from staff management list, skipping doctor management endpoint checks",
+      );
+    }
+  } else {
+    console.warn(
+      "ADMIN_MANAGEMENT_TOKEN not set, skipping admin-only management endpoint checks",
     );
   }
 

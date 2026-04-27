@@ -598,6 +598,218 @@ export const getDoctorCoursesByUserId = async (req, res) => {
   }
 };
 
+// ── GET /users/management/teaching-assistants/:userId/profile ─────────────
+export const getTeachingAssistantProfileByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const teachingAssistant = await prisma.users.findFirst({
+      where: {
+        id: userId,
+        role: "teaching_assistant",
+      },
+      select: {
+        id: true,
+        full_name: true,
+        email: true,
+        phone: true,
+        address: true,
+        avatar_url: true,
+        tutorials_labs: {
+          take: 1,
+          select: {
+            course_offerings: {
+              select: {
+                courses: {
+                  select: {
+                    departments: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        lectures: {
+          take: 1,
+          select: {
+            course_offerings: {
+              select: {
+                courses: {
+                  select: {
+                    departments: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!teachingAssistant) {
+      return res.status(404).json({ error: "Teaching assistant not found" });
+    }
+
+    return res.status(200).json({
+      teaching_assistant: {
+        name: teachingAssistant.full_name,
+        id: teachingAssistant.id,
+        avatar_url: teachingAssistant.avatar_url,
+        email: teachingAssistant.email,
+        phone: teachingAssistant.phone,
+        address: teachingAssistant.address,
+        department:
+          teachingAssistant.tutorials_labs[0]?.course_offerings?.courses
+            ?.departments?.name ??
+          teachingAssistant.lectures[0]?.course_offerings?.courses?.departments
+            ?.name ??
+          null,
+      },
+    });
+  } catch (err) {
+    logger.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// ── GET /users/management/teaching-assistants/:userId/courses ─────────────
+export const getTeachingAssistantCoursesByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const teachingAssistant = await prisma.users.findFirst({
+      where: {
+        id: userId,
+        role: "teaching_assistant",
+      },
+      select: {
+        id: true,
+        full_name: true,
+      },
+    });
+
+    if (!teachingAssistant) {
+      return res.status(404).json({ error: "Teaching assistant not found" });
+    }
+
+    const [lectures, tutorialsLabs] = await Promise.all([
+      prisma.lectures.findMany({
+        where: {
+          instructor_id: userId,
+        },
+        select: {
+          lecture_id: true,
+          day_of_week: true,
+          start_time: true,
+          end_time: true,
+          location: true,
+          course_offerings: {
+            select: {
+              course_code: true,
+              courses: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.tutorials_labs.findMany({
+        where: {
+          ta_id: userId,
+        },
+        select: {
+          tutorial_lab_id: true,
+          day_of_week: true,
+          start_time: true,
+          end_time: true,
+          location: true,
+          type: true,
+          course_offerings: {
+            select: {
+              course_code: true,
+              courses: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const scheduleMap = new Map();
+
+    lectures.forEach((lecture) => {
+      const day = normalizeDayName(lecture.day_of_week);
+
+      if (!scheduleMap.has(day)) {
+        scheduleMap.set(day, []);
+      }
+
+      scheduleMap.get(day).push({
+        lectureId: lecture.lecture_id,
+        startTime: formatTeacherSlotTime(lecture.start_time),
+        endTime: formatTeacherSlotTime(lecture.end_time),
+        courseCode: lecture.course_offerings.course_code,
+        courseName: lecture.course_offerings.courses.name,
+        location: lecture.location || "TBA",
+        type: "lecture",
+        _sortValue: lecture.start_time,
+      });
+    });
+
+    tutorialsLabs.forEach((tutorialLab) => {
+      const day = normalizeDayName(tutorialLab.day_of_week);
+
+      if (!scheduleMap.has(day)) {
+        scheduleMap.set(day, []);
+      }
+
+      scheduleMap.get(day).push({
+        tutorialLabId: tutorialLab.tutorial_lab_id,
+        startTime: formatTeacherSlotTime(tutorialLab.start_time),
+        endTime: formatTeacherSlotTime(tutorialLab.end_time),
+        courseCode: tutorialLab.course_offerings.course_code,
+        courseName: tutorialLab.course_offerings.courses.name,
+        location: tutorialLab.location || "TBA",
+        type: tutorialLab.type?.toLowerCase() || "tutorial",
+        _sortValue: tutorialLab.start_time,
+      });
+    });
+
+    const schedule = DAYS_ORDER.map((day) => {
+      const slots = (scheduleMap.get(day) || [])
+        .sort((a, b) => new Date(a._sortValue) - new Date(b._sortValue))
+        .map(({ _sortValue, ...slot }) => slot);
+
+      return {
+        day,
+        slots,
+      };
+    });
+
+    return res.status(200).json({
+      teacherId: teachingAssistant.id,
+      teacherName: teachingAssistant.full_name,
+      schedule,
+    });
+  } catch (err) {
+    logger.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 // ── GET /users ───────────────────────────────────────────────────────────────
 export const getUsers = async (req, res) => {
   try {

@@ -499,6 +499,88 @@ export default {
         },
       },
     },
+    "/users/management/teaching-assistants/{userId}/profile": {
+      get: {
+        tags: ["Users"],
+        summary: "Get teaching assistant profile by user_id",
+        description:
+          "Returns teaching assistant profile details by user_id. Accessible by admin and super_admin only.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "userId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+            description: "Teaching assistant user UUID",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Teaching assistant profile retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    teaching_assistant: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        id: { type: "string", format: "uuid" },
+                        avatar_url: { type: "string", nullable: true },
+                        email: { type: "string", format: "email" },
+                        phone: { type: "string", nullable: true },
+                        address: { type: "string", nullable: true },
+                        department: { type: "string", nullable: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden – admin or super_admin only" },
+          404: { description: "Teaching assistant not found" },
+          500: { description: "Internal server error" },
+        },
+      },
+    },
+    "/users/management/teaching-assistants/{userId}/courses": {
+      get: {
+        tags: ["Users"],
+        summary: "Get teaching assistant courses by user_id (schedule format)",
+        description:
+          "Returns the teaching assistant courses/schedule using the same structure as the teacher schedule endpoint. Accessible by admin and super_admin only.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "userId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+            description: "Teaching assistant user UUID",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Teaching assistant courses retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/TeacherScheduleResponse",
+                },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden – admin or super_admin only" },
+          404: { description: "Teaching assistant not found" },
+          500: { description: "Internal server error" },
+        },
+      },
+    },
     "/users/management/leaders": {
       get: {
         tags: ["Users"],

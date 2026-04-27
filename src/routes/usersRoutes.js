@@ -16,6 +16,8 @@ import {
   getStudentGradesHistoryByStudentId,
   getDoctorProfileByUserId,
   getDoctorCoursesByUserId,
+  getTeachingAssistantProfileByUserId,
+  getTeachingAssistantCoursesByUserId,
   getOwnProfile,
   updateOwnProfile,
 } from "../controllers/usersController.js";
@@ -74,6 +76,18 @@ router.get(
   authMiddleware,
   authorizationMiddleware("super_admin", "admin"),
   getDoctorCoursesByUserId,
+);
+router.get(
+  "/users/management/teaching-assistants/:userId/profile",
+  authMiddleware,
+  authorizationMiddleware("super_admin", "admin"),
+  getTeachingAssistantProfileByUserId,
+);
+router.get(
+  "/users/management/teaching-assistants/:userId/courses",
+  authMiddleware,
+  authorizationMiddleware("super_admin", "admin"),
+  getTeachingAssistantCoursesByUserId,
 );
 router.get("/users", authMiddleware, getUsers);
 

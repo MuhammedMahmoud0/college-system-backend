@@ -268,6 +268,74 @@ const run = async () => {
         "No doctor found from staff management list, skipping doctor management endpoint checks",
       );
     }
+
+    console.log("12) List teaching assistants for admin management");
+    const teachingAssistantsManagement = await callApi({
+      path: "/users/management/staff?role=teaching_assistant&limit=1",
+      method: "GET",
+      token: ADMIN_MANAGEMENT_TOKEN,
+    });
+    console.log(teachingAssistantsManagement);
+
+    if (teachingAssistantsManagement.status !== 200) {
+      console.error(
+        `Expected 200 from GET /users/management/staff?role=teaching_assistant, got ${teachingAssistantsManagement.status}`,
+      );
+      process.exit(1);
+    }
+
+    const managedTeachingAssistantUserId =
+      teachingAssistantsManagement.json?.data?.[0]?.id;
+
+    if (managedTeachingAssistantUserId) {
+      console.log("13) Get teaching assistant profile by user_id");
+      const teachingAssistantProfileByUserId = await callApi({
+        path: `/users/management/teaching-assistants/${managedTeachingAssistantUserId}/profile`,
+        method: "GET",
+        token: ADMIN_MANAGEMENT_TOKEN,
+      });
+      console.log(teachingAssistantProfileByUserId);
+
+      if (teachingAssistantProfileByUserId.status !== 200) {
+        console.error(
+          `Expected 200 from GET /users/management/teaching-assistants/:userId/profile, got ${teachingAssistantProfileByUserId.status}`,
+        );
+        process.exit(1);
+      }
+
+      if (!teachingAssistantProfileByUserId.json?.teaching_assistant?.id) {
+        console.error(
+          "Expected teaching assistant profile payload to include teaching_assistant.id",
+        );
+        process.exit(1);
+      }
+
+      console.log("14) Get teaching assistant courses by user_id");
+      const teachingAssistantCoursesByUserId = await callApi({
+        path: `/users/management/teaching-assistants/${managedTeachingAssistantUserId}/courses`,
+        method: "GET",
+        token: ADMIN_MANAGEMENT_TOKEN,
+      });
+      console.log(teachingAssistantCoursesByUserId);
+
+      if (teachingAssistantCoursesByUserId.status !== 200) {
+        console.error(
+          `Expected 200 from GET /users/management/teaching-assistants/:userId/courses, got ${teachingAssistantCoursesByUserId.status}`,
+        );
+        process.exit(1);
+      }
+
+      if (!Array.isArray(teachingAssistantCoursesByUserId.json?.schedule)) {
+        console.error(
+          "Expected teaching assistant courses payload to include schedule array",
+        );
+        process.exit(1);
+      }
+    } else {
+      console.warn(
+        "No teaching assistant found from staff management list, skipping teaching assistant management endpoint checks",
+      );
+    }
   } else {
     console.warn(
       "ADMIN_MANAGEMENT_TOKEN not set, skipping admin-only management endpoint checks",

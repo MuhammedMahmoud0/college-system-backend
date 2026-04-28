@@ -12,6 +12,8 @@ const ADMIN_MANAGEMENT_TOKEN =
   process.env.ADMIN_MANAGEMENT_TOKEN ||
   process.env.ADMIN_TOKEN ||
   process.env.SUPER_ADMIN_TOKEN;
+const SUPER_ADMIN_MANAGEMENT_TOKEN =
+  process.env.SUPER_ADMIN_MANAGEMENT_TOKEN || process.env.SUPER_ADMIN_TOKEN;
 
 const callApi = async ({ path, method, token, body }) => {
   const headers = {
@@ -339,6 +341,58 @@ const run = async () => {
   } else {
     console.warn(
       "ADMIN_MANAGEMENT_TOKEN not set, skipping admin-only management endpoint checks",
+    );
+  }
+
+  if (SUPER_ADMIN_MANAGEMENT_TOKEN) {
+    console.log("15) List admin users for super_admin management");
+    const adminsManagement = await callApi({
+      path: "/users/management/admins",
+      method: "GET",
+      token: SUPER_ADMIN_MANAGEMENT_TOKEN,
+    });
+    console.log(adminsManagement);
+
+    if (adminsManagement.status !== 200) {
+      console.error(
+        `Expected 200 from GET /users/management/admins, got ${adminsManagement.status}`,
+      );
+      process.exit(1);
+    }
+
+    if (!Array.isArray(adminsManagement.json?.admins)) {
+      console.error("Expected admins payload to include admins array");
+      process.exit(1);
+    }
+
+    console.log("16) Create a new admin user");
+    const uniqueAdminEmail = `smoke.admin.${Date.now()}@example.com`;
+    const createAdminResponse = await callApi({
+      path: "/users/management/admins",
+      method: "POST",
+      token: SUPER_ADMIN_MANAGEMENT_TOKEN,
+      body: {
+        name: "Smoke Admin",
+        email: uniqueAdminEmail,
+        password: "Admin123!",
+      },
+    });
+    console.log(createAdminResponse);
+
+    if (createAdminResponse.status !== 201) {
+      console.error(
+        `Expected 201 from POST /users/management/admins, got ${createAdminResponse.status}`,
+      );
+      process.exit(1);
+    }
+
+    if (!createAdminResponse.json?.userId) {
+      console.error("Expected create admin response to include userId");
+      process.exit(1);
+    }
+  } else {
+    console.warn(
+      "SUPER_ADMIN_MANAGEMENT_TOKEN not set, skipping super_admin-only admin endpoint checks",
     );
   }
 

@@ -183,6 +183,29 @@ export const getLeaders = async (req, res) => {
   }
 };
 
+// ── GET /users/management/admins ────────────────────────────────────────────
+// Returns all admin users.
+export const getAdminsForManagement = async (req, res) => {
+  try {
+    const admins = await prisma.users.findMany({
+      where: { role: "admin" },
+      select: {
+        id: true,
+        full_name: true,
+        email: true,
+        avatar_url: true,
+        created_at: true,
+      },
+      orderBy: { created_at: "desc" },
+    });
+
+    res.status(200).json({ admins });
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 // ── PATCH /users/students/:id/role ────────────────────────────────────────────
 // Promotes a student to leader or demotes a leader back to student.
 export const setStudentRole = async (req, res) => {
@@ -1032,6 +1055,48 @@ export const addUsers = async (req, res) => {
 
     res.status(201).json({
       message: "User created successfully",
+      userId: newUser.id,
+    });
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// ── POST /users/management/admins ───────────────────────────────────────────
+// Creates a new admin user.
+export const createAdminForManagement = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        error: "All fields (name, email, password) are required",
+      });
+    }
+
+    const existingUser = await prisma.users.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ error: "Email already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = await prisma.users.create({
+      data: {
+        full_name: name,
+        email,
+        password_hash: hashedPassword,
+        role: "admin",
+      },
+    });
+
+    await ensureUserInGeneralGroup(newUser.id);
+
+    res.status(201).json({
+      message: "Admin user created successfully",
       userId: newUser.id,
     });
   } catch (err) {

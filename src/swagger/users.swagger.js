@@ -662,6 +662,98 @@ export default {
         },
       },
     },
+    "/users/management/admins": {
+      get: {
+        tags: ["Users"],
+        summary: "List all admin users",
+        description:
+          "Returns all users with the admin role. Accessible by super_admin only.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: "List of admins",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    admins: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string", format: "uuid" },
+                          full_name: { type: "string" },
+                          email: { type: "string", format: "email" },
+                          avatar_url: { type: "string", nullable: true },
+                          created_at: {
+                            type: "string",
+                            format: "date-time",
+                            nullable: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden – super_admin only" },
+          500: { description: "Internal server error" },
+        },
+      },
+      post: {
+        tags: ["Users"],
+        summary: "Create a new admin user",
+        description:
+          "Creates a new user with the admin role. Accessible by super_admin only.",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name", "email", "password"],
+                properties: {
+                  name: { type: "string" },
+                  email: { type: "string", format: "email" },
+                  password: { type: "string" },
+                },
+              },
+              examples: {
+                createAdmin: {
+                  value: {
+                    name: "Admin User",
+                    email: "admin.user@example.edu",
+                    password: "SecurePass123",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: "Admin user created successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/CreateUserResponse",
+                },
+              },
+            },
+          },
+          400: { description: "Missing required fields" },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden – super_admin only" },
+          409: { description: "Email already exists" },
+          500: { description: "Internal server error" },
+        },
+      },
+    },
     "/users/students/{id}/role": {
       patch: {
         tags: ["Users"],

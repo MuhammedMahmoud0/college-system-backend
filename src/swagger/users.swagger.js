@@ -685,6 +685,9 @@ export default {
                           id: { type: "string", format: "uuid" },
                           full_name: { type: "string" },
                           email: { type: "string", format: "email" },
+                          national_id: { type: "string", nullable: true },
+                          phone: { type: "string", nullable: true },
+                          address: { type: "string", nullable: true },
                           avatar_url: { type: "string", nullable: true },
                           created_at: {
                             type: "string",

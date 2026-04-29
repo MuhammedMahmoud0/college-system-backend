@@ -161,93 +161,25 @@ const parseDateFilter = (value) => {
   return parsed;
 };
 
-const mapAdminStudentPaymentRow = (payment, statusByPaymentKey = new Map()) => {
-  const paymentKey = buildStudentPaymentStatusKey(payment);
+const mapAdminStudentPaymentRow = (invoice) => {
+  const latestPayment = Array.isArray(invoice?.payments)
+    ? invoice.payments[0] || null
+    : null;
 
   return {
-    id: payment.id,
-    student_user_id: payment.student_user_id,
-    student_name: payment.users?.full_name || null,
-    semester: payment.semester,
-    year: payment.year,
-    total_amount: Number.parseFloat(payment.total_amount || 0),
-    invoice_count: payment.invoice_count,
-    gateway: payment.gateway,
-    transaction_id: payment.transaction_id,
-    status: paymentKey ? statusByPaymentKey.get(paymentKey) || null : null,
-    paid_at: payment.paid_at,
-    created_at: payment.created_at,
-  };
-};
-
-const normalizePaymentTransactionIdForStudentPayment = (
-  gateway,
-  transactionId,
-) => {
-  if (typeof transactionId !== "string" || transactionId.trim() === "") {
-    return null;
-  }
-
-  const [baseTransactionId] = transactionId.split(":");
-
-  if (gateway === "paymob" && baseTransactionId.startsWith("paymob_")) {
-    return baseTransactionId.slice("paymob_".length);
-  }
-
-  return baseTransactionId;
-};
-
-const buildStudentPaymentStatusKey = ({
-  student_user_id: studentUserId,
-  semester,
-  year,
-  gateway,
-  transaction_id: transactionId,
-}) => {
-  if (!studentUserId || !semester || !year || !gateway || !transactionId) {
-    return null;
-  }
-
-  return `${studentUserId}|${semester}|${year}|${gateway}|${transactionId}`;
-};
-
-const buildStudentPaymentStatusKeyFromPayment = (payment) => {
-  const invoice = payment?.invoices;
-  const normalizedTransactionId =
-    normalizePaymentTransactionIdForStudentPayment(
-      payment?.gateway,
-      payment?.transaction_id,
-    );
-
-  if (!invoice || !normalizedTransactionId) {
-    return null;
-  }
-
-  return buildStudentPaymentStatusKey({
+    id: invoice.id,
     student_user_id: invoice.student_user_id,
+    student_name: invoice.users?.full_name || null,
     semester: invoice.semester,
     year: invoice.year,
-    gateway: payment.gateway,
-    transaction_id: normalizedTransactionId,
-  });
-};
-
-const buildStudentPaymentStatusMap = (payments = []) => {
-  const statusByPaymentKey = new Map();
-
-  for (const payment of payments) {
-    const paymentKey = buildStudentPaymentStatusKeyFromPayment(payment);
-    if (!paymentKey || !payment?.status) {
-      continue;
-    }
-
-    // Payments are queried newest-first, so keep the first status seen per key.
-    if (!statusByPaymentKey.has(paymentKey)) {
-      statusByPaymentKey.set(paymentKey, payment.status);
-    }
-  }
-
-  return statusByPaymentKey;
+    total_amount: Number.parseFloat(invoice.total_amount || 0),
+    invoice_count: 1,
+    gateway: latestPayment?.gateway || null,
+    transaction_id: latestPayment?.transaction_id || null,
+    status: invoice.status,
+    paid_at: invoice.payment_date,
+    created_at: invoice.created_at,
+  };
 };
 
 const buildInvoiceGroups = (invoices) => {
@@ -1176,112 +1108,43 @@ export const getAdminStudentPaymentsTable = async (req, res) => {
         : 20;
 
     const baseWhere = {
-      ...(normalizedPayMethod ? { gateway: normalizedPayMethod } : {}),
-      ...(dateRange ? { paid_at: dateRange } : {}),
+      ...(normalizedStatus ? { status: normalizedStatus } : {}),
+      ...(dateRange ? { created_at: dateRange } : {}),
+      ...(normalizedPayMethod
+        ? {
+            payments: {
+              some: {
+                gateway: normalizedPayMethod,
+              },
+            },
+          }
+        : {}),
     };
 
-    let studentPayments = [];
-    let total = 0;
-    let statusByPaymentKey = new Map();
-
-    if (normalizedStatus) {
-      const [candidateStudentPayments, statusMatchedPayments] =
-        await Promise.all([
-          prisma.student_payments.findMany({
-            where: baseWhere,
-            include: {
-              users: {
-                select: {
-                  full_name: true,
-                },
-              },
-            },
-            orderBy: [{ paid_at: "desc" }, { id: "desc" }],
-          }),
-          prisma.payments.findMany({
-            where: {
-              status: normalizedStatus,
-              ...(normalizedPayMethod ? { gateway: normalizedPayMethod } : {}),
-            },
+    const [studentPayments, total] = await Promise.all([
+      prisma.invoices.findMany({
+        where: baseWhere,
+        include: {
+          users: {
             select: {
-              status: true,
+              full_name: true,
+            },
+          },
+          payments: {
+            select: {
               gateway: true,
               transaction_id: true,
-              invoices: {
-                select: {
-                  student_user_id: true,
-                  semester: true,
-                  year: true,
-                },
-              },
+              created_at: true,
             },
             orderBy: [{ created_at: "desc" }, { id: "desc" }],
-          }),
-        ]);
-
-      statusByPaymentKey = buildStudentPaymentStatusMap(statusMatchedPayments);
-      const matchedStatusKeys = new Set(statusByPaymentKey.keys());
-
-      const filteredStudentPayments = candidateStudentPayments.filter(
-        (payment) => {
-          const paymentKey = buildStudentPaymentStatusKey(payment);
-          return paymentKey && matchedStatusKeys.has(paymentKey);
+            take: 1,
+          },
         },
-      );
-
-      total = filteredStudentPayments.length;
-      studentPayments = filteredStudentPayments.slice(0, safeLimit);
-    } else {
-      const [rows, count] = await Promise.all([
-        prisma.student_payments.findMany({
-          where: baseWhere,
-          include: {
-            users: {
-              select: {
-                full_name: true,
-              },
-            },
-          },
-          orderBy: [{ paid_at: "desc" }, { id: "desc" }],
-          take: safeLimit,
-        }),
-        prisma.student_payments.count({ where: baseWhere }),
-      ]);
-
-      studentPayments = rows;
-      total = count;
-
-      if (rows.length > 0) {
-        const statusLookupPayments = await prisma.payments.findMany({
-          where: {
-            OR: rows.map((payment) => ({
-              gateway: payment.gateway,
-              transaction_id: {
-                startsWith:
-                  payment.gateway === "paymob"
-                    ? `paymob_${payment.transaction_id}`
-                    : payment.transaction_id,
-              },
-            })),
-          },
-          select: {
-            status: true,
-            gateway: true,
-            transaction_id: true,
-            invoices: {
-              select: {
-                student_user_id: true,
-                semester: true,
-                year: true,
-              },
-            },
-          },
-          orderBy: [{ created_at: "desc" }, { id: "desc" }],
-        });
-
-        statusByPaymentKey = buildStudentPaymentStatusMap(statusLookupPayments);
-      }
-    }
+        orderBy: [{ created_at: "desc" }, { id: "desc" }],
+        take: safeLimit,
+      }),
+      prisma.invoices.count({ where: baseWhere }),
+    ]);
 
     return res.status(200).json({
       total,
@@ -1292,9 +1155,7 @@ export const getAdminStudentPaymentsTable = async (req, res) => {
         status: normalizedStatus,
         limit: safeLimit,
       },
-      payments: studentPayments.map((payment) =>
-        mapAdminStudentPaymentRow(payment, statusByPaymentKey),
-      ),
+      payments: studentPayments.map(mapAdminStudentPaymentRow),
       refreshedAt: new Date().toISOString(),
     });
   } catch (err) {

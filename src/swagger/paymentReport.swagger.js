@@ -27,9 +27,9 @@ export default {
     "/payments/admin/student-payments": {
       get: {
         tags: ["Payment Report"],
-        summary: "Get student_payments table rows",
+        summary: "Get invoice-based payment report rows",
         description:
-          "Returns realtime rows from student_payments table, includes student_name from users relation, and derives status from linked payments records. Supports filtering by paid date, payment method, and status.",
+          "Returns realtime rows from invoices table so all invoices are included (paid, pending, failed, refunded). Status is always sourced from invoice.status. Supports filtering by invoice creation date, payment method, and status.",
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -42,7 +42,7 @@ export default {
               example: "2026-04-17",
             },
             description:
-              "Filter by student payment date (paid_at) in YYYY-MM-DD.",
+              "Filter by invoice creation date (created_at) in YYYY-MM-DD.",
           },
           {
             in: "query",
@@ -83,7 +83,7 @@ export default {
             content: {
               "application/json": {
                 schema: {
-                  $ref: "#/components/schemas/AdminStudentPaymentsResponse",
+                  $ref: "#/components/schemas/AdminInvoicePaymentsReportResponse",
                 },
               },
             },
@@ -96,5 +96,74 @@ export default {
       },
     },
   },
-  schemas: {},
+  schemas: {
+    AdminInvoicePaymentReportRow: {
+      type: "object",
+      properties: {
+        id: { type: "integer" },
+        student_user_id: { type: "string", format: "uuid" },
+        student_name: {
+          type: "string",
+          nullable: true,
+          example: "Sarah Johnson",
+        },
+        semester: { type: "string", example: "Fall" },
+        year: { type: "integer", example: 2026 },
+        total_amount: { type: "number", example: 2700 },
+        invoice_count: { type: "integer", example: 1 },
+        gateway: {
+          type: "string",
+          nullable: true,
+          enum: ["paypal", "paymob", "manual"],
+        },
+        transaction_id: {
+          type: "string",
+          nullable: true,
+        },
+        status: {
+          type: "string",
+          enum: ["pending", "paid", "failed", "refunded"],
+        },
+        paid_at: {
+          type: "string",
+          format: "date-time",
+          nullable: true,
+        },
+        created_at: {
+          type: "string",
+          format: "date-time",
+          nullable: true,
+        },
+      },
+    },
+    AdminInvoicePaymentsReportResponse: {
+      type: "object",
+      properties: {
+        total: { type: "integer", example: 120 },
+        count: { type: "integer", example: 20 },
+        filters: {
+          type: "object",
+          properties: {
+            date: { type: "string", nullable: true, example: "2026-04-17" },
+            payMethod: {
+              type: "string",
+              nullable: true,
+              enum: ["paypal", "paymob", "manual"],
+            },
+            status: {
+              type: "string",
+              nullable: true,
+              enum: ["pending", "paid", "failed", "refunded"],
+            },
+            limit: { type: "integer", example: 20 },
+          },
+        },
+        payments: {
+          type: "array",
+          items: { $ref: "#/components/schemas/AdminInvoicePaymentReportRow" },
+        },
+        refreshedAt: { type: "string", format: "date-time" },
+      },
+    },
+  },
 };

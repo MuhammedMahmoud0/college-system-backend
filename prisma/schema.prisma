@@ -1,17 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
-
-// generator erd {
-//   provider = "prisma-erd-generator"
-//   output   = "./erd.svg"
-// }
 
 datasource db {
   provider = "postgresql"
@@ -35,12 +24,12 @@ model academic_calendar {
   event_date         DateTime                     @db.Date
   end_date           DateTime?                    @db.Date
   description        String?
-  semester           String? // e.g., "Fall 2026", "Spring 2027"
-  academic_year      String? // e.g., "2026-2027"
+  semester           String?
+  academic_year      String?
   created_at         DateTime?                    @default(now()) @db.Timestamptz(6)
   updated_at         DateTime?                    @updatedAt @db.Timestamptz(6)
   created_by_user_id String?                      @db.Uuid
-  users              users?                       @relation(fields: [created_by_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  users              users?                       @relation(fields: [created_by_user_id], references: [id], onUpdate: NoAction)
 
   @@index([event_date])
   @@index([event_type])
@@ -84,14 +73,14 @@ model group_members {
 
 model community_posts {
   id               Int               @id @default(autoincrement())
-  group_id         Int?
   author_id        String            @db.Uuid
   content          String
   image_url        String?
   is_pinned        Boolean?          @default(false)
   created_at       DateTime?         @default(now()) @db.Timestamptz(6)
-  community_groups community_groups? @relation(fields: [group_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  group_id         Int?
   users            users             @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  community_groups community_groups? @relation(fields: [group_id], references: [id], onUpdate: NoAction)
   post_comments    post_comments[]
   post_likes       post_likes[]
 
@@ -106,8 +95,8 @@ model post_comments {
   author_id       String          @db.Uuid
   content         String
   created_at      DateTime?       @default(now()) @db.Timestamptz(6)
-  community_posts community_posts @relation(fields: [post_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   users           users           @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  community_posts community_posts @relation(fields: [post_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([post_id])
   @@index([author_id])
@@ -131,8 +120,8 @@ model course_materials {
 model course_offerings {
   offering_id    Int              @id @default(autoincrement())
   course_code    String
-  semester       semester_type
   year           Int
+  semester       semester_type
   courses        courses          @relation(fields: [course_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
   exams          exams[]
   lectures       lectures[]
@@ -168,7 +157,6 @@ model departments {
 }
 
 model enrollments {
-  id              Int               @id @default(autoincrement())
   student_user_id String            @db.Uuid
   lecture_id      Int
   tutorial_lab_id Int?
@@ -177,6 +165,7 @@ model enrollments {
   final_score     Float?
   grade           String?
   status          enrollment_status @default(enrolled)
+  id              Int               @id @default(autoincrement())
   lectures        lectures          @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
   users           users             @relation(fields: [student_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tutorials_labs  tutorials_labs?   @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
@@ -244,7 +233,7 @@ model invoices {
   payment_date    DateTime?      @db.Timestamptz(6)
   created_at      DateTime?      @default(now()) @db.Timestamptz(6)
   updated_at      DateTime?      @updatedAt @db.Timestamptz(6)
-  enrollments     enrollments?   @relation(fields: [enrollment_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  enrollments     enrollments?   @relation(fields: [enrollment_id], references: [id], onUpdate: NoAction)
   users           users          @relation(fields: [student_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   payments        payments[]
 
@@ -286,6 +275,7 @@ model student_payments {
   @@unique([gateway, transaction_id])
   @@index([student_user_id])
   @@index([semester, year])
+  @@index([paid_at])
 }
 
 model grade_distributions {
@@ -302,12 +292,12 @@ model lectures {
   offering_id        Int
   instructor_id      String               @db.Uuid
   capacity           Int
-  enrolled_count     Int                  @default(0)
   day_of_week        String
   start_time         DateTime             @db.Time(6)
   end_time           DateTime             @db.Time(6)
   location           String?
   group              String?
+  enrolled_count     Int                  @default(0)
   attendance         attendance[]
   course_materials   course_materials[]
   enrollments        enrollments[]
@@ -332,8 +322,8 @@ model notifications {
   user_id    String            @db.Uuid
   message    String
   is_read    Boolean           @default(false)
-  type       notification_type @default(general)
   created_at DateTime?         @default(now()) @db.Timestamptz(6)
+  type       notification_type @default(general)
   users      users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([user_id])
@@ -368,11 +358,11 @@ model student_profiles {
   year_level         Int?         @default(1)
   cgpa               Float?
   department_id      String?      @db.Uuid
-  faculty_advisor_id String?      @db.Uuid
   total_credits      Int?
+  faculty_advisor_id String?      @db.Uuid
   departments        departments? @relation(fields: [department_id], references: [department_id], onDelete: NoAction, onUpdate: NoAction)
+  faculty_advisor    users?       @relation("FacultyAdvisor", fields: [faculty_advisor_id], references: [id], onUpdate: NoAction)
   users              users        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  faculty_advisor    users?       @relation("FacultyAdvisor", fields: [faculty_advisor_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([student_id])
   @@index([department_id])
@@ -419,12 +409,12 @@ model tutorials_labs {
   ta_id            String             @db.Uuid
   type             String
   capacity         Int
-  enrolled_count   Int                @default(0)
   day_of_week      String
   start_time       DateTime           @db.Time(6)
   end_time         DateTime           @db.Time(6)
   location         String?
   group            String
+  enrolled_count   Int                @default(0)
   attendance       attendance[]
   course_materials course_materials[]
   enrollments      enrollments[]
@@ -445,6 +435,7 @@ model users {
   address                  String?
   created_at               DateTime?                 @default(now()) @db.Timestamptz(6)
   updated_at               DateTime?                 @default(now()) @db.Timestamptz(6)
+  academic_calendar        academic_calendar[]
   announcements            announcements[]
   attendance               attendance[]
   community_posts          community_posts[]
@@ -453,16 +444,15 @@ model users {
   group_members            group_members[]
   invoices                 invoices[]
   lectures                 lectures[]
-  notifications            notifications[]
   notification_preferences notification_preferences?
+  notifications            notifications[]
   post_comments            post_comments[]
   post_likes               post_likes[]
   student_payments         student_payments[]
-  student_profiles         student_profiles?
   advised_students         student_profiles[]        @relation("FacultyAdvisor")
+  student_profiles         student_profiles?
   task_submissions         task_submissions[]
   tutorials_labs           tutorials_labs[]
-  academic_calendar        academic_calendar[]
 
   @@index([email])
   @@index([role])

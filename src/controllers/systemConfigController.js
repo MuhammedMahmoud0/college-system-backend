@@ -139,25 +139,51 @@ export const createAcademicCalendarEvent = async (req, res) => {
             }
         }
 
-        const event = await prisma.academic_calendar.create({
-            data: {
-                event_name,
-                event_type,
-                event_date: parsedEventDate,
-                end_date: parsedEndDate,
-                description: description || null,
-                semester: semester || null,
-                academic_year: academic_year || null,
-                created_by_user_id,
-            },
-            include: {
-                users: {
-                    select: {
-                        id: true,
-                        full_name: true,
-                    },
+        // ── Deduplication: overwrite existing event with same event_type + semester ──
+        const eventData = {
+            event_name,
+            event_type,
+            event_date: parsedEventDate,
+            end_date: parsedEndDate,
+            description: description || null,
+            semester: semester || null,
+            academic_year: academic_year || null,
+            created_by_user_id,
+        };
+
+        const includeUser = {
+            users: {
+                select: {
+                    id: true,
+                    full_name: true,
                 },
             },
+        };
+
+        if (semester) {
+            const existing = await prisma.academic_calendar.findFirst({
+                where: { event_type, semester },
+            });
+
+            if (existing) {
+                const updated = await prisma.academic_calendar.update({
+                    where: { id: existing.id },
+                    data: eventData,
+                    include: includeUser,
+                });
+
+                return res.status(200).json({
+                    message:
+                        "Existing calendar event with the same type and semester was overwritten.",
+                    data: updated,
+                    overwritten: true,
+                });
+            }
+        }
+
+        const event = await prisma.academic_calendar.create({
+            data: eventData,
+            include: includeUser,
         });
 
         return res.status(201).json({

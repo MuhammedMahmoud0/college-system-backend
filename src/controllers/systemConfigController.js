@@ -42,6 +42,33 @@ const formatAnnouncement = (announcement) => ({
     expire_at: announcement.expire_at ?? null,
 });
 
+// Helper: parse date dynamically handling YYYY-MM-DD explicitly or computing Cairo time
+const parseCairoDate = (dateStr) => {
+    // If it's a date-only string like "2026-5-31", parse as UTC midnight
+    const dateOnlyMatch = /^\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*$/.exec(dateStr);
+    if (dateOnlyMatch) {
+        const [, year, month, day] = dateOnlyMatch;
+        return new Date(Date.UTC(year, parseInt(month) - 1, day));
+    }
+
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return d;
+
+    // If it has a time/timezone, project it to an Africa/Cairo day
+    const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Africa/Cairo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    });
+    const parts = formatter.formatToParts(d);
+    const month = parts.find((p) => p.type === "month").value;
+    const day = parts.find((p) => p.type === "day").value;
+    const year = parts.find((p) => p.type === "year").value;
+
+    return new Date(Date.UTC(year, parseInt(month) - 1, day));
+};
+
 // ─────────────────────────────────────────────
 // 1. Academic Calendar (Database-backed)
 // ─────────────────────────────────────────────
@@ -122,7 +149,7 @@ export const createAcademicCalendarEvent = async (req, res) => {
         }
 
         // Validate date format
-        const parsedEventDate = new Date(event_date);
+        const parsedEventDate = parseCairoDate(event_date);
         if (isNaN(parsedEventDate.getTime())) {
             return res
                 .status(400)
@@ -131,7 +158,7 @@ export const createAcademicCalendarEvent = async (req, res) => {
 
         let parsedEndDate = null;
         if (end_date) {
-            parsedEndDate = new Date(end_date);
+            parsedEndDate = parseCairoDate(end_date);
             if (isNaN(parsedEndDate.getTime())) {
                 return res
                     .status(400)
@@ -160,9 +187,9 @@ export const createAcademicCalendarEvent = async (req, res) => {
             },
         };
 
-        if (semester) {
+        if (semester && academic_year) {
             const existing = await prisma.academic_calendar.findFirst({
-                where: { event_type, semester },
+                where: { event_type, semester, academic_year },
             });
 
             if (existing) {
@@ -174,7 +201,7 @@ export const createAcademicCalendarEvent = async (req, res) => {
 
                 return res.status(200).json({
                     message:
-                        "Existing calendar event with the same type and semester was overwritten.",
+                        "Existing calendar event with the same type, semester, and academic year was overwritten.",
                     data: updated,
                     overwritten: true,
                 });
@@ -230,7 +257,7 @@ export const updateAcademicCalendarEvent = async (req, res) => {
         }
 
         if (event_date) {
-            const parsedEventDate = new Date(event_date);
+            const parsedEventDate = parseCairoDate(event_date);
             if (isNaN(parsedEventDate.getTime())) {
                 return res
                     .status(400)
@@ -243,7 +270,7 @@ export const updateAcademicCalendarEvent = async (req, res) => {
             if (end_date === null) {
                 updateData.end_date = null;
             } else {
-                const parsedEndDate = new Date(end_date);
+                const parsedEndDate = parseCairoDate(end_date);
                 if (isNaN(parsedEndDate.getTime())) {
                     return res
                         .status(400)

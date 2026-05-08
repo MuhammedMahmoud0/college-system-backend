@@ -1,6 +1,7 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
 import { sendNotification } from "../utils/notificationService.js";
+import { computeYearLevel } from "../utils/academicRules.js";
 
 // Map letter grades to grade points (standard 4.0 scale)
 const GRADE_POINTS = {
@@ -71,10 +72,13 @@ async function recalculateCgpa(studentUserId) {
       ? parseFloat((totalPoints / totalCredits).toFixed(2))
       : null;
 
+  const yearLevel = computeYearLevel(totalCredits);
+
   await prisma.student_profiles.updateMany({
     where: { user_id: studentUserId },
     data: {
       cgpa: newCgpa,
+      year_level: yearLevel,
       ...(totalCredits > 0 && { total_credits: totalCredits }),
     },
   });

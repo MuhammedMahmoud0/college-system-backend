@@ -211,13 +211,39 @@ export default {
                       status: "enrolled",
                     },
                   ],
+                  billing: {
+                    invoices: [
+                      {
+                        id: 12,
+                        course_code: "CS201",
+                        total_amount: 900,
+                        status: "pending",
+                      },
+                      {
+                        id: 13,
+                        course_code: "CS301",
+                        total_amount: 900,
+                        status: "pending",
+                      },
+                    ],
+                    totalBilled: 1800,
+                    currency: "USD",
+                  },
+                  semesterHours: {
+                    used: 6,
+                    max: 18,
+                  },
+                  graduationProgress: {
+                    completed: 45,
+                    required: 140,
+                  },
                 },
               },
             },
           },
           400: {
             description:
-              "Validation error — time conflict, capacity full, missing lab, or already enrolled",
+              "Validation error — time conflict, capacity full, missing lab, already enrolled, semester hour limit exceeded, or graduation cap reached",
             content: {
               "application/json": {
                 schema: {
@@ -262,6 +288,29 @@ export default {
                     value: {
                       error:
                         "Invalid input. Required: selectedLectureIds (array), selectedLabIds (array)",
+                    },
+                  },
+                  semesterHourLimitExceeded: {
+                    summary: "Semester credit hour limit exceeded",
+                    value: {
+                      error:
+                        "Cannot register 6 credit hours. You already have 15 hours enrolled this semester. Maximum allowed is 18 hours (GPA > 3.3 allows 21 hours).",
+                      semesterHours: {
+                        enrolled: 15,
+                        requested: 6,
+                        max: 18,
+                      },
+                    },
+                  },
+                  graduationCapReached: {
+                    summary: "Student has completed all required credit hours",
+                    value: {
+                      error:
+                        "You have completed all 140 required credit hours and are eligible for graduation. No further registration is allowed.",
+                      graduationProgress: {
+                        completed: 140,
+                        required: 140,
+                      },
                     },
                   },
                 },
@@ -747,10 +796,124 @@ export default {
                 schema: {
                   $ref: "#/components/schemas/RegisterCoursesResponse",
                 },
+                example: {
+                  message: "Registration successful",
+                  enrollments: 2,
+                  details: [
+                    {
+                      id: 44,
+                      student_user_id: "9c60d94a-99e3-44e7-86df-074833cab9e8",
+                      lecture_id: 5,
+                      tutorial_lab_id: 12,
+                      status: "enrolled",
+                    },
+                    {
+                      id: 45,
+                      student_user_id: "9c60d94a-99e3-44e7-86df-074833cab9e8",
+                      lecture_id: 8,
+                      tutorial_lab_id: 19,
+                      status: "enrolled",
+                    },
+                  ],
+                  billing: {
+                    invoices: [
+                      {
+                        id: 12,
+                        course_code: "CS201",
+                        total_amount: 900,
+                        status: "pending",
+                      },
+                      {
+                        id: 13,
+                        course_code: "CS301",
+                        total_amount: 900,
+                        status: "pending",
+                      },
+                    ],
+                    totalBilled: 1800,
+                    currency: "USD",
+                  },
+                  semesterHours: {
+                    used: 6,
+                    max: 18,
+                  },
+                  graduationProgress: {
+                    completed: 45,
+                    required: 140,
+                  },
+                },
               },
             },
           },
-          400: { description: "Validation error" },
+          400: {
+            description:
+              "Validation error — time conflict, capacity full, missing lab, already enrolled, semester hour limit exceeded, or graduation cap reached",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/ErrorResponse",
+                },
+                examples: {
+                  scheduleConflict: {
+                    summary: "Conflict between newly selected sessions",
+                    value: {
+                      error:
+                        "Schedule conflict on Monday: Data Structures (CS201) [09:00-10:30] overlaps with Algorithms (CS301) [10:00-11:30]",
+                    },
+                  },
+                  conflictWithExisting: {
+                    summary: "Conflict with an already-enrolled session",
+                    value: {
+                      error:
+                        "Schedule conflict on Wednesday: Operating Systems (CS401) [11:00-12:30] overlaps with Networks (CS402) [11:30-13:00]",
+                    },
+                  },
+                  capacityFull: {
+                    summary: "Lecture is full",
+                    value: {
+                      error: "Lecture Data Structures (CS201) is full",
+                    },
+                  },
+                  noLabSelected: {
+                    summary: "No lab selected for a lecture",
+                    value: {
+                      error:
+                        "No lab selected for course Data Structures (CS201)",
+                    },
+                  },
+                  alreadyEnrolled: {
+                    summary: "Already enrolled in this lecture",
+                    value: {
+                      error: "Already enrolled in Data Structures (CS201)",
+                    },
+                  },
+                  semesterHourLimitExceeded: {
+                    summary: "Semester credit hour limit exceeded",
+                    value: {
+                      error:
+                        "Cannot register 6 credit hours. You already have 15 hours enrolled this semester. Maximum allowed is 18 hours (GPA > 3.3 allows 21 hours).",
+                      semesterHours: {
+                        enrolled: 15,
+                        requested: 6,
+                        max: 18,
+                      },
+                    },
+                  },
+                  graduationCapReached: {
+                    summary: "Student has completed all required credit hours",
+                    value: {
+                      error:
+                        "You have completed all 140 required credit hours and are eligible for graduation. No further registration is allowed.",
+                      graduationProgress: {
+                        completed: 140,
+                        required: 140,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
           401: { description: "Not authenticated" },
           403: {
             description: "Forbidden — admin/super_admin only",
@@ -1207,6 +1370,22 @@ export default {
               },
               totalBilled: { type: "number", example: 900 },
               currency: { type: "string", example: "USD" },
+            },
+          },
+          semesterHours: {
+            type: "object",
+            description: "Information about credit hour limits for the current semester",
+            properties: {
+              used: { type: "integer", description: "Total credit hours registered/requested this semester", example: 18 },
+              max: { type: "integer", description: "Maximum allowed credit hours this semester (based on GPA)", example: 18 },
+            },
+          },
+          graduationProgress: {
+            type: "object",
+            description: "Information about total completed credits against the graduation requirement",
+            properties: {
+              completed: { type: "integer", description: "Total credits completed before this registration", example: 105 },
+              required: { type: "integer", description: "Total credits required for graduation", example: 140 },
             },
           },
         },

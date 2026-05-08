@@ -82,7 +82,7 @@ export default {
                 tags: ["System Configuration"],
                 summary: "Create a new academic calendar event",
                 description:
-                    "Add a new event to the academic calendar. For registration/payment window control, use event_type values registration_start, registration_end, payment_start, and payment_end with semester and academic_year populated. Requires Admin or Super Admin role.",
+                    "Add a new event to the academic calendar. If an event with the same event_type and semester already exists, it will be overwritten and return a 200 status. Otherwise, it creates a new event and returns 201. For registration/payment window control, use event_type values registration_start, registration_end, payment_start, and payment_end with semester and academic_year populated. Requires Admin or Super Admin role.",
                 security: [{ bearerAuth: [] }],
                 requestBody: {
                     required: true,
@@ -95,6 +95,27 @@ export default {
                     },
                 },
                 responses: {
+                    200: {
+                        description: "Existing calendar event with the same type and semester was overwritten.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    allOf: [
+                                        { $ref: "#/components/schemas/AcademicCalendarEventResponse" },
+                                        {
+                                            type: "object",
+                                            properties: {
+                                                overwritten: {
+                                                    type: "boolean",
+                                                    example: true,
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                    },
                     201: {
                         description: "Calendar event created successfully.",
                         content: {

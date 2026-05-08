@@ -6,6 +6,11 @@ import {
     getCurrentSemester,
     getRegistrationPeriod,
 } from "../utils/periodHelpers.js";
+import {
+    getMaxSemesterHours,
+    isEligibleForGraduation,
+    GRADUATION_CREDITS,
+} from "../utils/academicRules.js";
 
 /**
  * Helper function to check if two time slots overlap
@@ -496,6 +501,72 @@ export const registerCourses = async (req, res) => {
             });
         }
 
+        // ── Graduation cap & semester hour-limit checks ─────────────
+        const studentProfile = await prisma.student_profiles.findUnique({
+            where: { user_id: studentId },
+            select: { cgpa: true, total_credits: true },
+        });
+
+        const completedCredits = studentProfile?.total_credits || 0;
+
+        if (isEligibleForGraduation(completedCredits)) {
+            return res.status(400).json({
+                error: `You have completed all ${GRADUATION_CREDITS} required credit hours and are eligible for graduation. No further registration is allowed.`,
+                graduationProgress: {
+                    completed: completedCredits,
+                    required: GRADUATION_CREDITS,
+                },
+            });
+        }
+
+        // Sum credit hours the student is already enrolled in this semester
+        const currentSemesterEnrollments = await prisma.enrollments.findMany({
+            where: {
+                student_user_id: studentId,
+                status: "enrolled",
+                lectures: {
+                    course_offerings: {
+                        semester: activeSemester.semester,
+                        year: activeSemester.year,
+                    },
+                },
+            },
+            include: {
+                lectures: {
+                    include: {
+                        course_offerings: { include: { courses: true } },
+                    },
+                },
+            },
+        });
+
+        const enrolledSemesterHours = currentSemesterEnrollments.reduce(
+            (sum, en) =>
+                sum +
+                (en.lectures?.course_offerings?.courses?.credits || 0),
+            0,
+        );
+
+        // Calculate requested hours from the new lectures
+        const requestedHours = lectures.reduce(
+            (sum, lecture) =>
+                sum + (lecture.course_offerings.courses.credits || 0),
+            0,
+        );
+
+        const maxSemesterHours = getMaxSemesterHours(studentProfile?.cgpa);
+
+        if (enrolledSemesterHours + requestedHours > maxSemesterHours) {
+            return res.status(400).json({
+                error: `Cannot register ${requestedHours} credit hours. You already have ${enrolledSemesterHours} hours enrolled this semester. Maximum allowed is ${maxSemesterHours} hours${maxSemesterHours === 18 ? " (GPA > 3.3 allows 21 hours)" : ""}.`,
+                semesterHours: {
+                    enrolled: enrolledSemesterHours,
+                    requested: requestedHours,
+                    max: maxSemesterHours,
+                },
+            });
+        }
+
         const departmentIds = [
             ...new Set(
                 lectures
@@ -814,6 +885,14 @@ export const registerCourses = async (req, res) => {
                         result.totalBilled.toFixed(2),
                     ),
                     currency: "USD",
+                },
+                semesterHours: {
+                    used: enrolledSemesterHours + requestedHours,
+                    max: maxSemesterHours,
+                },
+                graduationProgress: {
+                    completed: completedCredits,
+                    required: GRADUATION_CREDITS,
                 },
             });
         } catch (transactionError) {

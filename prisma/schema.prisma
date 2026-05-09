@@ -15,6 +15,8 @@ model announcements {
   publish_at DateTime?     @default(now()) @db.Timestamptz(6)
   expire_at  DateTime?     @db.Timestamptz(6)
   users      users         @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([audience, publish_at])
 }
 
 model academic_calendar {
@@ -34,6 +36,8 @@ model academic_calendar {
   @@index([event_date])
   @@index([event_type])
   @@index([semester])
+  @@index([event_type, semester, event_date])
+  @@index([event_type, academic_year, event_date])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -69,6 +73,7 @@ model group_members {
   @@id([group_id, user_id])
   @@index([user_id])
   @@index([group_id])
+  @@index([user_id, joined_at])
 }
 
 model community_posts {
@@ -87,6 +92,8 @@ model community_posts {
   @@index([author_id])
   @@index([group_id])
   @@index([created_at])
+  @@index([group_id, created_at])
+  @@index([author_id, created_at])
 }
 
 model post_comments {
@@ -101,6 +108,7 @@ model post_comments {
   @@index([post_id])
   @@index([author_id])
   @@index([created_at])
+  @@index([post_id, created_at])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -115,6 +123,9 @@ model course_materials {
   files           files?          @relation(fields: [file_id], references: [file_id], onDelete: NoAction, onUpdate: NoAction)
   lectures        lectures?       @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
   tutorials_labs  tutorials_labs? @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([lecture_id, uploaded_at])
+  @@index([tutorial_lab_id, uploaded_at])
 }
 
 model course_offerings {
@@ -126,6 +137,10 @@ model course_offerings {
   exams          exams[]
   lectures       lectures[]
   tutorials_labs tutorials_labs[]
+
+  @@index([course_code])
+  @@index([semester, year])
+  @@index([semester, course_code])
 }
 
 model course_prerequisites {
@@ -146,6 +161,8 @@ model courses {
   course_prerequisites_course_prerequisites_course_codeTocourses       course_prerequisites[] @relation("course_prerequisites_course_codeTocourses")
   course_prerequisites_course_prerequisites_prerequisite_codeTocourses course_prerequisites[] @relation("course_prerequisites_prerequisite_codeTocourses")
   departments                                                          departments            @relation(fields: [department_id], references: [department_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([department_id])
 }
 
 model departments {
@@ -172,6 +189,9 @@ model enrollments {
   invoices        invoices?
 
   @@unique([student_user_id, lecture_id])
+  @@index([lecture_id, status])
+  @@index([tutorial_lab_id, status])
+  @@index([student_user_id, status])
 }
 
 model events {
@@ -197,6 +217,9 @@ model exams {
   end_time         DateTime         @db.Time(6)
   location         String?
   course_offerings course_offerings @relation(fields: [offering_id], references: [offering_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([offering_id])
+  @@index([exam_date, start_time])
 }
 
 model files {
@@ -305,6 +328,9 @@ model lectures {
   users              users                @relation(fields: [instructor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   course_offerings   course_offerings     @relation(fields: [offering_id], references: [offering_id], onDelete: Cascade, onUpdate: NoAction)
   tasks              tasks[]
+
+  @@index([offering_id])
+  @@index([instructor_id])
 }
 
 model news_articles {
@@ -329,6 +355,8 @@ model notifications {
   @@index([user_id])
   @@index([is_read])
   @@index([created_at])
+  @@index([user_id, created_at])
+  @@index([user_id, is_read])
 }
 
 model notification_preferences {
@@ -378,6 +406,9 @@ model task_submissions {
   grade              Float?
   users              users     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   tasks              tasks     @relation(fields: [task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([task_id, submitted_at])
+  @@index([task_id, student_id])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -392,6 +423,9 @@ model tasks {
   task_submissions task_submissions[]
   lectures         lectures?          @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
   tutorials_labs   tutorials_labs?    @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([lecture_id, due_date, created_at])
+  @@index([tutorial_lab_id, due_date, created_at])
 }
 
 model testimonials {
@@ -421,6 +455,9 @@ model tutorials_labs {
   tasks            tasks[]
   course_offerings course_offerings   @relation(fields: [offering_id], references: [offering_id], onDelete: Cascade, onUpdate: NoAction)
   users            users              @relation(fields: [ta_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([offering_id])
+  @@index([ta_id])
 }
 
 model users {

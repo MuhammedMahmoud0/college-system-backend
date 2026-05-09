@@ -1,10 +1,19 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
+import { getCache, setCache, invalidateByPattern } from "../services/cacheService.js";
 
 // GET /api/v1/departments
 export const getAllDepartments = async (req, res) => {
     try {
         const { search } = req.query;
+
+        // Only cache the non-search version (search results may vary per query)
+        const cacheKey = !search ? "v1:departments:list" : null;
+
+        if (cacheKey) {
+            const cached = await getCache(cacheKey);
+            if (cached) return res.status(200).json(cached);
+        }
 
         const departments = await prisma.departments.findMany({
             where: search
@@ -23,7 +32,13 @@ export const getAllDepartments = async (req, res) => {
             orderBy: { name: "asc" },
         });
 
-        res.status(200).json({ departments });
+        const response = { departments };
+
+        if (cacheKey) {
+            await setCache(cacheKey, response, 1800); // 30 min
+        }
+
+        res.status(200).json(response);
     } catch (err) {
         logger.error(err);
         res.status(500).json({ error: "Internal server error" });
@@ -34,6 +49,10 @@ export const getAllDepartments = async (req, res) => {
 export const getDepartmentById = async (req, res) => {
     try {
         const { id } = req.params;
+        const cacheKey = `v1:departments:detail:${id}`;
+
+        const cached = await getCache(cacheKey);
+        if (cached) return res.status(200).json(cached);
 
         const department = await prisma.departments.findUnique({
             where: { department_id: id },
@@ -53,6 +72,7 @@ export const getDepartmentById = async (req, res) => {
             return res.status(404).json({ error: "Department not found" });
         }
 
+        await setCache(cacheKey, department, 1800); // 30 min
         res.status(200).json(department);
     } catch (err) {
         logger.error(err);
@@ -86,6 +106,8 @@ export const createDepartment = async (req, res) => {
                 name: true,
             },
         });
+
+        await invalidateByPattern("v1:departments:*");
 
         res.status(201).json(department);
     } catch (err) {
@@ -138,6 +160,8 @@ export const updateDepartment = async (req, res) => {
             },
         });
 
+        await invalidateByPattern("v1:departments:*");
+
         res.status(200).json(updated);
     } catch (err) {
         logger.error(err);
@@ -173,6 +197,8 @@ export const deleteDepartment = async (req, res) => {
         }
 
         await prisma.departments.delete({ where: { department_id: id } });
+
+        await invalidateByPattern("v1:departments:*");
 
         res.status(200).json({ message: "Department deleted successfully" });
     } catch (err) {

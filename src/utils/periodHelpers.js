@@ -1,4 +1,5 @@
 import { prisma } from "../config/connection.js";
+import { getCache, setCache } from "../services/cacheService.js";
 
 const DATE_ONLY_OPTIONS = {
     year: "numeric",
@@ -175,6 +176,10 @@ const getPeriodWindow = async ({ startType, endType, semester, year }) => {
 };
 
 export const getCurrentSemester = async () => {
+    const cacheKey = "v1:semester:current";
+    const cached = await getCache(cacheKey);
+    if (cached) return cached;
+
     const latestOffering = await prisma.course_offerings.findFirst({
         orderBy: [{ year: "desc" }, { offering_id: "desc" }],
         select: {
@@ -187,30 +192,48 @@ export const getCurrentSemester = async () => {
         return null;
     }
 
-    return {
+    const result = {
         semester: latestOffering.semester,
         year: latestOffering.year,
     };
+    await setCache(cacheKey, result, 1800); // 30 min
+    return result;
 };
 
 export const getRegistrationPeriod = async (semester, year) => {
     const normalizedSemester = normalizeSemester(semester);
-    return getPeriodWindow({
+    const cacheKey = `v1:period:registration:${normalizedSemester}:${year}`;
+
+    const cached = await getCache(cacheKey);
+    if (cached) return cached;
+
+    const result = await getPeriodWindow({
         startType: "registration_start",
         endType: "registration_end",
         semester: normalizedSemester,
         year,
     });
+
+    await setCache(cacheKey, result, 600); // 10 min
+    return result;
 };
 
 export const getPaymentPeriod = async (semester, year) => {
     const normalizedSemester = normalizeSemester(semester);
-    return getPeriodWindow({
+    const cacheKey = `v1:period:payment:${normalizedSemester}:${year}`;
+
+    const cached = await getCache(cacheKey);
+    if (cached) return cached;
+
+    const result = await getPeriodWindow({
         startType: "payment_start",
         endType: "payment_end",
         semester: normalizedSemester,
         year,
     });
+
+    await setCache(cacheKey, result, 600); // 10 min
+    return result;
 };
 
 export const isRegistrationOpen = async (semester, year) => {

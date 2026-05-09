@@ -32,6 +32,8 @@ import { swaggerSpec, swaggerUiHandler } from "./config/swagger.js";
 import { initializeSocketIO } from "./utils/socketIO.js";
 import { startExamReminderJob } from "./utils/examReminderJob.js";
 import { initializeUserImportQueue } from "./utils/userImportQueue.js";
+import { closeRedisClient } from "./config/redis.js";
+import { getCacheStats } from "./services/cacheService.js";
 
 config();
 connectDB();
@@ -67,6 +69,11 @@ app.get("/", (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
     });
+});
+
+// Dev-only cache stats route (disable in production as needed)
+app.get("/api/v1/cache/stats", (req, res) => {
+    res.json(getCacheStats());
 });
 
 // mount auth routes
@@ -159,6 +166,7 @@ process.on("unhandledRejection", (err) => {
     logger.error("Unhandled Rejection:", err);
     server.close(async () => {
         await disconnectDB();
+        await closeRedisClient();
         process.exit(1);
     });
 });
@@ -167,6 +175,7 @@ process.on("unhandledRejection", (err) => {
 process.on("uncaughtException", async (err) => {
     logger.error("Uncaught Exception:", err);
     await disconnectDB();
+    await closeRedisClient();
     process.exit(1);
 });
 
@@ -175,6 +184,7 @@ process.on("SIGTERM", async () => {
     logger.info("SIGTERM received. Shutting down gracefully...");
     server.close(async () => {
         await disconnectDB();
+        await closeRedisClient();
         process.exit(0);
     });
 });

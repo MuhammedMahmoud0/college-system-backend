@@ -1,5 +1,6 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
+import { getCache, setCache, invalidateByPattern } from "../services/cacheService.js";
 
 const parseCreditPrice = (creditPrice) => {
     const parsed = Number.parseFloat(creditPrice);
@@ -12,6 +13,12 @@ const parseCreditPrice = (creditPrice) => {
 export const getAllFinancials = async (req, res) => {
     try {
         const { departmentId } = req.query;
+        const cacheKey = departmentId
+            ? `v1:financials:by-dept:${departmentId}`
+            : "v1:financials:list";
+
+        const cached = await getCache(cacheKey);
+        if (cached) return res.status(200).json(cached);
 
         const financials = await prisma.financials.findMany({
             where: departmentId ? { department_id: departmentId } : undefined,
@@ -26,12 +33,15 @@ export const getAllFinancials = async (req, res) => {
             orderBy: { id: "asc" },
         });
 
-        res.status(200).json({
+        const response = {
             financials: financials.map((item) => ({
                 ...item,
                 credit_price: Number.parseFloat(item.credit_price),
             })),
-        });
+        };
+
+        await setCache(cacheKey, response, 3600); // 1 hour
+        res.status(200).json(response);
     } catch (err) {
         logger.error("Error getting financials:", err);
         res.status(500).json({ error: "Internal server error" });
@@ -44,6 +54,10 @@ export const getFinancialById = async (req, res) => {
         if (!Number.isInteger(id)) {
             return res.status(400).json({ error: "Invalid financial id" });
         }
+
+        const cacheKey = `v1:financials:detail:${id}`;
+        const cached = await getCache(cacheKey);
+        if (cached) return res.status(200).json(cached);
 
         const financial = await prisma.financials.findUnique({
             where: { id },
@@ -63,10 +77,13 @@ export const getFinancialById = async (req, res) => {
                 .json({ error: "Financial record not found" });
         }
 
-        res.status(200).json({
+        const response = {
             ...financial,
             credit_price: Number.parseFloat(financial.credit_price),
-        });
+        };
+
+        await setCache(cacheKey, response, 3600); // 1 hour
+        res.status(200).json(response);
     } catch (err) {
         logger.error("Error getting financial by id:", err);
         res.status(500).json({ error: "Internal server error" });
@@ -121,6 +138,8 @@ export const createFinancial = async (req, res) => {
             },
         });
 
+        await invalidateByPattern("v1:financials:*");
+
         res.status(201).json({
             ...created,
             credit_price: Number.parseFloat(created.credit_price),
@@ -167,6 +186,8 @@ export const updateFinancial = async (req, res) => {
             },
         });
 
+        await invalidateByPattern("v1:financials:*");
+
         res.status(200).json({
             ...updated,
             credit_price: Number.parseFloat(updated.credit_price),
@@ -192,6 +213,8 @@ export const deleteFinancial = async (req, res) => {
         }
 
         await prisma.financials.delete({ where: { id } });
+
+        await invalidateByPattern("v1:financials:*");
 
         res.status(200).json({
             message: "Financial record deleted successfully",

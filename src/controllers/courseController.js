@@ -1,5 +1,6 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
+import { getCache, setCache, invalidateByPattern } from "../services/cacheService.js";
 
 // GET /api/courses/student
 export const getStudentCourses = async (req, res) => {
@@ -110,6 +111,10 @@ const formatTime = (time) => {
 // GET /api/courses/all
 export const getAllCourses = async (req, res) => {
   try {
+    const cacheKey = "v1:courses:all";
+    const cached = await getCache(cacheKey);
+    if (cached) return res.status(200).json(cached);
+
     const courses = await prisma.courses.findMany({
       include: {
         departments: {
@@ -149,10 +154,12 @@ export const getAllCourses = async (req, res) => {
         ),
     }));
 
-    res.status(200).json({
+    const response = {
       courses: formattedCourses,
       total: formattedCourses.length,
-    });
+    };
+    await setCache(cacheKey, response, 1800); // 30 min
+    res.status(200).json(response);
   } catch (err) {
     logger.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -163,6 +170,10 @@ export const getAllCourses = async (req, res) => {
 export const getCourseDetails = async (req, res) => {
   try {
     const { offeringId } = req.params;
+    const cacheKey = `v1:course:detail:${offeringId}`;
+
+    const cached = await getCache(cacheKey);
+    if (cached) return res.status(200).json(cached);
 
     const offering = await prisma.course_offerings.findUnique({
       where: { offering_id: parseInt(offeringId) },
@@ -219,7 +230,7 @@ export const getCourseDetails = async (req, res) => {
       group: lab.group,
     }));
 
-    res.status(200).json({
+    const response = {
       name: offering.courses.name,
       code: offering.course_code,
       credits: offering.courses.credits,
@@ -227,7 +238,9 @@ export const getCourseDetails = async (req, res) => {
       year: offering.year,
       lectures: lectures,
       tutorialsLabs: tutorialsLabs,
-    });
+    };
+    await setCache(cacheKey, response, 900); // 15 min
+    res.status(200).json(response);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -370,6 +383,9 @@ export const createCourse = async (req, res) => {
       },
     });
 
+    await invalidateByPattern("v1:courses:*");
+    await invalidateByPattern("v1:course-offerings:*");
+
     res.status(201).json({
       code: result.code,
       name: result.name,
@@ -436,6 +452,9 @@ export const updateCourse = async (req, res) => {
       },
     });
 
+    await invalidateByPattern("v1:courses:*");
+    await invalidateByPattern("v1:course-offerings:*");
+
     res.status(200).json({
       code: updatedCourse.code,
       name: updatedCourse.name,
@@ -484,6 +503,9 @@ export const deleteCourse = async (req, res) => {
     const deletedCourse = await prisma.courses.delete({
       where: { code },
     });
+
+    await invalidateByPattern("v1:courses:*");
+    await invalidateByPattern("v1:course-offerings:*");
 
     res.status(200).json(deletedCourse);
   } catch (err) {
@@ -596,6 +618,11 @@ export const createLecture = async (req, res) => {
       },
     });
 
+    await invalidateByPattern("v1:course:detail:*");
+    await invalidateByPattern("v1:schedule:teacher:*");
+    await invalidateByPattern("v1:doctor:courses:*");
+    await invalidateByPattern("v1:admin:alerts");
+
     res.status(201).json({
       message: "Lecture created successfully",
       lecture: {
@@ -679,6 +706,11 @@ export const updateLecture = async (req, res) => {
       },
     });
 
+    await invalidateByPattern("v1:course:detail:*");
+    await invalidateByPattern("v1:schedule:teacher:*");
+    await invalidateByPattern("v1:doctor:courses:*");
+    await invalidateByPattern("v1:admin:alerts");
+
     res.status(200).json({
       message: "Lecture updated successfully",
       lecture: {
@@ -719,6 +751,11 @@ export const deleteLecture = async (req, res) => {
     await prisma.lectures.delete({
       where: { lecture_id: parseInt(lectureId) },
     });
+
+    await invalidateByPattern("v1:course:detail:*");
+    await invalidateByPattern("v1:schedule:teacher:*");
+    await invalidateByPattern("v1:doctor:courses:*");
+    await invalidateByPattern("v1:admin:alerts");
 
     res.status(200).json({ message: "Lecture deleted successfully" });
   } catch (err) {
@@ -826,6 +863,9 @@ export const createTutorialLab = async (req, res) => {
       },
     });
 
+    await invalidateByPattern("v1:course:detail:*");
+    await invalidateByPattern("v1:schedule:teacher:*");
+
     res.status(201).json({
       message: "Tutorial/Lab created successfully",
       tutorialLab: {
@@ -910,6 +950,9 @@ export const updateTutorialLab = async (req, res) => {
       },
     });
 
+    await invalidateByPattern("v1:course:detail:*");
+    await invalidateByPattern("v1:schedule:teacher:*");
+
     res.status(200).json({
       message: "Tutorial/Lab updated successfully",
       tutorialLab: {
@@ -951,6 +994,9 @@ export const deleteTutorialLab = async (req, res) => {
     await prisma.tutorials_labs.delete({
       where: { tutorial_lab_id: parseInt(tutorialLabId) },
     });
+
+    await invalidateByPattern("v1:course:detail:*");
+    await invalidateByPattern("v1:schedule:teacher:*");
 
     res.status(200).json({ message: "Tutorial/Lab deleted successfully" });
   } catch (err) {

@@ -2,6 +2,7 @@ import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
 import { sendNotification } from "../utils/notificationService.js";
 import { computeYearLevel } from "../utils/academicRules.js";
+import { invalidateByPattern } from "../services/cacheService.js";
 
 // Map letter grades to grade points (standard 4.0 scale)
 const GRADE_POINTS = {
@@ -520,6 +521,15 @@ export const updateGradeByLecture = async (req, res) => {
       io,
     );
 
+    // Invalidate leaderboard + alert caches whenever a grade changes
+    await Promise.all([
+      invalidateByPattern("v1:leaderboard:gpa:*"),
+      invalidateByPattern("v1:doctor:alerts:*"),
+      invalidateByPattern("v1:ta:alerts:*"),
+      invalidateByPattern("v1:admin:alerts"),
+      invalidateByPattern("v1:grades:*"),
+    ]);
+
     return res.status(200).json({
       message: "Grade updated successfully.",
       enrollment: updated,
@@ -641,6 +651,15 @@ export const updateGradeByTutorialLab = async (req, res) => {
       updateData,
       io,
     );
+
+    // Invalidate leaderboard + alert caches whenever a grade changes
+    await Promise.all([
+      invalidateByPattern("v1:leaderboard:gpa:*"),
+      invalidateByPattern("v1:doctor:alerts:*"),
+      invalidateByPattern("v1:ta:alerts:*"),
+      invalidateByPattern("v1:admin:alerts"),
+      invalidateByPattern("v1:grades:*"),
+    ]);
 
     return res.status(200).json({
       message: "Grade updated successfully.",

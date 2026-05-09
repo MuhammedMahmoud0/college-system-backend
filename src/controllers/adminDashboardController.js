@@ -1,5 +1,6 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
+import { getCache, setCache } from "../services/cacheService.js";
 
 // ─── Helper: format a Date as "YYYY-MM-DD HH:mm" ────────────────────────────
 const formatDateTime = (date = new Date()) => {
@@ -81,6 +82,10 @@ const getInvoiceOverdueSnapshot = async (now = new Date()) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export const getAlerts = async (req, res) => {
     try {
+        const cacheKey = "v1:admin:alerts";
+        const cached = await getCache(cacheKey);
+        if (cached) return res.status(200).json(cached);
+
         const now = new Date();
         const alerts = [];
 
@@ -194,7 +199,9 @@ export const getAlerts = async (req, res) => {
             }
         }
 
-        return res.status(200).json({ count: alerts.length, data: alerts });
+        const response = { count: alerts.length, data: alerts };
+        await setCache(cacheKey, response, 180); // 3 min
+        return res.status(200).json(response);
     } catch (err) {
         logger.error("Error fetching admin alerts:", err);
         return res.status(500).json({ error: "Internal server error." });
@@ -208,6 +215,10 @@ export const getAlerts = async (req, res) => {
 export const getRecentActivity = async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+        const cacheKey = `v1:admin:activity:${limit}`;
+
+        const cached = await getCache(cacheKey);
+        if (cached) return res.status(200).json(cached);
 
         const [newUsers, recentPosts, recentAnnouncements, recentSubmissions] =
             await Promise.all([
@@ -316,7 +327,9 @@ export const getRecentActivity = async (req, res) => {
             return { type, timestamp };
         });
 
-        return res.status(200).json({ count: result.length, data: result });
+        const activityResponse = { count: result.length, data: result };
+        await setCache(cacheKey, activityResponse, 90); // 90 sec
+        return res.status(200).json(activityResponse);
     } catch (err) {
         logger.error("Error fetching recent activity:", err);
         return res.status(500).json({ error: "Internal server error." });
@@ -337,6 +350,10 @@ export const getEnrollmentTrends = async (req, res) => {
                 .status(400)
                 .json({ error: "`from` year must be less than or equal to `to` year." });
         }
+
+        const cacheKey = `v1:admin:enrollment-trends:${fromYear}:${toYear}`;
+        const cached = await getCache(cacheKey);
+        if (cached) return res.status(200).json(cached);
 
         // Count distinct students enrolled per offering year
         const rows = await prisma.$queryRaw`
@@ -364,7 +381,9 @@ export const getEnrollmentTrends = async (req, res) => {
             student_count: count,
         }));
 
-        return res.status(200).json({ data });
+        const trendsResponse = { data };
+        await setCache(cacheKey, trendsResponse, 1800); // 30 min
+        return res.status(200).json(trendsResponse);
     } catch (err) {
         logger.error("Error fetching enrollment trends:", err);
         return res.status(500).json({ error: "Internal server error." });
@@ -378,6 +397,10 @@ export const getEnrollmentTrends = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export const getPaymentAging = async (req, res) => {
     try {
+        const cacheKey = "v1:admin:payment-aging";
+        const cached = await getCache(cacheKey);
+        if (cached) return res.status(200).json(cached);
+
         const now = new Date();
 
         const invoiceSnapshot = await getInvoiceOverdueSnapshot(now);
@@ -401,7 +424,7 @@ export const getPaymentAging = async (req, res) => {
 
         const totalOverdueStudents = overdueStudents.length;
 
-        return res.status(200).json({
+        const agingResponse = {
             total_overdue_students: totalOverdueStudents,
             data: [
                 {
@@ -417,7 +440,9 @@ export const getPaymentAging = async (req, res) => {
                     student_count: buckets["60+"],
                 },
             ],
-        });
+        };
+        await setCache(cacheKey, agingResponse, 300); // 5 min
+        return res.status(200).json(agingResponse);
     } catch (err) {
         logger.error("Error fetching payment aging:", err);
         return res.status(500).json({ error: "Internal server error." });

@@ -34,6 +34,7 @@ export async function getCache(key) {
 
     try {
         const client = getRedisClient();
+        if (!client) return null;
         const data = await client.get(key);
         if (!data) {
             cacheMisses++;
@@ -43,7 +44,7 @@ export async function getCache(key) {
         return JSON.parse(data);
     } catch (err) {
         logger.warn(`Cache GET failed for key ${key}:`, err.message);
-        return null; // fail open — caller will hit DB
+        return null;
     }
 }
 
@@ -55,6 +56,7 @@ export async function setCache(key, data, ttlSeconds = 300) {
 
     try {
         const client = getRedisClient();
+        if (!client) return;
         await client.set(key, JSON.stringify(data), "EX", ttlSeconds);
     } catch (err) {
         logger.warn(`Cache SET failed for key ${key}:`, err.message);
@@ -69,6 +71,7 @@ export async function delCache(key) {
 
     try {
         const client = getRedisClient();
+        if (!client) return;
         await client.del(key);
     } catch (err) {
         logger.warn(`Cache DEL failed for key ${key}:`, err.message);
@@ -84,6 +87,7 @@ export async function invalidateByPattern(pattern) {
 
     try {
         const client = getRedisClient();
+        if (!client) return;
         let cursor = "0";
         const deleted = [];
 
@@ -123,6 +127,7 @@ export async function cacheExists(key) {
     if (!isCacheEnabled()) return false;
     try {
         const client = getRedisClient();
+        if (!client) return false;
         const val = await client.exists(key);
         return val === 1;
     } catch {
@@ -135,15 +140,15 @@ export async function cacheExists(key) {
  * Returns true if this caller should compute, false if another is already computing.
  */
 export async function tryAcquireLock(key, ttlSeconds = 10) {
-    if (!isCacheEnabled()) return true; // no lock needed without cache
+    if (!isCacheEnabled()) return true;
     try {
         const client = getRedisClient();
+        if (!client) return true;
         const lockKey = `v1:lock:${key}`;
-        // SET NX = only set if NOT exists
         const result = await client.set(lockKey, "1", "EX", ttlSeconds, "NX");
-        return result === "OK"; // "OK" means we got the lock
+        return result === "OK";
     } catch {
-        return true; // fail open — let the request proceed
+        return true;
     }
 }
 
@@ -154,6 +159,7 @@ export async function releaseLock(key) {
     if (!isCacheEnabled()) return;
     try {
         const client = getRedisClient();
+        if (!client) return;
         await client.del(`v1:lock:${key}`);
     } catch {
         // ignore

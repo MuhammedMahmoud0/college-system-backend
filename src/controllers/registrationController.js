@@ -11,6 +11,7 @@ import {
     isEligibleForGraduation,
     GRADUATION_CREDITS,
 } from "../utils/academicRules.js";
+import { invalidateByPattern } from "../services/cacheService.js";
 
 /**
  * Helper function to check if two time slots overlap
@@ -870,6 +871,14 @@ export const registerCourses = async (req, res) => {
                 io,
             });
 
+            // Invalidate enrollment-dependent caches
+            await Promise.all([
+                invalidateByPattern("v1:registration:available:*"),
+                invalidateByPattern("v1:schedule:student:*"),
+                invalidateByPattern("v1:courses:student:*"),
+                invalidateByPattern("v1:admin:alerts"),
+            ]);
+
             res.status(201).json({
                 message: "Registration successful",
                 enrollments: result.enrollmentsCreated.length,
@@ -1369,6 +1378,14 @@ export const unregisterSession = async (req, res) => {
                 type: "general",
                 io: unregIo,
             });
+
+            // Invalidate enrollment-dependent caches
+            await Promise.all([
+                invalidateByPattern("v1:registration:available:*"),
+                invalidateByPattern("v1:schedule:student:*"),
+                invalidateByPattern("v1:courses:student:*"),
+                invalidateByPattern("v1:admin:alerts"),
+            ]);
 
             return res.status(200).json({
                 message: `Successfully unregistered from lab for ${tutorialLab.course_offerings.courses.name}. You can now register the same lecture with a different lab.`,

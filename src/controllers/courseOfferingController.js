@@ -1,5 +1,6 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
+import { getCache, setCache, invalidateByPattern } from "../services/cacheService.js";
 
 /**
  * GET /api/course-offerings
@@ -8,6 +9,10 @@ import logger from "../utils/logger.js";
  */
 export const getAllCourseOfferings = async (req, res) => {
   try {
+    const cacheKey = "v1:course-offerings:all";
+    const cached = await getCache(cacheKey);
+    if (cached) return res.status(200).json(cached);
+
     const offerings = await prisma.course_offerings.findMany({
       include: {
         courses: {
@@ -40,11 +45,13 @@ export const getAllCourseOfferings = async (req, res) => {
       exams_count: offering._count.exams,
     }));
 
-    res.status(200).json({
+    const response = {
       success: true,
       count: formattedOfferings.length,
       data: formattedOfferings,
-    });
+    };
+    await setCache(cacheKey, response, 1800); // 30 min
+    res.status(200).json(response);
   } catch (err) {
     logger.error("Error fetching course offerings:", err);
     res.status(500).json({
@@ -130,6 +137,10 @@ export const createCourseOffering = async (req, res) => {
       },
     });
 
+    await invalidateByPattern("v1:course-offerings:*");
+    await invalidateByPattern("v1:semester:*");
+    await invalidateByPattern("v1:period:*");
+
     res.status(201).json({
       success: true,
       message: "Course offering created successfully",
@@ -210,6 +221,10 @@ export const updateCourseOffering = async (req, res) => {
       },
     });
 
+    await invalidateByPattern("v1:course-offerings:*");
+    await invalidateByPattern("v1:semester:*");
+    await invalidateByPattern("v1:period:*");
+
     res.status(200).json({
       success: true,
       message: "Course offering updated successfully",
@@ -284,6 +299,10 @@ export const deleteCourseOffering = async (req, res) => {
     await prisma.course_offerings.delete({
       where: { offering_id: parseInt(offering_id) },
     });
+
+    await invalidateByPattern("v1:course-offerings:*");
+    await invalidateByPattern("v1:semester:*");
+    await invalidateByPattern("v1:period:*");
 
     res.status(200).json({
       success: true,

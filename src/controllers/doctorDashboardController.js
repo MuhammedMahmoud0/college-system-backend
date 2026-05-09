@@ -1,6 +1,7 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
 import { sendBulkNotification } from "../utils/notificationService.js";
+import { getCache, setCache } from "../services/cacheService.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. GET /api/v1/doctor/courses
@@ -10,6 +11,10 @@ import { sendBulkNotification } from "../utils/notificationService.js";
 export const getDoctorCourses = async (req, res) => {
     try {
         const instructorId = req.user.id;
+        const cacheKey = `v1:doctor:courses:${instructorId}`;
+
+        const cached = await getCache(cacheKey);
+        if (cached) return res.status(200).json(cached);
 
         const lectures = await prisma.lectures.findMany({
             where: { instructor_id: instructorId },
@@ -72,7 +77,9 @@ export const getDoctorCourses = async (req, res) => {
             ),
         }));
 
-        return res.status(200).json({ count: courses.length, courses });
+        const doctorCoursesResponse = { count: courses.length, courses };
+        await setCache(cacheKey, doctorCoursesResponse, 300); // 5 min
+        return res.status(200).json(doctorCoursesResponse);
     } catch (err) {
         logger.error("Error fetching doctor courses:", err);
         return res.status(500).json({ error: "Internal server error" });
@@ -262,6 +269,11 @@ export const createDoctorTask = async (req, res) => {
 export const getDoctorAlerts = async (req, res) => {
     try {
         const instructorId = req.user.id;
+        const cacheKey = `v1:doctor:alerts:${instructorId}`;
+
+        const cached = await getCache(cacheKey);
+        if (cached) return res.status(200).json(cached);
+
         const now = new Date();
         const alerts = [];
 
@@ -472,9 +484,9 @@ export const getDoctorAlerts = async (req, res) => {
             }
         }
 
-        return res
-            .status(200)
-            .json({ count: alerts.length, alerts });
+        const doctorAlertsResponse = { count: alerts.length, alerts };
+        await setCache(cacheKey, doctorAlertsResponse, 90); // 90 sec
+        return res.status(200).json(doctorAlertsResponse);
     } catch (err) {
         logger.error("Error fetching doctor alerts:", err);
         return res.status(500).json({ error: "Internal server error" });

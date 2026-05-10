@@ -1,5 +1,6 @@
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
+import { getCache, setCache } from "../services/cacheService.js";
 
 export const getStudentSchedule = async (req, res) => {
     try {
@@ -9,6 +10,12 @@ export const getStudentSchedule = async (req, res) => {
         }
 
         const { week, date } = req.query;
+
+        const cacheKey = `v1:schedule:student:${user.userId}:${week || 0}:${date || "current"}`;
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+            return res.status(200).json(cachedData);
+        }
 
         // Get student enrollments
         const enrollments = await prisma.enrollments.findMany({
@@ -147,7 +154,9 @@ export const getStudentSchedule = async (req, res) => {
         // Get the start of the week (Sunday)
         const startOfWeek = new Date(baseDate);
         startOfWeek.setDate(
-            startOfWeek.getDate() - startOfWeek.getDay() + (week ? week * 7 : 0)
+            startOfWeek.getDate() -
+                startOfWeek.getDay() +
+                (week ? week * 7 : 0),
         );
 
         const schedule = daysOrder.map((day, index) => {
@@ -163,7 +172,10 @@ export const getStudentSchedule = async (req, res) => {
             };
         });
 
-        res.status(200).json({ schedule });
+        const responseData = { schedule };
+        await setCache(cacheKey, responseData, 300); // Cache for 5 minutes
+
+        res.status(200).json(responseData);
     } catch (err) {
         logger.error(err);
         res.status(500).json({ error: "Internal server error" });

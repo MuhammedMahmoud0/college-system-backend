@@ -52,7 +52,36 @@ export default {
       type: "object",
       properties: {
         message: { type: "string" },
-        token: { type: "string" },
+        accessToken: { type: "string" },
+        requiresPasswordChange: { type: "boolean" },
+      },
+    },
+    RefreshResponse: {
+      type: "object",
+      properties: {
+        accessToken: { type: "string" },
+      },
+    },
+    ChangePasswordRequest: {
+      type: "object",
+      required: ["currentPassword", "newPassword"],
+      properties: {
+        currentPassword: { type: "string" },
+        newPassword: { type: "string" },
+      },
+    },
+    AdminResetPasswordRequest: {
+      type: "object",
+      required: ["userId", "newPassword"],
+      properties: {
+        userId: { type: "string", format: "uuid" },
+        newPassword: { type: "string" },
+      },
+    },
+    MessageResponse: {
+      type: "object",
+      properties: {
+        message: { type: "string" },
       },
     },
     MeResponse: {

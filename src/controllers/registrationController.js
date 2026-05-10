@@ -11,7 +11,11 @@ import {
     isEligibleForGraduation,
     GRADUATION_CREDITS,
 } from "../utils/academicRules.js";
-import { invalidateByPattern } from "../services/cacheService.js";
+import {
+    getCache,
+    setCache,
+    invalidateByPattern,
+} from "../services/cacheService.js";
 
 /**
  * Helper function to check if two time slots overlap
@@ -233,6 +237,21 @@ export const getAvailableOfferings = async (req, res) => {
             });
         }
 
+        const isStaff = [
+            "doctor",
+            "teaching_assistant",
+            "admin",
+            "super_admin",
+        ].includes(userRole);
+        const cacheKey = isStaff
+            ? `v1:registration:available:staff:${currentSemester}:${currentYear}`
+            : `v1:registration:available:${userId}:${currentSemester}:${currentYear}`;
+
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+            return res.status(200).json(cachedData);
+        }
+
         const registrationPeriod = await getRegistrationPeriod(
             currentSemester,
             currentYear,
@@ -298,13 +317,16 @@ export const getAvailableOfferings = async (req, res) => {
                 })),
             }));
 
-            return res.status(200).json({
+            const responseData = {
                 semester: currentSemester,
                 year: currentYear,
                 total: offerings.length,
                 offerings,
                 registrationPeriod,
-            });
+            };
+
+            await setCache(cacheKey, responseData, 300); // Cache for 5 minutes
+            return res.status(200).json(responseData);
         }
 
         // --- Student / Leader view: filter by eligibility ---
@@ -401,12 +423,15 @@ export const getAvailableOfferings = async (req, res) => {
             });
         }
 
-        res.status(200).json({
+        const responseData = {
             semester: currentSemester,
             year: currentYear,
             offerings: availableOfferings,
             registrationPeriod,
-        });
+        };
+
+        await setCache(cacheKey, responseData, 300); // Cache for 5 minutes
+        res.status(200).json(responseData);
     } catch (err) {
         logger.error("Error fetching available offerings:", err);
         res.status(500).json({ error: "Internal server error" });
@@ -543,8 +568,7 @@ export const registerCourses = async (req, res) => {
 
         const enrolledSemesterHours = currentSemesterEnrollments.reduce(
             (sum, en) =>
-                sum +
-                (en.lectures?.course_offerings?.courses?.credits || 0),
+                sum + (en.lectures?.course_offerings?.courses?.credits || 0),
             0,
         );
 

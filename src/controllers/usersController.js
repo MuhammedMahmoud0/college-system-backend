@@ -1,5 +1,5 @@
 import { prisma } from "../config/connection.js";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import logger from "../utils/logger.js";
 import { supabase } from "../utils/supabase.js";
 import path from "path";
@@ -1044,7 +1044,7 @@ export const addUsers = async (req, res) => {
       return res.status(409).json({ error: "Email already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
     const newUser = await prisma.users.create({
       data: {
         full_name: name,
@@ -1086,7 +1086,7 @@ export const createAdminForManagement = async (req, res) => {
       return res.status(409).json({ error: "Email already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
     const newUser = await prisma.users.create({
       data: {
         full_name: name,
@@ -1238,7 +1238,7 @@ export const updateUser = async (req, res) => {
     }
 
     if (normalizedPassword !== undefined) {
-      data.password_hash = await bcrypt.hash(normalizedPassword, 10);
+      data.password_hash = await bcrypt.hash(normalizedPassword, 12);
     }
 
     const hasUserDataUpdate = Object.keys(data).length > 0;
@@ -1375,7 +1375,7 @@ export const addStudent = async (req, res) => {
       return res.status(404).json({ error: "Department not found" });
     }
 
-    const hashedPassword = await bcrypt.hash(national_id, 10);
+    const hashedPassword = await bcrypt.hash(national_id, 12);
 
     const newUser = await prisma.users.create({
       data: {

@@ -1,5 +1,5 @@
 import { prisma } from "../config/connection.js";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import exceljs from "exceljs";
 
 const USERS_MESSAGE = "Users processed successfully";
@@ -102,7 +102,7 @@ export const processExcelUsersBuffer = async (
         users.map((user) =>
             seenEmails.has(user.email)
                 ? null
-                : bcrypt.hash(user.password, 10).then((hashedPassword) => ({
+                : bcrypt.hash(user.password, 12).then((hashedPassword) => ({
                       ...user,
                       hashedPassword,
                   }))
@@ -252,7 +252,7 @@ export const processExcelStudentsBuffer = async (
 
     // Hash all passwords in parallel
     const hashedPasswords = await Promise.all(
-        rowsToProcess.map((row) => bcrypt.hash(row.nationalId, 10))
+        rowsToProcess.map((row) => bcrypt.hash(row.nationalId, 12))
     );
 
     const usersToInsert = rowsToProcess.map((row, i) => ({

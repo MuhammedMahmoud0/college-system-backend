@@ -1,5 +1,5 @@
 import { config } from "dotenv";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { prisma } from "../config/connection.js";
 import logger from "../utils/logger.js";
 
@@ -34,7 +34,7 @@ async function main() {
         return;
     }
 
-    const password_hash = await bcrypt.hash(SUPER_ADMIN.password, 10);
+    const password_hash = await bcrypt.hash(SUPER_ADMIN.password, 12);
 
     const newUser = await prisma.users.create({
         data: {

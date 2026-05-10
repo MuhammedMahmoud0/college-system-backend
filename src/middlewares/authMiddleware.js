@@ -2,35 +2,31 @@ import jwt from "jsonwebtoken";
 
 export const authMiddleware = (req, res, next) => {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "Authentication invalid" });
+
+    if (!authHeader?.startsWith("Bearer ")) {
+        return res.status(401).json({ message: "Authentication required" });
     }
+
     const token = authHeader.split(" ")[1];
+
     try {
         const payload = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Normalize user id
-        payload.id = payload.id ?? payload.userId;
+        req.user = {
+            userId: payload.userId,
+            role: payload.role,
+            // Keep backward-compat alias so existing route guards still work
+            id: payload.userId,
+        };
 
-        if (!payload.id) {
-            return res.status(401).json({ error: "Invalid token payload" });
-        }
-
-        req.user = payload;
         next();
     } catch (err) {
-        return res.status(401).json({ error: "Authentication invalid" });
+        if (err.name === "TokenExpiredError") {
+            return res.status(401).json({ message: "Token expired" });
+        }
+        return res.status(401).json({ message: "Invalid token" });
     }
 };
-
-// export const authorizationMiddleware = (requiredRole) => {
-//     return (req, res, next) => {
-//         if (!req.user || req.user.role !== requiredRole) {
-//             return res.status(403).json({ error: "Access denied" });
-//         }
-//         next();
-//     };
-// };
 
 export const authorizationMiddleware = (...allowedRoles) => {
     return (req, res, next) => {

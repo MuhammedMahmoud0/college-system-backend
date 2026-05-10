@@ -28,10 +28,16 @@ export function initializeSocketIO(httpServer) {
 
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            socket.user = decoded; // Attach user info to socket
+            socket.user = {
+                userId: decoded.userId,
+                role: decoded.role,
+            };
             next();
         } catch (err) {
-            return next(new Error("Authentication error: Invalid token"));
+            if (err.name === "TokenExpiredError") {
+                return next(new Error("Token expired. Reconnect required."));
+            }
+            return next(new Error("Invalid token"));
         }
     });
 

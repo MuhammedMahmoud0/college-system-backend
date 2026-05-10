@@ -16,7 +16,7 @@ model announcements {
   expire_at  DateTime?     @db.Timestamptz(6)
   users      users         @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([audience, publish_at])
+  @@index([audience, publish_at], map: "idx_announcements_audience_publish_at")
 }
 
 model academic_calendar {
@@ -36,8 +36,8 @@ model academic_calendar {
   @@index([event_date])
   @@index([event_type])
   @@index([semester])
-  @@index([event_type, semester, event_date])
-  @@index([event_type, academic_year, event_date])
+  @@index([event_type, academic_year, event_date], map: "idx_academic_calendar_event_type_academic_year_event_date")
+  @@index([event_type, semester, event_date], map: "idx_academic_calendar_event_type_semester_event_date")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -73,7 +73,7 @@ model group_members {
   @@id([group_id, user_id])
   @@index([user_id])
   @@index([group_id])
-  @@index([user_id, joined_at])
+  @@index([user_id, joined_at], map: "idx_group_members_user_id_joined_at")
 }
 
 model community_posts {
@@ -92,8 +92,8 @@ model community_posts {
   @@index([author_id])
   @@index([group_id])
   @@index([created_at])
-  @@index([group_id, created_at])
-  @@index([author_id, created_at])
+  @@index([author_id, created_at], map: "idx_community_posts_author_id_created_at")
+  @@index([group_id, created_at], map: "idx_community_posts_group_id_created_at")
 }
 
 model post_comments {
@@ -108,7 +108,7 @@ model post_comments {
   @@index([post_id])
   @@index([author_id])
   @@index([created_at])
-  @@index([post_id, created_at])
+  @@index([post_id, created_at], map: "idx_post_comments_post_id_created_at")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -124,8 +124,8 @@ model course_materials {
   lectures        lectures?       @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
   tutorials_labs  tutorials_labs? @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([lecture_id, uploaded_at])
-  @@index([tutorial_lab_id, uploaded_at])
+  @@index([lecture_id, uploaded_at], map: "idx_course_materials_lecture_id_uploaded_at")
+  @@index([tutorial_lab_id, uploaded_at], map: "idx_course_materials_tutorial_lab_id_uploaded_at")
 }
 
 model course_offerings {
@@ -138,9 +138,9 @@ model course_offerings {
   lectures       lectures[]
   tutorials_labs tutorials_labs[]
 
-  @@index([course_code])
-  @@index([semester, year])
-  @@index([semester, course_code])
+  @@index([course_code], map: "idx_course_offerings_course_code")
+  @@index([semester, course_code], map: "idx_course_offerings_semester_course_code")
+  @@index([semester, year], map: "idx_course_offerings_semester_year")
 }
 
 model course_prerequisites {
@@ -162,7 +162,7 @@ model courses {
   course_prerequisites_course_prerequisites_prerequisite_codeTocourses course_prerequisites[] @relation("course_prerequisites_prerequisite_codeTocourses")
   departments                                                          departments            @relation(fields: [department_id], references: [department_id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([department_id])
+  @@index([department_id], map: "idx_courses_department_id")
 }
 
 model departments {
@@ -189,9 +189,9 @@ model enrollments {
   invoices        invoices?
 
   @@unique([student_user_id, lecture_id])
-  @@index([lecture_id, status])
-  @@index([tutorial_lab_id, status])
-  @@index([student_user_id, status])
+  @@index([lecture_id, status], map: "idx_enrollments_lecture_id_status")
+  @@index([student_user_id, status], map: "idx_enrollments_student_user_id_status")
+  @@index([tutorial_lab_id, status], map: "idx_enrollments_tutorial_lab_id_status")
 }
 
 model events {
@@ -218,8 +218,8 @@ model exams {
   location         String?
   course_offerings course_offerings @relation(fields: [offering_id], references: [offering_id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([offering_id])
-  @@index([exam_date, start_time])
+  @@index([exam_date, start_time], map: "idx_exams_exam_date_start_time")
+  @@index([offering_id], map: "idx_exams_offering_id")
 }
 
 model files {
@@ -329,8 +329,8 @@ model lectures {
   course_offerings   course_offerings     @relation(fields: [offering_id], references: [offering_id], onDelete: Cascade, onUpdate: NoAction)
   tasks              tasks[]
 
-  @@index([offering_id])
-  @@index([instructor_id])
+  @@index([instructor_id], map: "idx_lectures_instructor_id")
+  @@index([offering_id], map: "idx_lectures_offering_id")
 }
 
 model news_articles {
@@ -355,8 +355,8 @@ model notifications {
   @@index([user_id])
   @@index([is_read])
   @@index([created_at])
-  @@index([user_id, created_at])
-  @@index([user_id, is_read])
+  @@index([user_id, created_at], map: "idx_notifications_user_id_created_at")
+  @@index([user_id, is_read], map: "idx_notifications_user_id_is_read")
 }
 
 model notification_preferences {
@@ -407,8 +407,8 @@ model task_submissions {
   users              users     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   tasks              tasks     @relation(fields: [task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([task_id, submitted_at])
-  @@index([task_id, student_id])
+  @@index([task_id, student_id], map: "idx_task_submissions_task_id_student_id")
+  @@index([task_id, submitted_at], map: "idx_task_submissions_task_id_submitted_at")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -424,8 +424,8 @@ model tasks {
   lectures         lectures?          @relation(fields: [lecture_id], references: [lecture_id], onDelete: NoAction, onUpdate: NoAction)
   tutorials_labs   tutorials_labs?    @relation(fields: [tutorial_lab_id], references: [tutorial_lab_id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([lecture_id, due_date, created_at])
-  @@index([tutorial_lab_id, due_date, created_at])
+  @@index([lecture_id, due_date, created_at], map: "idx_tasks_lecture_id_due_date_created_at")
+  @@index([tutorial_lab_id, due_date, created_at], map: "idx_tasks_tutorial_lab_id_due_date_created_at")
 }
 
 model testimonials {
@@ -456,8 +456,8 @@ model tutorials_labs {
   course_offerings course_offerings   @relation(fields: [offering_id], references: [offering_id], onDelete: Cascade, onUpdate: NoAction)
   users            users              @relation(fields: [ta_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([offering_id])
-  @@index([ta_id])
+  @@index([offering_id], map: "idx_tutorials_labs_offering_id")
+  @@index([ta_id], map: "idx_tutorials_labs_ta_id")
 }
 
 model users {
@@ -472,6 +472,9 @@ model users {
   address                  String?
   created_at               DateTime?                 @default(now()) @db.Timestamptz(6)
   updated_at               DateTime?                 @default(now()) @db.Timestamptz(6)
+  failed_login_attempts    Int                       @default(0)
+  locked_until             DateTime?                 @db.Timestamptz(6)
+  must_change_password     Boolean                   @default(false)
   academic_calendar        academic_calendar[]
   announcements            announcements[]
   attendance               attendance[]
@@ -485,6 +488,7 @@ model users {
   notifications            notifications[]
   post_comments            post_comments[]
   post_likes               post_likes[]
+  refresh_tokens           refresh_tokens[]
   student_payments         student_payments[]
   advised_students         student_profiles[]        @relation("FacultyAdvisor")
   student_profiles         student_profiles?
@@ -493,6 +497,21 @@ model users {
 
   @@index([email])
   @@index([role])
+}
+
+model refresh_tokens {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token      String   @unique
+  user_id    String   @db.Uuid
+  expires_at DateTime @db.Timestamptz(6)
+  revoked    Boolean  @default(false)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  ip_address String?
+  user_agent String?
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token])
 }
 
 enum audience_type {

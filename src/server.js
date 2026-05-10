@@ -1,7 +1,11 @@
 import { config } from "dotenv";
 import express from "express";
 import { createServer } from "http";
+import helmet from "helmet";
+import cors from "cors";
+import cookieParser from "cookie-parser";
 import { connectDB, disconnectDB } from "./config/connection.js";
+import { globalLimiter } from "./middlewares/rateLimitMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
 import studentProfileRoutes from "./routes/studentProfileRoutes.js";
@@ -53,6 +57,23 @@ startExamReminderJob(io);
 
 // Start async Excel import queue worker (requires Redis)
 initializeUserImportQueue();
+
+// Security headers
+app.use(helmet());
+
+// CORS — restrict to configured frontend origin
+app.use(
+    cors({
+        origin: process.env.FRONTEND_URL || "http://localhost:5173",
+        credentials: true, // required for HttpOnly cookie exchange
+    })
+);
+
+// Parse cookies (needed for refresh-token cookie)
+app.use(cookieParser());
+
+// Global rate limiter
+app.use(globalLimiter);
 
 // Middleware to parse JSON bodies
 app.use(express.json());

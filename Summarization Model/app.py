@@ -3,26 +3,14 @@ import re
 from pathlib import Path
 
 import pandas as pd
-#import torch
+import torch
 from dotenv import load_dotenv
 from flask import Flask, request
 from sentence_transformers import CrossEncoder, SentenceTransformer, util
 import google.generativeai as genai
-from huggingface_hub import snapshot_download
-import os
-
-
-if not os.path.exists("flask_assets"):
-
-    snapshot_download(
-        repo_id="muhammed-mahmoud/course_recommendation_model",
-        local_dir="flask_assets",
-        token=os.getenv("HF_TOKEN")
-    )
-
 
 BASE_DIR = Path(__file__).resolve().parent
-ASSETS_DIR = BASE_DIR / "flask_assets"
+ASSETS_DIR = BASE_DIR / "flask_assets_bundle"
 
 load_dotenv()
 
@@ -43,31 +31,47 @@ def preprocess_text(text: str) -> str:
 
 
 def load_data_and_models():
+    df = pd.read_csv(BASE_DIR / "Coursera.csv")
+    df = df[
+        [
+            "Course Name",
+            "Course Description",
+            "Skills",
+            "Course Rating",
+            "Difficulty Level",
+            "Course URL",
+        ]
+    ]
+
+    df.columns = df.columns.str.replace(" ", "_").str.lower()
+
+    df.drop_duplicates(inplace=True)
+    df["course_rating"] = pd.to_numeric(df["course_rating"], errors="coerce")
+    df.dropna(inplace=True)
+
+    df["text"] = df["course_name"] + " " + df["course_description"] + " " + df["skills"]
+    df["text"] = df["text"].apply(preprocess_text)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    df = pd.read_pickle(
-        ASSETS_DIR / "cleaned_coursera_data.pkl"
-    )
-
     bi_encoder = SentenceTransformer(
-        str(ASSETS_DIR / "bi_encoder_model"),
-        device=device
+        str(ASSETS_DIR / "bi_encoder_model"), device=device
     )
+    cross_encoder = CrossEncoder(str(ASSETS_DIR / "cross_encoder_model"), device=device)
 
     embeddings_path = ASSETS_DIR / "course_embeddings.pt"
-
-    course_embeddings = torch.load(
-        embeddings_path,
-        map_location=device
-    )
-
+    course_embeddings = torch.load(embeddings_path, map_location=device)
     if not isinstance(course_embeddings, torch.Tensor):
         course_embeddings = torch.tensor(course_embeddings)
-
     course_embeddings = course_embeddings.to(device)
 
-    return df, bi_encoder, course_embeddings
+    if len(df) != course_embeddings.shape[0]:
+        raise ValueError(
+            "Embedding count does not match dataset rows. Regenerate embeddings to proceed."
+        )
+
+    return df, bi_encoder, cross_encoder, course_embeddings
+
 
 def recommend_courses(query: str, top_n: int = 5, initial_k: int = 50):
     query_embedding = bi_encoder.encode(query, convert_to_tensor=True)
@@ -76,8 +80,16 @@ def recommend_courses(query: str, top_n: int = 5, initial_k: int = 50):
 
     hits = util.semantic_search(query_embedding, course_embeddings, top_k=initial_k)[0]
 
+    cross_inp = []
+    for hit in hits:
+        text = df.iloc[hit["corpus_id"]]["text"]
+        cross_inp.append([query, text])
 
-    hits = sorted(hits, key=lambda x: x["score"], reverse=True)
+    cross_scores = cross_encoder.predict(cross_inp)
+    for idx, score in enumerate(cross_scores):
+        hits[idx]["cross_score"] = float(score)
+
+    hits = sorted(hits, key=lambda x: x["cross_score"], reverse=True)
 
     results = []
     for hit in hits[:top_n]:

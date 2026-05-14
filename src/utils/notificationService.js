@@ -45,7 +45,7 @@ export async function sendNotification({
             // Preferences row may not exist yet (user never saved them) — treat as default true
             if (prefs && prefs[preferenceKey] === false) {
                 logger.info(
-                    `Notification suppressed for user ${userId}: preference '${preferenceKey}' is disabled`
+                    `Notification suppressed for user ${userId}: preference '${preferenceKey}' is disabled`,
                 );
                 return null;
             }
@@ -71,7 +71,7 @@ export async function sendNotification({
         if (io) {
             io.to(`notifications:${userId}`).emit(
                 "new-notification",
-                notification
+                notification,
             );
 
             // Also update unread count
@@ -86,20 +86,20 @@ export async function sendNotification({
         // Send push notification via FCM for this specific user
         const activeDevices = await prisma.device_tokens.findMany({
             where: { user_id: userId, is_active: true },
-            select: { token: true }
+            select: { token: true },
         });
 
         if (activeDevices.length > 0) {
-            const tokens = activeDevices.map(d => d.token);
+            const tokens = activeDevices.map((d) => d.token);
             await sendToTokens(tokens, {
                 title: "University Update",
                 body: message,
-                data: { type, id: notification.id }
+                data: { type, id: String(notification.id) },
             });
         }
 
         logger.info(
-            `Notification sent to user ${userId}: [${type}] ${message}`
+            `Notification sent to user ${userId}: [${type}] ${message}`,
         );
         return notification;
     } catch (err) {
@@ -138,7 +138,7 @@ export async function sendBulkNotification({
  * Sends a global announcement to ALL registered devices (logged in or out).
  * Optionally records the notification in the database for a specific set of users
  * (e.g. all students).
- * 
+ *
  * @param {object} options
  * @param {string} options.message - Notification message text
  * @param {string} options.type - notification_type enum value
@@ -148,48 +148,52 @@ export async function sendBulkNotification({
 export async function sendGlobalAnnouncement({
     message,
     type = "campus_announcement",
-    persistentUserIds = []
+    persistentUserIds = [],
 }) {
     logger.info(`Starting Global Announcement: ${message}`);
-    
+
     // 1. Fetch all active device tokens
     const allDevices = await prisma.device_tokens.findMany({
         where: { is_active: true },
-        select: { token: true }
+        select: { token: true },
     });
-    const tokens = allDevices.map(d => d.token);
+    const tokens = allDevices.map((d) => d.token);
 
     // 2. Perform the global FCM Blast
     const result = await broadcastGlobal(tokens, {
         title: "University Global Announcement",
         body: message,
-        data: { type }
+        data: { type },
     });
 
     // 3. Mark failed tokens as inactive
     if (result && result.failedTokens.length > 0) {
         await prisma.device_tokens.updateMany({
             where: { token: { in: result.failedTokens } },
-            data: { is_active: false }
+            data: { is_active: false },
         });
-        logger.info(`Deactivated ${result.failedTokens.length} stale FCM tokens.`);
+        logger.info(
+            `Deactivated ${result.failedTokens.length} stale FCM tokens.`,
+        );
     }
 
     // 4. Optionally, persist to the DB for specific users
     // This allows the notification to show up in the in-app bell menu when they log in
     if (persistentUserIds.length > 0) {
-        const notificationsData = persistentUserIds.map(userId => ({
+        const notificationsData = persistentUserIds.map((userId) => ({
             user_id: userId,
             message,
             type,
-            is_read: false
+            is_read: false,
         }));
-        
+
         await prisma.notifications.createMany({
             data: notificationsData,
-            skipDuplicates: true
+            skipDuplicates: true,
         });
-        logger.info(`Persisted global announcement for ${persistentUserIds.length} users.`);
+        logger.info(
+            `Persisted global announcement for ${persistentUserIds.length} users.`,
+        );
     }
 
     return result;

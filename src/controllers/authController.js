@@ -184,11 +184,19 @@ export const refresh = async (req, res) => {
 export const logout = async (req, res) => {
     try {
         const rawToken = req.cookies?.refreshToken;
+        const { fcmToken } = req.body;
 
         if (rawToken) {
             await prisma.refresh_tokens.updateMany({
                 where: { token: rawToken },
                 data: { revoked: true },
+            });
+        }
+
+        if (fcmToken) {
+            await prisma.device_tokens.updateMany({
+                where: { token: fcmToken, user_id: req.user?.userId },
+                data: { user_id: null },
             });
         }
 

@@ -81,6 +81,23 @@ export default {
                 tags: ["Auth"],
                 summary: "Logout the current user and revoke their refresh token",
                 security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: false,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                properties: {
+                                    fcmToken: {
+                                        type: "string",
+                                        description: "Optional FCM token to unlink from this user",
+                                        example: "device_firebase_token_xyz"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
                 responses: {
                     200: {
                         description: "Logged out successfully",

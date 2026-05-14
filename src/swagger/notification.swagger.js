@@ -353,6 +353,78 @@ export default {
                 },
             },
         },
+        "/notifications/register-device": {
+            post: {
+                tags: ["Notifications"],
+                summary: "Register an FCM device token for push notifications",
+                description: "Can be used by logged out users to receive global broadasts, or logged in users to attach their device to their account to receive personal pushes.",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                required: ["fcmToken"],
+                                properties: {
+                                    fcmToken: { type: "string" },
+                                    platform: { type: "string", example: "android" }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    200: { description: "Device registered successfully" },
+                    400: { description: "Bad request - missing fcmToken" }
+                }
+            }
+        },
+        "/notifications/global-broadcast": {
+            post: {
+                tags: ["Notifications"],
+                summary: "Send a global push blast to all active devices (Admin only)",
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                required: ["message"],
+                                properties: {
+                                    message: { type: "string" },
+                                    type: { type: "string", example: "campus_announcement" },
+                                    persistent_user_ids: { 
+                                        type: "array", 
+                                        items: { type: "string", format: "uuid" },
+                                        description: "Optional list of users to also persist in DB" 
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    200: { 
+                        description: "Global announcement dispatched",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        message: { type: "string" },
+                                        fcmResult: { type: "object" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    400: { description: "Bad request" },
+                    403: { description: "Forbidden - Admin only" }
+                }
+            }
+        },
         "/notifications/preferences": {
             get: {
                 tags: ["Notifications"],

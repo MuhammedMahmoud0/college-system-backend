@@ -3,11 +3,15 @@ import * as notificationController from "../controllers/notificationController.j
 import {
     authMiddleware,
     authorizationMiddleware,
+    optionalAuthMiddleware,
 } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// Apply authentication to all notification routes
+// Device Registration (Uses optional auth to attach user_id if logged in, else null)
+router.post("/register-device", optionalAuthMiddleware, notificationController.registerDevice);
+
+// Apply authentication to all remaining notification routes
 router.use(authMiddleware);
 
 // ── User routes ─────────────────────────────────────────────────────────────
@@ -35,6 +39,11 @@ router.post(
     "/bulk",
     authorizationMiddleware("admin", "super_admin"),
     notificationController.createBulkNotifications
+);
+router.post(
+    "/global-broadcast",
+    authorizationMiddleware("admin", "super_admin"),
+    notificationController.createGlobalBroadcast
 );
 
 export default router;

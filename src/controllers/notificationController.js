@@ -3,6 +3,7 @@ import logger from "../utils/logger.js";
 import {
     sendNotification,
     sendBulkNotification,
+    sendGlobalAnnouncement,
 } from "../utils/notificationService.js";
 
 // ---------------------------------------------------------------------------
@@ -375,3 +376,74 @@ export const createBulkNotifications = async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/notifications/register-device
+// ---------------------------------------------------------------------------
+export const registerDevice = async (req, res) => {
+    try {
+        const { fcmToken, platform } = req.body;
+        // req.user might be undefined if not logged in (optionalAuthMiddleware)
+        const userId = req.user ? req.user.id : null;
+
+        if (!fcmToken) {
+            return res.status(400).json({ error: "fcmToken is required" });
+        }
+
+        const deviceToken = await prisma.device_tokens.upsert({
+            where: { token: fcmToken },
+            update: {
+                user_id: userId,
+                platform: platform || null,
+                is_active: true,
+                updated_at: new Date()
+            },
+            create: {
+                token: fcmToken,
+                user_id: userId,
+                platform: platform || null,
+                is_active: true
+            }
+        });
+
+        res.status(200).json({
+            message: "Device registered successfully",
+            device: {
+                id: deviceToken.id,
+                linked_to_user: !!userId,
+                is_active: deviceToken.is_active
+            }
+        });
+    } catch (err) {
+        logger.error("Error registering device token:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/notifications/global-broadcast
+// ---------------------------------------------------------------------------
+export const createGlobalBroadcast = async (req, res) => {
+    try {
+        const { message, type, persistent_user_ids } = req.body;
+
+        if (!message) {
+            return res.status(400).json({ error: "message is required" });
+        }
+
+        const result = await sendGlobalAnnouncement({
+            message,
+            type: type || "campus_announcement",
+            persistentUserIds: Array.isArray(persistent_user_ids) ? persistent_user_ids : []
+        });
+
+        res.status(200).json({
+            message: "Global announcement dispatched",
+            fcmResult: result
+        });
+    } catch (err) {
+        logger.error("Error broadcasting global announcement:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+

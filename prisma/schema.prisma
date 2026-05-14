@@ -494,6 +494,7 @@ model users {
   student_profiles         student_profiles?
   task_submissions         task_submissions[]
   tutorials_labs           tutorials_labs[]
+  device_tokens            device_tokens[]
 
   @@index([email])
   @@index([role])
@@ -509,6 +510,20 @@ model refresh_tokens {
   ip_address String?
   user_agent String?
   users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token])
+}
+
+model device_tokens {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token      String   @unique
+  user_id    String?  @db.Uuid
+  platform   String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  users      users?   @relation(fields: [user_id], references: [id], onDelete: SetNull)
 
   @@index([user_id])
   @@index([token])

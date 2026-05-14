@@ -52,10 +52,6 @@ export const optionalAuthMiddleware = (req, res, next) => {
         return next();
     }
 };
-        }
-        return res.status(401).json({ message: "Invalid token" });
-    }
-};
 
 export const authorizationMiddleware = (...allowedRoles) => {
     return (req, res, next) => {

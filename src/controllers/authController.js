@@ -34,14 +34,17 @@ export const login = async (req, res) => {
         // ── Account lockout check ──────────────────────────────────────────
         if (user.locked_until && new Date() < new Date(user.locked_until)) {
             const minutesLeft = Math.ceil(
-                (new Date(user.locked_until) - new Date()) / 60_000
+                (new Date(user.locked_until) - new Date()) / 60_000,
             );
             return res.status(429).json({
                 message: `Account temporarily locked. Try again in ${minutesLeft} minute(s).`,
             });
         }
 
-        const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+        const isPasswordValid = await bcrypt.compare(
+            password,
+            user.password_hash,
+        );
 
         if (!isPasswordValid) {
             const newAttempts = (user.failed_login_attempts ?? 0) + 1;
@@ -58,12 +61,13 @@ export const login = async (req, res) => {
             });
 
             logger.warn(
-                `Failed login attempt ${newAttempts} for user ${user.id}${willLock ? " — account locked" : ""}`
+                `Failed login attempt ${newAttempts} for user ${user.id}${willLock ? " — account locked" : ""}`,
             );
 
             if (willLock) {
                 return res.status(429).json({
-                    message: "Too many failed attempts. Account locked for 30 minutes.",
+                    message:
+                        "Too many failed attempts. Account locked for 30 minutes.",
                 });
             }
 
@@ -83,7 +87,7 @@ export const login = async (req, res) => {
         const accessToken = jwt.sign(
             { userId: user.id, role: user.role },
             process.env.JWT_SECRET,
-            { expiresIn: ACCESS_TOKEN_EXPIRY }
+            { expiresIn: ACCESS_TOKEN_EXPIRY },
         );
 
         const rawToken = crypto.randomBytes(64).toString("hex");
@@ -135,8 +139,14 @@ export const refresh = async (req, res) => {
             include: { users: { select: { id: true, role: true } } },
         });
 
-        if (!record || record.revoked || new Date() > new Date(record.expires_at)) {
-            return res.status(401).json({ message: "Invalid or expired refresh token" });
+        if (
+            !record ||
+            record.revoked ||
+            new Date() > new Date(record.expires_at)
+        ) {
+            return res
+                .status(401)
+                .json({ message: "Invalid or expired refresh token" });
         }
 
         // ── Rotate refresh token ───────────────────────────────────────────
@@ -170,7 +180,7 @@ export const refresh = async (req, res) => {
         const accessToken = jwt.sign(
             { userId: record.users.id, role: record.users.role },
             process.env.JWT_SECRET,
-            { expiresIn: ACCESS_TOKEN_EXPIRY }
+            { expiresIn: ACCESS_TOKEN_EXPIRY },
         );
 
         return res.status(200).json({ accessToken });
@@ -184,19 +194,11 @@ export const refresh = async (req, res) => {
 export const logout = async (req, res) => {
     try {
         const rawToken = req.cookies?.refreshToken;
-        const { fcmToken } = req.body;
 
         if (rawToken) {
             await prisma.refresh_tokens.updateMany({
                 where: { token: rawToken },
                 data: { revoked: true },
-            });
-        }
-
-        if (fcmToken) {
-            await prisma.device_tokens.updateMany({
-                where: { token: fcmToken, user_id: req.user?.userId },
-                data: { user_id: null },
             });
         }
 
@@ -252,7 +254,9 @@ export const adminResetPassword = async (req, res) => {
                 message: "Validation failed",
                 errors: {
                     userId: !userId ? ["userId is required"] : undefined,
-                    newPassword: !newPassword ? ["newPassword is required"] : undefined,
+                    newPassword: !newPassword
+                        ? ["newPassword is required"]
+                        : undefined,
                 },
             });
         }
@@ -267,10 +271,7 @@ export const adminResetPassword = async (req, res) => {
         }
 
         // super_admin cannot be reset by a regular admin
-        if (
-            target.role === "super_admin" &&
-            req.user.role !== "super_admin"
-        ) {
+        if (target.role === "super_admin" && req.user.role !== "super_admin") {
             return res.status(403).json({ message: "Insufficient privileges" });
         }
 
@@ -294,11 +295,12 @@ export const adminResetPassword = async (req, res) => {
         ]);
 
         logger.info(
-            `Admin ${req.user.userId} reset password for user ${userId} (${target.full_name})`
+            `Admin ${req.user.userId} reset password for user ${userId} (${target.full_name})`,
         );
 
         return res.status(200).json({
-            message: "Password reset successfully. User must change it on next login.",
+            message:
+                "Password reset successfully. User must change it on next login.",
         });
     } catch (err) {
         logger.error(err);
@@ -336,7 +338,10 @@ export const changePassword = async (req, res) => {
             return res.status(404).json({ message: "User not found" });
         }
 
-        const isValid = await bcrypt.compare(currentPassword, user.password_hash);
+        const isValid = await bcrypt.compare(
+            currentPassword,
+            user.password_hash,
+        );
         if (!isValid) {
             return res
                 .status(401)
@@ -371,7 +376,9 @@ export const changePassword = async (req, res) => {
 
         logger.info(`User ${user.id} changed their password`);
 
-        return res.status(200).json({ message: "Password changed successfully" });
+        return res
+            .status(200)
+            .json({ message: "Password changed successfully" });
     } catch (err) {
         logger.error(err);
         return res.status(500).json({ message: "Internal server error" });

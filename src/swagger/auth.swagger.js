@@ -3,7 +3,8 @@ export default {
         "/auth/login": {
             post: {
                 tags: ["Auth"],
-                summary: "Authenticate user and return an access token (and refresh token in cookie)",
+                summary:
+                    "Authenticate user and return an access token (and refresh token in cookie)",
                 requestBody: {
                     required: true,
                     content: {
@@ -51,7 +52,8 @@ export default {
         "/auth/refresh": {
             post: {
                 tags: ["Auth"],
-                summary: "Refresh the access token using a valid refresh token cookie",
+                summary:
+                    "Refresh the access token using a valid refresh token cookie",
                 responses: {
                     200: {
                         description: "Access token refreshed",
@@ -79,25 +81,9 @@ export default {
         "/auth/logout": {
             post: {
                 tags: ["Auth"],
-                summary: "Logout the current user and revoke their refresh token",
+                summary:
+                    "Logout the current user and revoke their refresh token",
                 security: [{ bearerAuth: [] }],
-                requestBody: {
-                    required: false,
-                    content: {
-                        "application/json": {
-                            schema: {
-                                type: "object",
-                                properties: {
-                                    fcmToken: {
-                                        type: "string",
-                                        description: "Optional FCM token to unlink from this user",
-                                        example: "device_firebase_token_xyz"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
                 responses: {
                     200: {
                         description: "Logged out successfully",
@@ -178,7 +164,8 @@ export default {
                         },
                     },
                     401: {
-                        description: "Not authenticated or current password incorrect",
+                        description:
+                            "Not authenticated or current password incorrect",
                         content: {
                             "application/json": {
                                 schema: {

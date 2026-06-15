@@ -496,6 +496,123 @@ export const deleteCourse = async (req, res) => {
       });
     }
 
+    // Check if there are completed enrollments
+    const completedEnrollmentsCount = await prisma.enrollments.count({
+      where: {
+        status: "completed",
+        lectures: {
+          course_offerings: {
+            course_code: code,
+          },
+        },
+      },
+    });
+
+    if (completedEnrollmentsCount > 0) {
+      // Find all non-completed enrollments for this course
+      const nonCompletedEnrollments = await prisma.enrollments.findMany({
+        where: {
+          status: { not: "completed" },
+          lectures: {
+            course_offerings: {
+              course_code: code,
+            },
+          },
+        },
+        select: { id: true },
+      });
+
+      const nonCompletedEnrollmentIds = nonCompletedEnrollments.map(e => e.id);
+
+      if (nonCompletedEnrollmentIds.length > 0) {
+        // Delete invoices associated with non-completed enrollments
+        await prisma.invoices.deleteMany({
+          where: { enrollment_id: { in: nonCompletedEnrollmentIds } },
+        });
+
+        // Delete the non-completed enrollments
+        await prisma.enrollments.deleteMany({
+          where: { id: { in: nonCompletedEnrollmentIds } },
+        });
+      }
+
+      await invalidateByPattern("v1:courses:*");
+      await invalidateByPattern("v1:course-offerings:*");
+
+      return res.status(200).json({
+        message: "Course could not be fully deleted because some students have already completed it. However, non-completed enrollments have been successfully removed.",
+        courseKept: true,
+      });
+    }
+
+    // If there are no completed enrollments, proceed with full cascade delete
+    const offerings = await prisma.course_offerings.findMany({
+      where: { course_code: code },
+      select: { offering_id: true },
+    });
+    const offeringIds = offerings.map((o) => o.offering_id);
+
+    if (offeringIds.length > 0) {
+      const lectures = await prisma.lectures.findMany({
+        where: { offering_id: { in: offeringIds } },
+        select: { lecture_id: true },
+      });
+      const lectureIds = lectures.map((l) => l.lecture_id);
+
+      const tutorials = await prisma.tutorials_labs.findMany({
+        where: { offering_id: { in: offeringIds } },
+        select: { tutorial_lab_id: true },
+      });
+      const tutorialIds = tutorials.map((t) => t.tutorial_lab_id);
+
+      if (lectureIds.length > 0) {
+        const enrollments = await prisma.enrollments.findMany({
+          where: { lecture_id: { in: lectureIds } },
+          select: { id: true },
+        });
+        const enrollmentIds = enrollments.map((e) => e.id);
+
+        if (enrollmentIds.length > 0) {
+          await prisma.invoices.deleteMany({
+            where: { enrollment_id: { in: enrollmentIds } },
+          });
+          await prisma.enrollments.deleteMany({
+            where: { id: { in: enrollmentIds } },
+          });
+        }
+      }
+
+      if (lectureIds.length > 0 || tutorialIds.length > 0) {
+        const orConditions = [];
+        if (lectureIds.length > 0) orConditions.push({ lecture_id: { in: lectureIds } });
+        if (tutorialIds.length > 0) orConditions.push({ tutorial_lab_id: { in: tutorialIds } });
+
+        await prisma.course_materials.deleteMany({
+          where: { OR: orConditions },
+        });
+      }
+
+      await prisma.exams.deleteMany({
+        where: { offering_id: { in: offeringIds } },
+      });
+
+      if (tutorialIds.length > 0) {
+        await prisma.tutorials_labs.deleteMany({
+          where: { offering_id: { in: offeringIds } },
+        });
+      }
+      if (lectureIds.length > 0) {
+        // grade_distributions cascade deletes with lectures
+        await prisma.lectures.deleteMany({
+          where: { offering_id: { in: offeringIds } },
+        });
+      }
+
+      await prisma.course_offerings.deleteMany({
+        where: { course_code: code },
+      });
+    }
+
     await prisma.course_prerequisites.deleteMany({
       where: { course_code: code },
     });
@@ -507,7 +624,11 @@ export const deleteCourse = async (req, res) => {
     await invalidateByPattern("v1:courses:*");
     await invalidateByPattern("v1:course-offerings:*");
 
-    res.status(200).json(deletedCourse);
+    res.status(200).json({
+      message: "Course completely deleted.",
+      courseKept: false,
+      deletedCourse,
+    });
   } catch (err) {
     logger.error("Error deleting course:", err);
     logger.error("Error details:", {

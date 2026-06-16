@@ -11,11 +11,11 @@ export const getStudentSchedule = async (req, res) => {
 
         const { week, date } = req.query;
 
-        const cacheKey = `v1:schedule:student:${user.userId}:${week || 0}:${date || "current"}`;
-        const cachedData = await getCache(cacheKey);
-        if (cachedData) {
-            return res.status(200).json(cachedData);
-        }
+        // const cacheKey = `v1:schedule:student:${user.userId}:${week || 0}:${date || "current"}`;
+        // const cachedData = await getCache(cacheKey);
+        // if (cachedData) {
+        //     return res.status(200).json(cachedData);
+        // }
 
         // Get student enrollments
         const enrollments = await prisma.enrollments.findMany({
@@ -173,7 +173,7 @@ export const getStudentSchedule = async (req, res) => {
         });
 
         const responseData = { schedule };
-        await setCache(cacheKey, responseData, 300); // Cache for 5 minutes
+        // await setCache(cacheKey, responseData, 300); // Cache for 5 minutes
 
         res.status(200).json(responseData);
     } catch (err) {
